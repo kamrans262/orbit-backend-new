@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Admin verification · Orbit</title><link rel="stylesheet" href="{{ asset('assets/orbit-admin/admin.css') }}">
+<title>Admin verification · Orbit</title><link rel="stylesheet" href="{{ route('orbit.admin.asset', ['file' => 'admin.css']) }}">
 </head><body class="auth-body"><main class="auth-panel">
   <div class="auth-mark">O</div><p class="eyebrow">SECOND FACTOR</p><h1>Verify your identity</h1>
   <p class="auth-help">Enter the six-digit one-time code from your registered authenticator app.</p>

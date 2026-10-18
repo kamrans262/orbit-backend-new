@@ -120,6 +120,13 @@ final class OrbitConfigTest extends TestCase
         $this->get('/admin/config/new')->assertOk()->assertSee('JSON Schema');
     }
 
+    public function test_admin_assets_are_served_via_laravel_without_public_html_copies(): void
+    {
+        $this->get('/admin/assets/admin.css')->assertOk()->assertSee('--purple');
+        $this->get('/admin/assets/admin.js')->assertOk()->assertSee('sidebar-open');
+        $this->get('/admin/assets/nope.php')->assertNotFound();
+    }
+
     public function test_admin_without_config_permission_is_denied(): void
     {
         $admin = $this->admin();

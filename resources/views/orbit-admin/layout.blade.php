@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <title>@yield('title', 'Administration') · Orbit</title>
-<link rel="stylesheet" href="{{ asset('assets/orbit-admin/admin.css') }}">
+<link rel="stylesheet" href="{{ route('orbit.admin.asset', ['file' => 'admin.css']) }}">
 </head>
 <body>
 <div class="shell" data-shell>
@@ -40,6 +40,6 @@
     </main>
   </div>
 </div>
-<script src="{{ asset('assets/orbit-admin/admin.js') }}" defer></script>
+<script src="{{ route('orbit.admin.asset', ['file' => 'admin.js']) }}" defer></script>
 @stack('scripts')
 </body></html>

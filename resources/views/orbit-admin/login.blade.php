@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Administrator sign in · Orbit</title><link rel="stylesheet" href="{{ asset('assets/orbit-admin/admin.css') }}">
+<title>Administrator sign in · Orbit</title><link rel="stylesheet" href="{{ route('orbit.admin.asset', ['file' => 'admin.css']) }}">
 </head><body class="auth-body"><main class="auth-panel">
   <div class="auth-mark">O</div><p class="eyebrow">ORBIT OPERATIONS</p><h1>Admin sign in</h1>
   <p class="auth-help">A separate, protected administrator account is required. There are no default credentials.</p>
