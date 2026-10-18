@@ -44,13 +44,16 @@ final class OtpService
             || RateLimiter::tooManyAttempts($byIp, (int) config('orbit_identity.otp_request_per_ip_hour', 10))) {
             return 'rate_limited';
         }
-        $code = (string) random_int(100000, 999999);
+        // With Twilio Verify, Twilio generates the SMS code; we never mint a competing local code.
+        $useTwilioVerify = $channel === 'sms' && app(TwilioVerifyGateway::class)->enabled();
+        $code = $useTwilioVerify ? null : (string) random_int(100000, 999999);
         $id = (string) Str::uuid7();
         // Invalidate older unconsumed codes for the same recipient.
         DB::table('otp_challenges')->where('recipient_hash', $digest)->whereNull('consumed_at')->update(['consumed_at' => now()]);
         DB::table('otp_challenges')->insert([
             'id' => $id, 'channel' => $channel, 'recipient_hash' => $digest,
-            'code_hash' => hash_hmac('sha256', $id.'|'.$code, $this->secret()),
+            // The local challenge is a single-use lock even when verification happens at Twilio.
+            'code_hash' => hash_hmac('sha256', $id.'|'.($code ?? bin2hex(random_bytes(24))), $this->secret()),
             'expires_at' => now()->addMinutes((int) config('orbit_identity.otp_minutes', 5)),
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -59,6 +62,10 @@ final class OtpService
                 Mail::raw('Your Orbit verification code is '.$code.'. It expires in 5 minutes. Never share this code.', function ($message) use ($normalized): void {
                     $message->to($normalized)->subject('Your Orbit verification code');
                 });
+            } elseif ($useTwilioVerify) {
+                if (!app(TwilioVerifyGateway::class)->start($normalized)) {
+                    throw new RuntimeException('Twilio Verify is unavailable.');
+                }
             } else {
                 $settings = config('orbit_identity.sms');
                 if (!$settings['sid'] || !$settings['token'] || !$settings['from']) {
@@ -92,7 +99,12 @@ final class OtpService
                 ->whereNull('consumed_at')->orderByDesc('created_at')->lockForUpdate()->first();
             if (!$challenge || now()->greaterThan($challenge->expires_at) || $challenge->attempts >= 5) return null;
             DB::table('otp_challenges')->where('id', $challenge->id)->increment('attempts');
-            if (!hash_equals($challenge->code_hash, hash_hmac('sha256', $challenge->id.'|'.$code, $this->secret()))) return null;
+            // SMS codes issued by Twilio Verify are checked with that service, never against
+            // a locally generated code. A consumed local challenge blocks token replay.
+            $approved = ($channel === 'sms' && app(TwilioVerifyGateway::class)->enabled())
+                ? app(TwilioVerifyGateway::class)->check($normalized, $code)
+                : hash_equals($challenge->code_hash, hash_hmac('sha256', $challenge->id.'|'.$code, $this->secret()));
+            if (!$approved) return null;
             DB::table('otp_challenges')->where('id', $challenge->id)->update(['consumed_at' => now()]);
             $provider = $channel === 'sms' ? 'phone' : 'email';
             $identity = UserIdentity::query()->where('provider', $provider)->where('provider_subject', $normalized)->lockForUpdate()->first();

@@ -11,5 +11,6 @@ return [
         'sid' => env('TWILIO_ACCOUNT_SID'),
         'token' => env('TWILIO_AUTH_TOKEN'),
         'from' => env('TWILIO_FROM_NUMBER'),
+        'verify_service_sid' => env('TWILIO_VERIFY_SERVICE_SID'),
     ],
 ];

@@ -9,6 +9,7 @@ use App\Modules\Identity\Services\TokenService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -133,6 +134,57 @@ final class OrbitIdentityTest extends TestCase
         $this->withToken($initial['access_token'])
             ->deleteJson('/api/v1/me/sessions/'.$session->id)->assertOk();
         $this->withToken($initial['access_token'])->getJson('/api/v1/me')->assertUnauthorized();
+    }
+
+    public function test_twilio_verify_service_is_used_for_sms_and_is_single_use(): void
+    {
+        config()->set('orbit_identity.sms.sid', 'AC'.str_repeat('a', 32));
+        config()->set('orbit_identity.sms.token', 'test-token');
+        config()->set('orbit_identity.sms.verify_service_sid', 'VA'.str_repeat('b', 32));
+        config()->set('orbit_identity.sms.from', null);
+
+        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+            if (str_ends_with($request->url(), '/Verifications')) {
+                return Http::response(['status' => 'pending'], 201);
+            }
+            if (str_ends_with($request->url(), '/VerificationCheck')) {
+                return Http::response(['status' => $request['Code'] === '472819' ? 'approved' : 'pending'], 200);
+            }
+            return Http::response([], 404);
+        });
+
+        $this->postJson('/api/v1/auth/otp/request', [
+            'channel' => 'sms', 'recipient' => '+923001234567',
+        ])->assertStatus(202);
+        Http::assertSent(fn (\Illuminate\Http\Client\Request $req) =>
+            str_ends_with($req->url(), '/Verifications') && $req['Channel'] === 'sms'
+            && $req['To'] === '+923001234567');
+        $payload = [
+            'channel' => 'sms', 'recipient' => '+923001234567',
+            'code' => '000000', 'device_public_id' => (string) Str::uuid7(),
+            'platform' => 'android', 'device_name' => 'SMS test device',
+        ];
+        $this->postJson('/api/v1/auth/otp/verify', $payload)->assertUnprocessable();
+        $this->assertDatabaseCount('orbit_users', 0);
+        $payload['code'] = '472819';
+        $this->postJson('/api/v1/auth/otp/verify', $payload)
+            ->assertOk()->assertJsonPath('data.device_requires_registration', true);
+        $this->assertDatabaseCount('orbit_users', 1);
+        $this->postJson('/api/v1/auth/otp/verify', $payload)->assertUnprocessable();
+        $this->assertDatabaseCount('orbit_users', 1);
+        Http::assertSent(fn (\Illuminate\Http\Client\Request $req) =>
+            str_ends_with($req->url(), '/VerificationCheck') && $req['Code'] === '472819');
+    }
+
+    public function test_sms_verify_without_valid_credentials_fails_closed(): void
+    {
+        config()->set('orbit_identity.sms.verify_service_sid', 'VA'.str_repeat('b', 32));
+        config()->set('orbit_identity.sms.sid', 'AC'.str_repeat('a', 32));
+        config()->set('orbit_identity.sms.token', null);
+        $this->postJson('/api/v1/auth/otp/request', [
+            'channel' => 'sms', 'recipient' => '+923001234567',
+        ])->assertStatus(503);
+        $this->assertDatabaseCount('otp_challenges', 0);
     }
 
     public function test_admin_user_view_is_not_public(): void

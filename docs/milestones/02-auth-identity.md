@@ -12,7 +12,7 @@
 ## Implemented in this branch
 - UUID Orbit account tables added *without modifying the existing stock Laravel users table*; UUID identities and devices.
 - Six-digit email/SMS OTP request/verify with hashed expiring codes, invalidation, rate limits, no code echoed.
-- SMTP email via server-side Laravel Mail; SMS via Twilio server-side REST request, returning 503 when unconfigured.
+- SMTP email via server-side Laravel Mail; SMS via the **Twilio Verify API** when TWILIO_VERIFY_SERVICE_SID is set; Twilio generates and verifies the code. Legacy Messages API with TWILIO_FROM_NUMBER remains a fallback only when no Verify Service SID is configured. Misconfigured Verify fails closed with 503 instead of silently falling back.
 - Orbit-owned signed HS256 access JWT (15 minutes, scoped to Orbit mobile) with database session checks.
 - Hashed 60-day refresh sessions, rotation, replay-family revocation, logout, per-device revocation.
 - Device verification: OTP required on each new device, initial device trusted; later devices pending and require approval by a trusted registered-key device.
@@ -31,7 +31,7 @@
 - GET /api/v1/me/devices, PATCH /api/v1/me/devices/{id}, POST /api/v1/me/devices/{id}/approve, DELETE /api/v1/me/devices/{id}
 
 ## Safety / credentials
-- Store TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER in private server .env only. Do not commit or paste.
+- Store TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_VERIFY_SERVICE_SID in private server .env only for Twilio Verify. The alternative Messages path requires TWILIO_FROM_NUMBER. Never copy secrets into chat, commits or logs. Do not commit or paste.
 - Phone input uses E.164 (+923...); Twilio trial may only contact approved recipients.
 - Never run `php artisan test` or `migrate:fresh` against the live Hostinger database.
 - Do not accept a bearer token as admin auth; do not grant Orbit account access via admin session.
