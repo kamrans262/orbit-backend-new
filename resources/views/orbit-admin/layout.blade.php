@@ -17,7 +17,8 @@
       <a href="{{ route('orbit.admin.config.new') }}" class="nav-item"><span>⚙</span> New remote config</a>
     </nav>
     <div class="nav-caption space-top">UPCOMING MODULES</div>
-    <div class="nav-item disabled"><span>◎</span> Users &amp; Circles <small>Upcoming</small></div>
+    <a class="nav-item" href="{{ route('orbit.admin.users.index') }}"><span>◎</span> Users &amp; Devices</a>
+    <div class="nav-item disabled"><span>◌</span> Circles <small>Upcoming</small></div>
     <div class="nav-item disabled"><span>✚</span> SOS operations <small>Upcoming</small></div>
     <div class="nav-item disabled"><span>▤</span> Billing &amp; Ads <small>Upcoming</small></div>
     <div class="nav-item disabled"><span>▦</span> System health <small>Upcoming</small></div>

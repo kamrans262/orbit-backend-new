@@ -23,6 +23,12 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
     Route::get('/mfa', [AdminAuthController::class, 'mfaForm'])->name('mfa');
     Route::post('/mfa', [AdminAuthController::class, 'verifyMfa'])->middleware('throttle:8,1')->name('mfa.verify');
     Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
+    Route::middleware([EnsureAdmin::class])->group(function (): void {
+        Route::get('/users', [\\App\\Modules\\Identity\\Http\\Controllers\\AdminIdentityController::class, 'index'])
+            ->middleware(RequireAdminPermission::class.':users.read')->name('users.index');
+        Route::get('/users/{user}', [\\App\\Modules\\Identity\\Http\\Controllers\\AdminIdentityController::class, 'show'])
+            ->middleware(RequireAdminPermission::class.':users.read')->name('users.show');
+    });
     Route::middleware([EnsureAdmin::class, RequireAdminPermission::class])->group(function (): void {
         Route::get('/', [AdminConfigController::class, 'dashboard'])->name('dashboard');
         Route::get('/flags/new', [AdminConfigController::class, 'flagForm'])->name('flags.new');
