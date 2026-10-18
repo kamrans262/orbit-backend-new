@@ -11,6 +11,7 @@
 <label>Configuration key <input name="key" required pattern="[a-z][a-z0-9_.-]*" maxlength="120" value="{{ old('key',$config?->key ?? '') }}" {{ $config?->exists ? 'readonly' : '' }} placeholder="location.refresh_interval"></label>
 <label>JSON schema type <select name="value_type" required>@foreach(['string','number','boolean','array','object'] as $type)<option value="{{ $type }}" {{ old('value_type',$config?->value_type ?? 'object') === $type ? 'selected' : '' }}>{{ ucfirst($type) }}</option>@endforeach</select></label>
 <label class="span2">Description <input name="description" maxlength="500" value="{{ old('description',$config?->description ?? '') }}"></label>
+<label class="span2">JSON Schema (supported: type, properties, required, additionalProperties, items, enum, min/max constraints) <textarea name="schema_json" rows="6" spellcheck="false" class="code-input">{{ old('schema_json',$config?->exists && $config->schema_json ? json_encode($config->schema_json,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES) : '{"type":"object"}') }}</textarea></label>
 <label class="span2">JSON value <textarea name="value_json" required rows="8" spellcheck="false" class="code-input">{{ old('value_json',$config?->exists ? json_encode($config->value,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES) : '{}') }}</textarea></label>
 <div class="form-field span2"><div class="checkbox-row">
 <label class="check"><input type="checkbox" name="published" value="1" {{ old('published',$config?->published ?? false) ? 'checked' : '' }}>Published</label>

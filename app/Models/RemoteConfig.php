@@ -10,5 +10,5 @@ final class RemoteConfig extends Model
     use HasUuids;
 
     protected $guarded = ['id'];
-    protected function casts(): array { return ['value' => 'array', 'published' => 'boolean']; }
+    protected function casts(): array { return ['value' => 'object', 'schema_json' => 'array', 'published' => 'boolean', 'client_visible' => 'boolean']; }
 }

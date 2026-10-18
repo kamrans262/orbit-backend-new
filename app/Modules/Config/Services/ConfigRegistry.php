@@ -68,20 +68,14 @@ final class ConfigRegistry
             $config ??= new RemoteConfig();
             if ($config->exists) $config = RemoteConfig::query()->whereKey($config->id)->lockForUpdate()->firstOrFail();
             $before = $config->exists ? $config->toArray() : null;
-            try {
-                $value = json_decode($input['value_json'], true, 512, JSON_THROW_ON_ERROR);
-            } catch (\JsonException) {
-                throw ValidationException::withMessages(['value_json' => 'Enter valid JSON.']);
-            }
-            $validTypes = ['string', 'number', 'boolean', 'array', 'object'];
             $type = $input['value_type'];
-            if (!in_array($type, $validTypes, true) || !$this->matchesType($value, $type, trim($input['value_json']))) {
-                throw ValidationException::withMessages(['value_json' => 'Value does not match the declared JSON type.']);
-            }
+            $schemaJson = $input['schema_json'] ?? json_encode(['type' => $type], JSON_THROW_ON_ERROR);
+            [$value, $schema] = app(JsonSchemaGuard::class)->check($input['value_json'], $schemaJson, $type);
             $config->fill([
                 'key' => $input['key'],
                 'description' => $input['description'] ?? null,
                 'value' => $value,
+                'schema_json' => $schema,
                 'value_type' => $type,
                 'published' => (bool) ($input['published'] ?? false),
                 'client_visible' => (bool) ($input['client_visible'] ?? false),
@@ -105,7 +99,7 @@ final class ConfigRegistry
             $before = $record->toArray();
             $fields = $type === 'flag'
                 ? ['description', 'enabled', 'kill_switch', 'rollout_percentage', 'platforms', 'min_version', 'countries', 'cohorts']
-                : ['description', 'value', 'value_type', 'published', 'client_visible'];
+                : ['description', 'value', 'schema_json', 'value_type', 'published', 'client_visible'];
             $record->fill(collect($snapshot)->only($fields)->all());
             $record->version += 1;
             $record->save();

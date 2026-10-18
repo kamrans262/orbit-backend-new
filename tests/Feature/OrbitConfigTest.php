@@ -91,6 +91,35 @@ final class OrbitConfigTest extends TestCase
         $this->assertTrue($flag->fresh()->enabled);
     }
 
+
+    public function test_nested_remote_schema_rejects_invalid_payload_and_accepts_valid_one(): void
+    {
+        $admin = $this->admin();
+        $this->be($admin, 'admin');
+        $base = [
+            'key' => 'camera.limits',
+            'value_type' => 'object',
+            'schema_json' => '{"type":"object","required":["max_seconds"],"properties":{"max_seconds":{"type":"number","minimum":1,"maximum":60}},"additionalProperties":false}',
+            'published' => '1',
+            'client_visible' => '1',
+            'reason' => 'Approved validation contract',
+        ];
+        $this->post('/admin/config', array_merge($base, ['value_json' => '{"max_seconds":120}']))
+            ->assertSessionHasErrors('value_json');
+        $this->assertDatabaseMissing('remote_configs', ['key' => 'camera.limits']);
+        $this->post('/admin/config', array_merge($base, ['value_json' => '{"max_seconds":30}']))
+            ->assertRedirect(route('orbit.admin.dashboard'));
+        $this->assertDatabaseHas('remote_configs', ['key' => 'camera.limits', 'published' => 1]);
+        $this->assertSame(30, $this->getJson('/api/v1/config/bootstrap')->json('data.config')['camera.limits']['max_seconds']);
+    }
+
+    public function test_configuration_editors_render_for_authorized_admin(): void
+    {
+        $this->be($this->admin(), 'admin');
+        $this->get('/admin/flags/new')->assertOk()->assertSee('Create feature flag');
+        $this->get('/admin/config/new')->assertOk()->assertSee('JSON Schema');
+    }
+
     public function test_admin_without_config_permission_is_denied(): void
     {
         $admin = $this->admin();

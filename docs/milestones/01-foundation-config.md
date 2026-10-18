@@ -11,7 +11,7 @@
 - Dedicated M1 schema, non-destructive additive migrations, UUID7 identities.
 - Separate admin authentication with password + mandatory time-based OTP, independently scoped Laravel guard, 15-minute inactivity expiry, throttling, and console-only first administrator provisioning.
 - Feature flags: default off, deterministic percentage rollout, platform/country/min-app-version/cohort matching, independent kill switch, preview, audit reason and revision rollback.
-- Remote configuration: JSON type validation, draft/published states, server-only/client-visible toggle, revision rollback.
+- Remote configuration: bounded JSON Schema validation (root and nested fields, unknown schema keywords rejected), draft/published states, server-only/client-visible toggle, revision rollback.
 - Flutter-readable *public hints* API: GET /api/v1/config/bootstrap (not a source of security/entitlement authorization).
 - Laravel Blade admin pages for dashboard, flag editor, config editor, preview, MFA/login, with responsive custom CSS and JavaScript.
 - Automated tests and GitHub Actions CI on isolated MariaDB service.

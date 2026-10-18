@@ -63,6 +63,7 @@ final class AdminConfigController extends Controller
             'description' => ['nullable', 'string', 'max:500'],
             'value_json' => ['required', 'string', 'max:50000'],
             'value_type' => ['required', 'in:string,number,boolean,array,object'],
+            'schema_json' => ['nullable', 'string', 'max:30000'],
             'published' => ['nullable', 'boolean'], 'client_visible' => ['nullable', 'boolean'],
             'reason' => ['required', 'string', 'min:5', 'max:500'],
         ]);
