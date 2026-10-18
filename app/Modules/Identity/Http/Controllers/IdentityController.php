@@ -150,6 +150,38 @@ final class IdentityController extends Controller
         return response()->json(['message' => 'Device and associated sessions revoked.']);
     }
 
+
+    public function listSessions(Request $request): JsonResponse
+    {
+        $current = $request->attributes->get('orbit_session');
+        $sessions = OrbitSession::query()->where('user_id', $current->user_id)
+            ->orderByDesc('created_at')->limit(100)->get();
+        $devices = OrbitDevice::query()->whereIn('id', $sessions->pluck('device_id'))->get()->keyBy('id');
+        return response()->json(['data' => $sessions->map(function (OrbitSession $session) use ($current, $devices): array {
+            $device = $devices->get($session->device_id);
+            return [
+                'id' => $session->id, 'device_id' => $session->device_id,
+                'device_name' => $device?->name ?? 'Unknown device',
+                'is_current' => $session->id === $current->id,
+                'created_at' => $session->created_at?->toIso8601String(),
+                'expires_at' => $session->expires_at?->toIso8601String(),
+                'last_used_at' => $session->last_used_at?->toIso8601String(),
+                'revoked' => (bool) $session->revoked_at,
+            ];
+        })->values()])->header('Cache-Control', 'no-store');
+    }
+
+    public function revokeSession(Request $request, OrbitSession $session, TokenService $tokens): JsonResponse
+    {
+        $current = $request->attributes->get('orbit_session');
+        abort_unless($session->user_id === $current->user_id, 404);
+        if (!$session->revoked_at) {
+            $session->update(['revoked_at' => now()]);
+            $tokens->event($session->user_id, $session->device_id, 'session.revoked', 'user_revoke');
+        }
+        return response()->json(['message' => 'Session revoked.']);
+    }
+
     private function deviceData(OrbitDevice $device, string $currentId): array
     {
         return [

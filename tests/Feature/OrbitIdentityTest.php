@@ -111,6 +111,18 @@ final class OrbitIdentityTest extends TestCase
         $this->withToken($a['access_token'])->getJson('/api/v1/me')->assertOk();
     }
 
+
+    public function test_user_lists_and_revokes_a_specific_session(): void
+    {
+        $initial = $this->signIn();
+        $this->withToken($initial['access_token'])->getJson('/api/v1/me/sessions')->assertOk()
+            ->assertJsonCount(1, 'data');
+        $session = OrbitSession::firstOrFail();
+        $this->withToken($initial['access_token'])
+            ->deleteJson('/api/v1/me/sessions/'.$session->id)->assertOk();
+        $this->withToken($initial['access_token'])->getJson('/api/v1/me')->assertUnauthorized();
+    }
+
     public function test_admin_user_view_is_not_public(): void
     {
         $this->get('/admin/users')->assertRedirect(route('orbit.admin.login'));
