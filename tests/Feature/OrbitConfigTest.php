@@ -36,10 +36,13 @@ final class OrbitConfigTest extends TestCase
             'value_type' => 'object', 'published' => false, 'client_visible' => true]);
         RemoteConfig::create(['key' => 'public.setting', 'value' => ['refresh' => 30],
             'value_type' => 'object', 'published' => true, 'client_visible' => true]);
-        $this->getJson('/api/v1/config/bootstrap?platform=ios&app_version=1.0.0&country=PK')
-            ->assertOk()->assertJsonPath('data.config.public.setting.refresh', 30)
-            ->assertJsonMissingPath('data.config.private.setting')
-            ->assertJsonMissingPath('data.config.draft.setting');
+        $response = $this->getJson('/api/v1/config/bootstrap?platform=ios&app_version=1.0.0&country=PK');
+        $response->assertOk();
+        // Configuration keys are literal dotted strings, not JSON path separators.
+        $configs = $response->json('data.config');
+        $this->assertSame(['refresh' => 30], $configs['public.setting']);
+        $this->assertArrayNotHasKey('private.setting', $configs);
+        $this->assertArrayNotHasKey('draft.setting', $configs);
     }
 
     public function test_feature_flag_kill_switch_has_absolute_precedence(): void
