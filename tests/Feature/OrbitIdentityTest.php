@@ -39,6 +39,13 @@ final class OrbitIdentityTest extends TestCase
         return $response->json('data');
     }
 
+    private function registerTrustedDevice(array $tokens): void
+    {
+        $this->withToken($tokens['access_token'])->postJson('/api/v1/devices/register', [
+            'public_key' => base64_encode(random_bytes(32)),
+        ])->assertOk();
+    }
+
     public function test_otp_request_uses_configured_mail_transport_without_returning_code(): void
     {
         Mail::fake();
@@ -70,6 +77,8 @@ final class OrbitIdentityTest extends TestCase
         $this->assertDatabaseCount('user_identities', 1);
         $this->assertDatabaseCount('devices', 1);
         $this->assertDatabaseCount('orbit_sessions', 1);
+        $this->withToken($tokens['access_token'])->getJson('/api/v1/me')->assertForbidden();
+        $this->registerTrustedDevice($tokens);
         $this->withToken($tokens['access_token'])->getJson('/api/v1/me')->assertOk()
             ->assertJsonPath('data.id', $tokens['user']['id']);
         $this->postJson('/api/v1/auth/otp/verify', [
@@ -106,6 +115,8 @@ final class OrbitIdentityTest extends TestCase
         $a = $this->signIn('member@example.test');
         $b = $this->signIn('member@example.test','ac2dca36-eb23-4a02-92bf-af94d7f58000');
         $this->assertTrue($b['device_requires_approval']);
+        $this->registerTrustedDevice($a);
+        $this->withToken($b['access_token'])->getJson('/api/v1/me')->assertForbidden();
         $this->withToken($a['access_token'])->deleteJson('/api/v1/me/devices/'.$b['device']['id'])->assertOk();
         $this->withToken($b['access_token'])->getJson('/api/v1/me')->assertUnauthorized();
         $this->withToken($a['access_token'])->getJson('/api/v1/me')->assertOk();
@@ -115,6 +126,7 @@ final class OrbitIdentityTest extends TestCase
     public function test_user_lists_and_revokes_a_specific_session(): void
     {
         $initial = $this->signIn();
+        $this->registerTrustedDevice($initial);
         $this->withToken($initial['access_token'])->getJson('/api/v1/me/sessions')->assertOk()
             ->assertJsonCount(1, 'data');
         $session = OrbitSession::firstOrFail();
