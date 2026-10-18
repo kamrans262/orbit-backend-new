@@ -122,8 +122,10 @@ final class OrbitConfigTest extends TestCase
 
     public function test_admin_assets_are_served_via_laravel_without_public_html_copies(): void
     {
-        $this->get('/admin/assets/admin.css')->assertOk()->assertSee('--purple');
-        $this->get('/admin/assets/admin.js')->assertOk()->assertSee('sidebar-open');
+        $this->assertFileExists(public_path('assets/orbit-admin/admin.css'));
+        $this->assertFileExists(public_path('assets/orbit-admin/admin.js'));
+        $this->get('/admin/assets/admin.css')->assertOk()->assertHeader('Content-Type', 'text/css; charset=UTF-8');
+        $this->get('/admin/assets/admin.js')->assertOk()->assertHeader('Content-Type', 'application/javascript; charset=UTF-8');
         $this->get('/admin/assets/nope.php')->assertNotFound();
     }
 
