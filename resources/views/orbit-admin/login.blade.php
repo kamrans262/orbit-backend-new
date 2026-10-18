@@ -2,7 +2,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Administrator sign in · Orbit</title><link rel="stylesheet" href="{{ route('orbit.admin.asset', ['file' => 'admin.css']) }}">
 </head><body class="auth-body"><main class="auth-panel">
-  <div class="auth-mark">O</div><p class="eyebrow">ORBIT OPERATIONS</p><h1>Admin sign in</h1>
+  <img class="auth-mark" src="{{ route('orbit.admin.asset', ['file' => 'orbit-logo.png']) }}" width="84" height="84" alt="Orbit logo"><p class="eyebrow">ORBIT OPERATIONS</p><h1>Admin sign in</h1>
   <p class="auth-help">A separate, protected administrator account is required. There are no default credentials.</p>
   @if($errors->any())<div class="notice danger" role="alert">{{ $errors->first() }}</div>@endif
   <form method="post" action="{{ route('orbit.admin.password') }}">@csrf

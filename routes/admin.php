@@ -11,13 +11,13 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
     // Serve the small admin assets from the existing Laravel app on Hostinger.
     // public_html uses a separate front controller; no duplicated public files or symlinks.
     Route::get('/assets/{file}', function (string $file) {
-        abort_unless(in_array($file, ['admin.css', 'admin.js'], true), 404);
+        abort_unless(in_array($file, ['admin.css', 'admin.js', 'orbit-logo.png'], true), 404);
         return response()->file(public_path('assets/orbit-admin/'.$file), [
-            'Content-Type' => $file === 'admin.css' ? 'text/css; charset=UTF-8' : 'application/javascript; charset=UTF-8',
+            'Content-Type' => match ($file) { 'admin.css' => 'text/css; charset=UTF-8', 'admin.js' => 'application/javascript; charset=UTF-8', default => 'image/png' },
             'Cache-Control' => 'public, max-age=3600',
             'X-Content-Type-Options' => 'nosniff',
         ]);
-    })->where('file', 'admin\\.(css|js)')->name('asset');
+    })->where('file', 'admin\\.(css|js)|orbit-logo\\.png')->name('asset');
     Route::get('/login', [AdminAuthController::class, 'loginForm'])->name('login');
     Route::post('/login', [AdminAuthController::class, 'password'])->middleware('throttle:8,1')->name('password');
     Route::get('/mfa', [AdminAuthController::class, 'mfaForm'])->name('mfa');

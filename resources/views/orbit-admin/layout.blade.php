@@ -9,7 +9,7 @@
 <body>
 <div class="shell" data-shell>
   <aside class="sidebar" data-sidebar aria-label="Admin navigation">
-    <a href="{{ route('orbit.admin.dashboard') }}" class="brand"><span class="brand-logo">O</span><span>Orbit<small>ADMINISTRATION</small></span></a>
+    <a href="{{ route('orbit.admin.dashboard') }}" class="brand"><img class="brand-logo" src="{{ route('orbit.admin.asset', ['file' => 'orbit-logo.png']) }}" width="44" height="44" alt="Orbit logo"><span>Orbit<small>ADMINISTRATION</small></span></a>
     <div class="nav-caption">WORKSPACE</div>
     <nav>
       <a href="{{ route('orbit.admin.dashboard') }}" class="nav-item active"><span>◫</span> Configuration</a>

@@ -124,8 +124,10 @@ final class OrbitConfigTest extends TestCase
     {
         $this->assertFileExists(public_path('assets/orbit-admin/admin.css'));
         $this->assertFileExists(public_path('assets/orbit-admin/admin.js'));
+        $this->assertFileExists(public_path('assets/orbit-admin/orbit-logo.png'));
         $this->get('/admin/assets/admin.css')->assertOk()->assertHeader('Content-Type', 'text/css; charset=UTF-8');
         $this->get('/admin/assets/admin.js')->assertOk()->assertHeader('Content-Type', 'application/javascript; charset=UTF-8');
+        $this->get('/admin/assets/orbit-logo.png')->assertOk()->assertHeader('Content-Type', 'image/png');
         $this->get('/admin/assets/nope.php')->assertNotFound();
     }
 
