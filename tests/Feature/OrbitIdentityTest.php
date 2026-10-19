@@ -254,6 +254,38 @@ final class OrbitIdentityTest extends TestCase
             ->assertOk()->assertSee('alpha_test')->assertDontSee('beta_test');
     }
 
+    public function test_admin_suspension_requires_permission_and_revokes_sessions(): void
+    {
+        $tokens = $this->signIn();
+        $this->registerTrustedDevice($tokens);
+        $user = OrbitUser::firstOrFail();
+        $admin = \App\Models\AdminUser::create([
+            'name' => 'Admin operator', 'email' => 'operator@example.test',
+            'password' => 'TestingPassword123!', 'totp_secret' => (new \App\Modules\Config\Services\Totp())->generateSecret(),
+            'status' => 'active',
+        ]);
+        $role = \App\Models\AdminRole::create([
+            'name' => 'Support reviewer', 'permissions' => ['users.read'],
+        ]);
+        $admin->roles()->attach($role->id);
+        $this->be($admin, 'admin');
+
+        $endpoint = '/admin/users/'.$user->id.'/status';
+        $this->post($endpoint, ['status' => 'suspended', 'reason' => 'Account safety support review'])
+            ->assertForbidden();
+        $this->assertSame('active', $user->fresh()->status);
+
+        $role->update(['permissions' => ['users.read', 'users.manage']]);
+        $this->post($endpoint, ['status' => 'suspended', 'reason' => 'Account safety support review'])
+            ->assertRedirect(route('orbit.admin.users.show', $user));
+        $this->assertSame('suspended', $user->fresh()->status);
+        $this->assertNotNull(OrbitSession::firstOrFail()->revoked_at);
+        $this->assertDatabaseHas('admin_audit_log', [
+            'action' => 'users.status', 'target' => 'user:'.$user->id,
+        ]);
+        $this->withToken($tokens['access_token'])->getJson('/api/v1/me')->assertUnauthorized();
+    }
+
     public function test_admin_user_view_is_not_public(): void
     {
         $this->get('/admin/users')->assertRedirect(route('orbit.admin.login'));
