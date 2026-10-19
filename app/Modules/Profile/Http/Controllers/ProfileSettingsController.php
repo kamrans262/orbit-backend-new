@@ -168,10 +168,13 @@ final class ProfileSettingsController extends Controller
             }
             if ($changes !== []) {
                 $session = $request->attributes->get('orbit_session');
-                app(TokenService::class)->event($id, $session->device_id,
-                    $column === 'privacy' ? 'settings.privacy_updated' : 'settings.notifications_updated',
-                    // Log names only; never precise locations or sensitive preference values.
-                    implode(',', array_keys($changes)));
+                foreach (array_keys($changes) as $changedKey) {
+                    // Single-key reason codes stay within the 80-character column.
+                    // Never log secret values, coordinates or recipient identities.
+                    app(TokenService::class)->event($id, $session->device_id,
+                        $column === 'privacy' ? 'settings.privacy_updated' : 'settings.notifications_updated',
+                        $changedKey);
+                }
             }
             return $saved;
         });
