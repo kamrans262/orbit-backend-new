@@ -6,6 +6,7 @@ use App\Models\OrbitDevice;
 use App\Models\OrbitSession;
 use App\Models\OrbitUser;
 use App\Modules\Identity\Services\TokenService;
+use App\Modules\Identity\Services\OrbitPasswordHasher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -119,6 +120,68 @@ final class OrbitIdentityTest extends TestCase
         $this->withToken($initial['access_token'])
             ->postJson('/api/v1/devices/register', ['public_key'=>base64_encode(random_bytes(32))])->assertStatus(409);
         $this->assertSame($valid, OrbitDevice::firstOrFail()->public_key);
+    }
+
+    public function test_second_device_requires_trusted_approval_and_can_only_check_own_status(): void
+    {
+        $first = $this->signIn();
+        $this->registerTrustedDevice($first);
+        $second = $this->signIn('member@example.test', (string) Str::uuid());
+        $this->assertTrue($second['device_requires_approval']);
+
+        $status = '/api/v1/devices/registration-status';
+        $this->getJson($status)->assertUnauthorized();
+        $this->withToken($second['access_token'])->getJson($status)->assertOk()
+            ->assertJsonPath('data.trust_state', 'pending')
+            ->assertJsonPath('data.key_registered', false)
+            ->assertJsonMissingPath('data.user_id');
+
+        $this->withToken($second['access_token'])
+            ->postJson('/api/v1/devices/register', ['public_key' => base64_encode(random_bytes(32))])
+            ->assertOk()->assertJsonPath('data.trust_state', 'pending');
+        $this->withToken($second['access_token'])->getJson($status)->assertOk()
+            ->assertJsonPath('data.key_registered', true);
+        $this->withToken($second['access_token'])->getJson('/api/v1/me')->assertForbidden();
+        $this->withToken($second['access_token'])->getJson('/api/v1/me/devices')->assertForbidden();
+        $this->withToken($second['access_token'])
+            ->postJson('/api/v1/me/devices/'.$second['device']['id'].'/approve')->assertForbidden();
+
+        $this->withToken($first['access_token'])
+            ->postJson('/api/v1/me/devices/'.$second['device']['id'].'/approve')->assertOk()
+            ->assertJsonPath('data.trust_state', 'trusted');
+        $this->withToken($second['access_token'])->getJson($status)->assertOk()
+            ->assertJsonPath('data.trust_state', 'trusted');
+        $this->withToken($second['access_token'])->getJson('/api/v1/me')->assertOk();
+
+        $this->withToken($first['access_token'])
+            ->deleteJson('/api/v1/me/devices/'.$second['device']['id'])->assertOk();
+        $this->withToken($second['access_token'])->getJson($status)->assertUnauthorized();
+    }
+
+    public function test_argon2id_enrollment_and_existing_bcrypt_account_upgrade(): void
+    {
+        $tokens = $this->signIn();
+        $this->registerTrustedDevice($tokens);
+        $user = OrbitUser::firstOrFail();
+        $this->withToken($tokens['access_token'])->postJson('/api/v1/me/password', [
+            'password' => 'ArgonNewPassword123',
+        ])->assertOk();
+        $this->assertSame('argon2id', password_get_info($user->fresh()->password_hash)['algoName']);
+        $this->assertTrue(app(OrbitPasswordHasher::class)->check('ArgonNewPassword123', $user->fresh()->password_hash));
+
+        $bcryptHash = Hash::driver('bcrypt')->make('LegacyPassword123');
+        $user->update(['password_hash' => $bcryptHash]);
+        Mail::fake();
+        $this->postJson('/api/v1/auth/password/otp/request', [
+            'recipient' => 'member@example.test', 'password' => 'IncorrectLegacy123',
+        ])->assertUnprocessable();
+        $this->assertSame($bcryptHash, $user->fresh()->password_hash);
+        $this->postJson('/api/v1/auth/password/otp/request', [
+            'recipient' => 'member@example.test', 'password' => 'LegacyPassword123',
+        ])->assertStatus(202)->assertJsonMissingPath('data.access_token');
+        $this->assertSame('argon2id', password_get_info($user->fresh()->password_hash)['algoName']);
+        $this->assertTrue(app(OrbitPasswordHasher::class)->check('LegacyPassword123', $user->fresh()->password_hash));
+        $this->assertDatabaseCount('orbit_users', 1);
     }
 
     public function test_revoke_another_device_invalidates_only_that_devices_sessions(): void
@@ -317,12 +380,12 @@ final class OrbitIdentityTest extends TestCase
             'password' => 'StrongAndUniquePass123!',
         ])->assertOk();
         $user = OrbitUser::firstOrFail();
-        $this->assertTrue(Hash::check('StrongAndUniquePass123!', $user->password_hash));
+        $this->assertTrue(app(OrbitPasswordHasher::class)->check('StrongAndUniquePass123!', $user->password_hash));
         $this->assertNotSame('StrongAndUniquePass123!', $user->password_hash);
         $this->withToken($tokens['access_token'])->postJson($endpoint, [
             'password' => 'AnotherSecretPassword456!',
         ])->assertStatus(409);
-        $this->assertTrue(Hash::check('StrongAndUniquePass123!', $user->fresh()->password_hash));
+        $this->assertTrue(app(OrbitPasswordHasher::class)->check('StrongAndUniquePass123!', $user->fresh()->password_hash));
     }
 
     public function test_password_login_starts_same_otp_flow_but_does_not_issue_tokens(): void
@@ -422,7 +485,7 @@ final class OrbitIdentityTest extends TestCase
             ->assertUnprocessable();
         $this->postJson('/api/v1/auth/password/reset/confirm', $payload)
             ->assertOk()->assertJsonMissingPath('data.access_token');
-        $this->assertTrue(Hash::check('NewStrongPassword456!', $user->fresh()->password_hash));
+        $this->assertTrue(app(OrbitPasswordHasher::class)->check('NewStrongPassword456!', $user->fresh()->password_hash));
         $this->withToken($tokens['access_token'])->getJson('/api/v1/me')->assertUnauthorized();
         $this->postJson('/api/v1/auth/password/reset/confirm', $payload)->assertUnprocessable();
         $this->assertDatabaseCount('orbit_users', 1);
@@ -441,7 +504,7 @@ final class OrbitIdentityTest extends TestCase
             'code' => '472819',
             'password' => 'NewLegacyPassword123',
         ])->assertOk();
-        $this->assertTrue(Hash::check('NewLegacyPassword123', $account->fresh()->password_hash));
+        $this->assertTrue(app(OrbitPasswordHasher::class)->check('NewLegacyPassword123', $account->fresh()->password_hash));
         $this->assertDatabaseCount('orbit_users', 1);
         $this->withToken($tokens['access_token'])->getJson('/api/v1/me')->assertUnauthorized();
     }
