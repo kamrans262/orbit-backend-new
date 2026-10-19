@@ -63,7 +63,8 @@ final class IdentityController extends Controller
     public function enrollPassword(Request $request, TokenService $tokens): JsonResponse
     {
         $data = $request->validate([
-            'password' => ['required', 'string', 'min:10', 'max:256'],
+            'password' => ['required', 'string', 'min:10', 'max:256',
+                'regex:/[A-Za-z]/', 'regex:/[0-9]/'],
         ]);
         $session = $request->attributes->get('orbit_session');
         if ($session->created_at->lt(now()->subMinutes(10))) {
@@ -107,7 +108,8 @@ final class IdentityController extends Controller
         $data = $request->validate([
             'recipient' => ['required', 'string', 'max:190'],
             'code' => ['required', 'digits:6'],
-            'password' => ['required', 'string', 'min:10', 'max:256'],
+            'password' => ['required', 'string', 'min:10', 'max:256',
+                'regex:/[A-Za-z]/', 'regex:/[0-9]/'],
         ]);
         $channel = str_contains($data['recipient'], '@') ? 'email' : 'sms';
         $recipient = $otp->normalized($channel, $data['recipient']);

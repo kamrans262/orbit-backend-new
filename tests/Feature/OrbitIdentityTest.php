@@ -308,6 +308,12 @@ final class OrbitIdentityTest extends TestCase
             'password' => 'short',
         ])->assertUnprocessable();
         $this->withToken($tokens['access_token'])->postJson($endpoint, [
+            'password' => 'onlyalphabeticpassword',
+        ])->assertUnprocessable();
+        $this->withToken($tokens['access_token'])->postJson($endpoint, [
+            'password' => str_repeat('a', 260).'1',
+        ])->assertUnprocessable();
+        $this->withToken($tokens['access_token'])->postJson($endpoint, [
             'password' => 'StrongAndUniquePass123!',
         ])->assertOk();
         $user = OrbitUser::firstOrFail();
@@ -394,6 +400,9 @@ final class OrbitIdentityTest extends TestCase
             'recipient' => 'member@example.test', 'code' => '472819',
             'password' => 'NewStrongPassword456!',
         ];
+        $this->postJson('/api/v1/auth/password/reset/confirm', array_merge($payload, [
+            'password' => 'onlyalphabeticpassword',
+        ]))->assertUnprocessable();
         $this->postJson('/api/v1/auth/password/reset/confirm', array_merge($payload, ['code' => '000000']))
             ->assertUnprocessable();
         $this->postJson('/api/v1/auth/password/reset/confirm', $payload)
