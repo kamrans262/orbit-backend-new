@@ -29,6 +29,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/me/sessions', [IdentityController::class, 'listSessions']);
         Route::delete('/me/sessions/{session}', [IdentityController::class, 'revokeSession']);
         Route::post('/devices/register', [IdentityController::class, 'registerDevice']);
+        Route::get('/devices/registration-status', [IdentityController::class, 'deviceRegistrationStatus']);
         Route::patch('/me/devices/{device}', [IdentityController::class, 'renameDevice']);
         Route::post('/me/devices/{device}/approve', [IdentityController::class, 'approveDevice']);
         Route::delete('/me/devices/{device}', [IdentityController::class, 'revokeDevice']);
