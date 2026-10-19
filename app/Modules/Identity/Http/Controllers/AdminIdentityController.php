@@ -64,6 +64,11 @@ final class AdminIdentityController extends Controller
         ]);
         $actor = auth()->guard('admin')->user();
         abort_unless($actor?->canPerform('users.delete'), 403);
+        // A pending self-service request has grace-period and legal-hold
+        // controls. A generic admin Delete User action must not bypass them.
+        abort_if(DB::table('orbit_account_deletion_requests')
+            ->where('user_id', $user->id)->where('status', 'pending')->exists(),
+            409, 'This account is pending reviewed deletion; use the erasure review workflow.');
         $deletion->execute(
             $user->id,
             $actor,
