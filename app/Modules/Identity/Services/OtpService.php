@@ -33,7 +33,7 @@ final class OtpService
     {
         return hash_hmac('sha256', $channel.'|'.$recipient, $this->secret());
     }
-    public function request(string $channel, string $recipient, string $ip): string
+    public function request(string $channel, string $recipient, string $ip, string $purpose = 'signup'): string
     {
         $normalized = $this->normalized($channel, $recipient);
         if (!$normalized) return 'invalid';
@@ -52,6 +52,7 @@ final class OtpService
         DB::table('otp_challenges')->where('recipient_hash', $digest)->whereNull('consumed_at')->update(['consumed_at' => now()]);
         DB::table('otp_challenges')->insert([
             'id' => $id, 'channel' => $channel, 'recipient_hash' => $digest,
+            'purpose' => $purpose,
             // The local challenge is a single-use lock even when verification happens at Twilio.
             'code_hash' => hash_hmac('sha256', $id.'|'.($code ?? bin2hex(random_bytes(24))), $this->secret()),
             'expires_at' => now()->addMinutes((int) config('orbit_identity.otp_minutes', 5)),
@@ -103,6 +104,7 @@ final class OtpService
 
             $challenge = DB::table('otp_challenges')
                 ->where('recipient_hash', $digest)->where('channel', $channel)
+                ->where('purpose', 'link')
                 ->whereNull('consumed_at')->orderByDesc('created_at')->lockForUpdate()->first();
             if (!$challenge || now()->greaterThan($challenge->expires_at) || $challenge->attempts >= 5) return 'invalid';
             DB::table('otp_challenges')->where('id', $challenge->id)->increment('attempts');
@@ -124,7 +126,35 @@ final class OtpService
         });
     }
 
-    public function verify(string $channel, string $recipient, string $code, string $devicePublicId, string $platform, string $deviceName, TokenService $tokens, ?string $ip): ?array
+    /**
+     * OTP-only password recovery. Never creates accounts or mobile sessions;
+     * the caller must authorize its change with this exact challenge purpose.
+     */
+    public function consumeRecoveryCode(string $channel, string $recipient, string $code): bool
+    {
+        $normalized = $this->normalized($channel, $recipient);
+        if (!$normalized || !preg_match('/^\\d{6}$/D', $code)) return false;
+        $digest = $this->digest($channel, $normalized);
+        $key = 'orbit:otp:recovery:'.$digest;
+        if (RateLimiter::tooManyAttempts($key, 5)) return false;
+        RateLimiter::hit($key, 600);
+        return DB::transaction(function () use ($channel, $digest, $code, $key, $normalized): bool {
+            $challenge = DB::table('otp_challenges')->where('recipient_hash', $digest)
+                ->where('channel', $channel)->where('purpose', 'reset')
+                ->whereNull('consumed_at')->orderByDesc('created_at')->lockForUpdate()->first();
+            if (!$challenge || now()->greaterThan($challenge->expires_at) || $challenge->attempts >= 5) return false;
+            DB::table('otp_challenges')->where('id', $challenge->id)->increment('attempts');
+            $approved = ($channel === 'sms' && app(TwilioVerifyGateway::class)->enabled())
+                ? app(TwilioVerifyGateway::class)->check($normalized, $code)
+                : hash_equals($challenge->code_hash, hash_hmac('sha256', $challenge->id.'|'.$code, $this->secret()));
+            if (!$approved) return false;
+            DB::table('otp_challenges')->where('id', $challenge->id)->update(['consumed_at' => now()]);
+            RateLimiter::clear($key);
+            return true;
+        });
+    }
+
+    public function verify(string $channel, string $recipient, string $code, string $devicePublicId, string $platform, string $deviceName, TokenService $tokens, ?string $ip, string $purpose = 'signup'): ?array
     {
         $normalized = $this->normalized($channel, $recipient);
         if (!$normalized || !preg_match('/^\d{6}$/D', $code)) return null;
@@ -132,8 +162,9 @@ final class OtpService
         $key = 'orbit:otp:verify:'.$digest;
         if (RateLimiter::tooManyAttempts($key, (int) config('orbit_identity.otp_verify_per_recipient', 5))) return null;
         RateLimiter::hit($key, 600);
-        return DB::transaction(function () use ($channel, $normalized, $code, $digest, $devicePublicId, $platform, $deviceName, $tokens, $ip, $key): ?array {
+        return DB::transaction(function () use ($channel, $normalized, $code, $digest, $devicePublicId, $platform, $deviceName, $tokens, $ip, $key, $purpose): ?array {
             $challenge = DB::table('otp_challenges')->where('recipient_hash', $digest)->where('channel', $channel)
+                ->where('purpose', $purpose)
                 ->whereNull('consumed_at')->orderByDesc('created_at')->lockForUpdate()->first();
             if (!$challenge || now()->greaterThan($challenge->expires_at) || $challenge->attempts >= 5) return null;
             DB::table('otp_challenges')->where('id', $challenge->id)->increment('attempts');
@@ -147,9 +178,15 @@ final class OtpService
             $provider = $channel === 'sms' ? 'phone' : 'email';
             $identity = UserIdentity::query()->where('provider', $provider)->where('provider_subject', $normalized)->lockForUpdate()->first();
             if ($identity) {
+                // A verified signup code proves contact ownership but may
+                // never authenticate or overwrite an existing Orbit account.
+                if ($purpose === 'signup') return ['account_exists' => true];
                 $user = OrbitUser::find($identity->user_id);
-                if (!$user || $user->status !== 'active') return null;
+                if (!$user || $user->status !== 'active' || $purpose !== 'login'
+                    || !$user->password_hash) return null;
             } else {
+                // A login code never creates a new account.
+                if ($purpose !== 'signup') return null;
                 $user = OrbitUser::create(['status' => 'active']);
                 UserIdentity::create([
                     'user_id' => $user->id, 'provider' => $provider, 'provider_subject' => $normalized,

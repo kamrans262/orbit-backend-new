@@ -12,6 +12,8 @@ Route::prefix('v1')->group(function (): void {
     // Never expose OTP codes or verification-provider credentials to consumers.
     Route::post('/auth/otp/request', [IdentityController::class, 'requestOtp'])->middleware('throttle:20,1');
     Route::post('/auth/password/otp/request', [IdentityController::class, 'requestPasswordOtp'])->middleware('throttle:8,1');
+    Route::post('/auth/password/reset/request', [IdentityController::class, 'requestPasswordReset'])->middleware('throttle:8,1');
+    Route::post('/auth/password/reset/confirm', [IdentityController::class, 'confirmPasswordReset'])->middleware('throttle:10,1');
     Route::post('/auth/otp/verify', [IdentityController::class, 'verifyOtp'])->middleware('throttle:25,1');
     Route::post('/auth/refresh', [IdentityController::class, 'refresh'])->middleware('throttle:30,1');
 

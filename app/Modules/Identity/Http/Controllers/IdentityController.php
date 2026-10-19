@@ -45,7 +45,7 @@ final class IdentityController extends Controller
             || !Hash::check($data['password'], $user->password_hash)) {
             return response()->json(['message' => 'Invalid credentials.'], 422)->header('Cache-Control', 'no-store');
         }
-        $result = $otp->request($channel, $recipient, (string) $request->ip());
+        $result = $otp->request($channel, $recipient, (string) $request->ip(), 'login');
         if ($result === 'rate_limited') {
             return response()->json(['message' => 'Too many requests. Try again later.'], 429);
         }
@@ -80,16 +80,66 @@ final class IdentityController extends Controller
         return response()->json(['message' => 'Password secured.'])->header('Cache-Control', 'no-store');
     }
 
+    /**
+     * Send a neutral response for unknown identities; no account enumeration.
+     * A reset code can change only an existing active password account.
+     */
+    public function requestPasswordReset(Request $request, OtpService $otp): JsonResponse
+    {
+        $data = $request->validate(['recipient' => ['required', 'string', 'max:190']]);
+        $channel = str_contains($data['recipient'], '@') ? 'email' : 'sms';
+        $recipient = $otp->normalized($channel, $data['recipient']);
+        if (!$recipient) return response()->json(['message' => 'Enter a valid email or international phone number.'], 422);
+        $identity = UserIdentity::query()->where('provider', $channel === 'sms' ? 'phone' : 'email')
+            ->where('provider_subject', $recipient)->first();
+        $user = $identity ? OrbitUser::find($identity->user_id) : null;
+        if ($user && $user->status === 'active' && $user->password_hash) {
+            $result = $otp->request($channel, $recipient, (string) $request->ip(), 'reset');
+            if ($result === 'rate_limited') return response()->json(['message' => 'Too many requests. Please try later.'], 429);
+            if ($result !== 'sent') return response()->json(['message' => 'Verification service unavailable.'], 503);
+        }
+        return response()->json(['message' => 'If the account exists, a password reset code has been sent.'], 202)
+            ->header('Cache-Control', 'no-store');
+    }
+
+    public function confirmPasswordReset(Request $request, OtpService $otp, TokenService $tokens): JsonResponse
+    {
+        $data = $request->validate([
+            'recipient' => ['required', 'string', 'max:190'],
+            'code' => ['required', 'digits:6'],
+            'password' => ['required', 'string', 'min:10', 'max:256'],
+        ]);
+        $channel = str_contains($data['recipient'], '@') ? 'email' : 'sms';
+        $recipient = $otp->normalized($channel, $data['recipient']);
+        if (!$recipient) return response()->json(['message' => 'Invalid or expired code.'], 422);
+        $result = DB::transaction(function () use ($otp, $tokens, $channel, $recipient, $data): bool {
+            $identity = UserIdentity::query()->where('provider', $channel === 'sms' ? 'phone' : 'email')
+                ->where('provider_subject', $recipient)->first();
+            $user = $identity ? OrbitUser::whereKey($identity->user_id)->lockForUpdate()->first() : null;
+            if (!$user || $user->status !== 'active' || !$user->password_hash) return false;
+            if (!$otp->consumeRecoveryCode($channel, $recipient, $data['code'])) return false;
+            $user->update(['password_hash' => Hash::make($data['password'])]);
+            OrbitSession::where('user_id', $user->id)->whereNull('revoked_at')->update(['revoked_at' => now()]);
+            $tokens->event($user->id, null, 'auth.password_reset', 'verified_otp');
+            return true;
+        });
+        if (!$result) return response()->json(['message' => 'Invalid or expired code.'], 422)
+            ->header('Cache-Control', 'no-store');
+        return response()->json(['message' => 'Password updated. Please log in.'])
+            ->header('Cache-Control', 'no-store');
+    }
+
     public function requestOtp(Request $request, OtpService $otp): JsonResponse
     {
         $data = $request->validate([
             'channel' => ['required', Rule::in(['email', 'sms'])],
             'recipient' => ['required', 'string', 'max:190'],
+            'purpose' => ['sometimes', Rule::in(['signup', 'link'])],
         ]);
         if (!$otp->normalized($data['channel'], $data['recipient'])) {
             return response()->json(['message' => 'Enter a valid email or E.164 international phone number.'], 422);
         }
-        $result = $otp->request($data['channel'], $data['recipient'], (string) $request->ip());
+        $result = $otp->request($data['channel'], $data['recipient'], (string) $request->ip(), $data['purpose'] ?? 'signup');
         if ($result === 'rate_limited') return response()->json(['message' => 'Too many requests. Please try later.'], 429);
         if ($result === 'delivery_unavailable') return response()->json(['message' => 'Verification service is unavailable. Please try later.'], 503);
         return response()->json(['message' => 'If the destination can receive messages, a verification code has been sent.',
@@ -102,12 +152,17 @@ final class IdentityController extends Controller
             'channel' => ['required', Rule::in(['email', 'sms'])],
             'recipient' => ['required', 'string', 'max:190'],
             'code' => ['required', 'digits:6'],
+            'purpose' => ['required', Rule::in(['signup', 'login'])],
             'device_public_id' => ['required', 'uuid'],
             'platform' => ['required', Rule::in(['android','ios'])],
             'device_name' => ['required', 'string', 'min:1', 'max:80'],
         ]);
         $result = $otp->verify($data['channel'], $data['recipient'], $data['code'],
-            $data['device_public_id'], $data['platform'], $data['device_name'], $tokens, $request->ip());
+            $data['device_public_id'], $data['platform'], $data['device_name'], $tokens, $request->ip(), $data['purpose']);
+        if (is_array($result) && ($result['account_exists'] ?? false)) {
+            return response()->json(['message' => 'An account already exists. Please log in instead.'], 409)
+                ->header('Cache-Control', 'no-store');
+        }
         if (!$result) return response()->json(['message' => 'Invalid or expired code.'], 422)->header('Cache-Control', 'no-store');
         return response()->json(['data' => $result])->header('Cache-Control', 'no-store');
     }

@@ -18,13 +18,13 @@ final class OrbitIdentityTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function createdCode(string $recipient, string $code = '472819'): void
+    private function createdCode(string $recipient, string $code = '472819', string $purpose = 'signup'): void
     {
         $id = (string) Str::uuid7();
         $secret = hash('sha256', config('app.key').'|orbit-otp-v1', true);
         $digest = hash_hmac('sha256', 'email|'.strtolower($recipient), $secret);
         DB::table('otp_challenges')->insert([
-            'id' => $id, 'channel' => 'email',
+            'id' => $id, 'channel' => 'email', 'purpose' => $purpose,
             'recipient_hash' => $digest,
             'code_hash' => hash_hmac('sha256', $id.'|'.$code, $secret),
             'expires_at' => now()->addMinutes(5), 'created_at' => now(), 'updated_at' => now(),
@@ -33,9 +33,18 @@ final class OrbitIdentityTest extends TestCase
 
     private function signIn(string $email = 'member@example.test', string $deviceId = 'dc2dca36-eb23-4a02-92bf-af94d7f58000'): array
     {
-        $this->createdCode($email);
+        $isExisting = \App\Models\UserIdentity::where('provider', 'email')
+            ->where('provider_subject', strtolower($email))->exists();
+        if ($isExisting) {
+            $record = \App\Models\UserIdentity::where('provider_subject', strtolower($email))->firstOrFail();
+            OrbitUser::whereKey($record->user_id)->whereNull('password_hash')
+                ->update(['password_hash' => Hash::make('ExistingTestPassword123!')]);
+        }
+        $purpose = $isExisting ? 'login' : 'signup';
+        $this->createdCode($email, '472819', $purpose);
         $response = $this->postJson('/api/v1/auth/otp/verify', [
-            'channel' => 'email', 'recipient' => $email, 'code' => '472819',
+            'channel' => 'email', 'purpose' => $purpose,
+            'recipient' => $email, 'code' => '472819',
             'device_public_id' => $deviceId, 'platform' => 'android', 'device_name' => 'Test Android',
         ])->assertOk();
         return $response->json('data');
@@ -60,7 +69,7 @@ final class OrbitIdentityTest extends TestCase
     public function test_invalid_and_expired_otp_are_rejected(): void
     {
         $this->createdCode('member@example.test');
-        $input = ['channel' => 'email', 'recipient' => 'member@example.test',
+        $input = ['channel' => 'email', 'purpose' => 'signup', 'recipient' => 'member@example.test',
             'code' => '000000', 'device_public_id' => (string) Str::uuid7(),
             'platform' => 'ios', 'device_name' => 'My iPhone'];
         $this->postJson('/api/v1/auth/otp/verify', $input)->assertUnprocessable();
@@ -84,7 +93,7 @@ final class OrbitIdentityTest extends TestCase
         $this->withToken($tokens['access_token'])->getJson('/api/v1/me')->assertOk()
             ->assertJsonPath('data.id', $tokens['user']['id']);
         $this->postJson('/api/v1/auth/otp/verify', [
-            'channel'=>'email', 'recipient'=>'member@example.test', 'code'=>'472819',
+            'channel'=>'email', 'purpose'=>'signup', 'recipient'=>'member@example.test', 'code'=>'472819',
             'device_public_id'=>(string) Str::uuid7(), 'platform'=>'android','device_name'=>'Other',
         ])->assertUnprocessable();
     }
@@ -161,7 +170,7 @@ final class OrbitIdentityTest extends TestCase
             str_ends_with($req->url(), '/Verifications') && $req['Channel'] === 'sms'
             && $req['To'] === '+923001234567');
         $payload = [
-            'channel' => 'sms', 'recipient' => '+923001234567',
+            'channel' => 'sms', 'purpose' => 'signup', 'recipient' => '+923001234567',
             'code' => '000000', 'device_public_id' => (string) Str::uuid7(),
             'platform' => 'android', 'device_name' => 'SMS test device',
         ];
@@ -212,7 +221,7 @@ final class OrbitIdentityTest extends TestCase
     {
         $initial = $this->signIn();
         $this->registerTrustedDevice($initial);
-        $this->createdCode('linked@example.test');
+        $this->createdCode('linked@example.test', '472819', 'link');
         $payload = ['channel' => 'email', 'recipient' => 'linked@example.test', 'code' => '472819'];
         $this->withToken($initial['access_token'])->postJson('/api/v1/me/identities/link', $payload)->assertOk();
         $this->assertDatabaseCount('orbit_users', 1);
@@ -230,7 +239,7 @@ final class OrbitIdentityTest extends TestCase
         $this->registerTrustedDevice($first);
         $second = $this->signIn('second@example.test', 'cc2dca36-eb23-4a02-92bf-af94d7f58000');
         $this->registerTrustedDevice($second);
-        $this->createdCode('member@example.test');
+        $this->createdCode('member@example.test', '472819', 'link');
         $this->withToken($second['access_token'])
             ->postJson('/api/v1/me/identities/link', [
                 'channel' => 'email', 'recipient' => 'member@example.test', 'code' => '472819',
@@ -325,6 +334,120 @@ final class OrbitIdentityTest extends TestCase
             'recipient' => 'member@example.test', 'password' => 'StrongAndUniquePass123!',
         ])->assertStatus(202)->assertJsonMissingPath('data.access_token');
         $this->assertDatabaseCount('orbit_sessions', 1);
+    }
+
+
+    public function test_signup_cannot_log_in_as_an_existing_verified_identity(): void
+    {
+        $tokens = $this->signIn();
+        $userId = $tokens['user']['id'];
+        $this->createdCode('member@example.test', '472819', 'signup');
+        $payload = [
+            'channel' => 'email', 'purpose' => 'signup',
+            'recipient' => 'member@example.test', 'code' => '472819',
+            'device_public_id' => (string) Str::uuid(), 'platform' => 'android',
+            'device_name' => 'Unauthorized signup',
+        ];
+        $this->postJson('/api/v1/auth/otp/verify', $payload)
+            ->assertStatus(409)->assertJsonFragment(['message' => 'An account already exists. Please log in instead.']);
+        $this->assertDatabaseCount('orbit_users', 1);
+        $this->assertDatabaseCount('orbit_sessions', 1);
+        $this->assertDatabaseHas('orbit_users', ['id' => $userId]);
+        $this->assertDatabaseCount('devices', 1);
+    }
+
+    public function test_a_login_code_cannot_create_users_or_be_used_as_signup(): void
+    {
+        $this->createdCode('unknown@example.test', '472819', 'login');
+        $payload = [
+            'channel' => 'email', 'purpose' => 'login',
+            'recipient' => 'unknown@example.test', 'code' => '472819',
+            'device_public_id' => (string) Str::uuid(), 'platform' => 'android',
+            'device_name' => 'Test Android',
+        ];
+        $this->postJson('/api/v1/auth/otp/verify', $payload)->assertUnprocessable();
+        $this->assertDatabaseCount('orbit_users', 0);
+        $payload['purpose'] = 'signup';
+        $this->postJson('/api/v1/auth/otp/verify', $payload)->assertUnprocessable();
+        $this->assertDatabaseCount('orbit_users', 0);
+        $this->assertDatabaseCount('orbit_sessions', 0);
+    }
+
+    public function test_recovery_updates_password_without_issuing_a_session_and_revokes_all_existing_sessions(): void
+    {
+        $tokens = $this->signIn();
+        $this->registerTrustedDevice($tokens);
+        $user = OrbitUser::firstOrFail();
+        $user->update(['password_hash' => Hash::make('OriginalTestPassword123!')]);
+        Mail::fake();
+        $this->postJson('/api/v1/auth/password/reset/request', [
+            'recipient' => 'member@example.test',
+        ])->assertStatus(202)->assertDontSee('access_token');
+        $this->assertDatabaseHas('otp_challenges', ['purpose' => 'reset']);
+        $challenge = DB::table('otp_challenges')->where('purpose', 'reset')->first();
+        $secret = hash('sha256', config('app.key').'|orbit-otp-v1', true);
+        // Fakes let us explicitly set a known code without exposing it in responses.
+        DB::table('otp_challenges')->where('id', $challenge->id)->update([
+            'code_hash' => hash_hmac('sha256', $challenge->id.'|472819', $secret),
+        ]);
+        $payload = [
+            'recipient' => 'member@example.test', 'code' => '472819',
+            'password' => 'NewStrongPassword456!',
+        ];
+        $this->postJson('/api/v1/auth/password/reset/confirm', array_merge($payload, ['code' => '000000']))
+            ->assertUnprocessable();
+        $this->postJson('/api/v1/auth/password/reset/confirm', $payload)
+            ->assertOk()->assertJsonMissingPath('data.access_token');
+        $this->assertTrue(Hash::check('NewStrongPassword456!', $user->fresh()->password_hash));
+        $this->withToken($tokens['access_token'])->getJson('/api/v1/me')->assertUnauthorized();
+        $this->postJson('/api/v1/auth/password/reset/confirm', $payload)->assertUnprocessable();
+        $this->assertDatabaseCount('orbit_users', 1);
+        $this->assertDatabaseHas('orbit_identity_events', ['action' => 'auth.password_reset']);
+    }
+
+    public function test_unknown_recovery_request_is_generic_and_creates_no_account_or_otp(): void
+    {
+        Mail::fake();
+        $this->postJson('/api/v1/auth/password/reset/request', [
+            'recipient' => 'unknown@example.test',
+        ])->assertStatus(202)->assertJsonFragment([
+            'message' => 'If the account exists, a password reset code has been sent.',
+        ]);
+        $this->assertDatabaseCount('otp_challenges', 0);
+        $this->assertDatabaseCount('orbit_users', 0);
+        $this->postJson('/api/v1/auth/password/reset/confirm', [
+            'recipient' => 'unknown@example.test',
+            'code' => '472819', 'password' => 'NewStrongPassword456!',
+        ])->assertUnprocessable();
+        $this->assertDatabaseCount('orbit_sessions', 0);
+    }
+
+    public function test_password_login_code_cannot_be_used_as_signup_even_when_password_is_correct(): void
+    {
+        $tokens = $this->signIn();
+        $this->registerTrustedDevice($tokens);
+        OrbitUser::firstOrFail()->update(['password_hash' => Hash::make('OriginalTestPassword123!')]);
+        Mail::fake();
+        $this->postJson('/api/v1/auth/password/otp/request', [
+            'recipient' => 'member@example.test', 'password' => 'OriginalTestPassword123!',
+        ])->assertStatus(202);
+        $challenge = DB::table('otp_challenges')->where('purpose', 'login')->first();
+        $this->assertNotNull($challenge);
+        $secret = hash('sha256', config('app.key').'|orbit-otp-v1', true);
+        DB::table('otp_challenges')->where('id', $challenge->id)->update([
+            'code_hash' => hash_hmac('sha256', $challenge->id.'|472819', $secret),
+        ]);
+        $payload = [
+            'channel' => 'email', 'purpose' => 'signup',
+            'recipient' => 'member@example.test', 'code' => '472819',
+            'device_public_id' => (string) Str::uuid(), 'platform' => 'android',
+            'device_name' => 'Test Android',
+        ];
+        $this->postJson('/api/v1/auth/otp/verify', $payload)->assertUnprocessable();
+        $this->assertDatabaseCount('orbit_sessions', 1);
+        $payload['purpose'] = 'login';
+        $this->postJson('/api/v1/auth/otp/verify', $payload)->assertOk();
+        $this->assertDatabaseCount('orbit_sessions', 2);
     }
 
     public function test_admin_user_view_is_not_public(): void
