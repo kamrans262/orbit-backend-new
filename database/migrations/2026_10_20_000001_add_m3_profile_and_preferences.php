@@ -15,6 +15,8 @@ return new class extends Migration
 
         Schema::create('orbit_user_preferences', function (Blueprint $table): void {
             $table->uuid('user_id')->primary();
+            $table->string('locale', 20)->default('en');
+            $table->string('timezone', 64)->default('UTC');
             $table->json('notifications')->nullable();
             $table->json('privacy')->nullable();
             $table->timestamps();
