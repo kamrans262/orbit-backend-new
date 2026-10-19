@@ -274,7 +274,7 @@ final class OrbitIdentityTest extends TestCase
         $first = $this->signIn();
         $this->registerTrustedDevice($first);
         $this->withToken($first['access_token'])->postJson('/api/v1/me/deletion-request', ['confirm' => true])
-            ->assertStatus(202)->assertJsonFragment(['message' => 'Account deletion request recorded. All sessions were signed out. Final deletion is pending processing.']);
+            ->assertStatus(202)->assertJsonPath('data.status', 'pending')->assertJsonPath('message', 'Deletion request recorded. Access is restricted. Erasure is not complete.');
         $this->assertNotNull(OrbitUser::firstOrFail()->deletion_requested_at);
         $this->assertDatabaseCount('orbit_users', 1);
         $this->withToken($first['access_token'])->getJson('/api/v1/me')->assertUnauthorized();
