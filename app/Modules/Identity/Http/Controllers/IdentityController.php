@@ -239,13 +239,17 @@ final class IdentityController extends Controller
     {
         $data = $request->validate([
             'display_name' => ['required', 'string', 'min:2', 'max:120'],
-            'username' => ['required', 'alpha_dash:ascii', 'min:3', 'max:32', Rule::unique('orbit_users', 'username')
-                ->ignore($request->attributes->get('orbit_session')->user_id)],
+            'username' => ['required', 'string', 'min:3', 'max:32', 'regex:/^[A-Za-z0-9._]+$/D',
+                Rule::unique('orbit_users', 'username')
+                    ->ignore($request->attributes->get('orbit_session')->user_id)],
+            'bio' => ['sometimes', 'nullable', 'string', 'max:280'],
         ]);
         $session = $request->attributes->get('orbit_session');
         $user = OrbitUser::findOrFail($session->user_id);
+        $data['username'] = strtolower($data['username']);
         $user->update($data);
-        return response()->json(['data' => ['id' => $user->id, 'display_name' => $user->display_name, 'username' => $user->username]]);
+        return response()->json(['data' => ['id' => $user->id, 'display_name' => $user->display_name,
+            'username' => $user->username, 'bio' => $user->bio]])->header('Cache-Control','no-store');
     }
 
     /** Revokes all mobile sessions, preserving identity records and device keys. */
@@ -261,21 +265,95 @@ final class IdentityController extends Controller
     }
 
     /**
-     * Non-destructive privacy request. The separate retention/deletion workstream
-     * must implement verified erasure; never claim that data has been deleted here.
+     * The request schedules eligibility for erasure after 30 days. It does NOT
+     * delete data. All active sessions are revoked and data APIs are restricted.
+     * Downstream per-category erasure remains an explicit release dependency.
      */
     public function requestDeletion(Request $request, TokenService $tokens): JsonResponse
     {
-        $data = $request->validate(['confirm' => ['required', 'accepted']]);
-        $current = $request->attributes->get('orbit_session');
-        DB::transaction(function () use ($current, $tokens): void {
-            OrbitUser::whereKey($current->user_id)->whereNull('deletion_requested_at')
-                ->update(['deletion_requested_at' => now()]);
-            OrbitSession::where('user_id', $current->user_id)->whereNull('revoked_at')
-                ->update(['revoked_at' => now()]);
-            $tokens->event($current->user_id, $current->device_id, 'account.deletion_requested', 'pending_privacy_erasure');
+        $request->validate(['confirm' => ['required', 'accepted']]);
+        $session = $request->attributes->get('orbit_session');
+        if ($session->created_at->lt(now()->subMinutes(10))) {
+            return response()->json(['message' => 'Please sign in again before requesting deletion.'], 403)
+                ->header('Cache-Control', 'no-store');
+        }
+
+        $result = DB::transaction(function () use ($session, $tokens): array {
+            $user = OrbitUser::whereKey($session->user_id)->lockForUpdate()->firstOrFail();
+            $existing = DB::table('orbit_account_deletion_requests')->where('user_id', $user->id)->first();
+            if ($existing && $existing->status === 'pending') {
+                return ['request_id' => $existing->request_id,
+                    'eligible_for_erasure_at' => $existing->eligible_for_erasure_at];
+            }
+            $now = now();
+            $requestId = (string) \Illuminate\Support\Str::uuid7();
+            $deadline = $now->copy()->addDays(30);
+            $values = [
+                'request_id' => $requestId, 'status' => 'pending',
+                'requested_at' => $now, 'eligible_for_erasure_at' => $deadline,
+                'cancelled_at' => null, 'completed_at' => null,
+                'updated_at' => $now,
+            ];
+            DB::table('orbit_account_deletion_requests')->updateOrInsert(
+                ['user_id' => $user->id],
+                [...$values, 'created_at' => $now],
+            );
+            $user->update(['deletion_requested_at' => $now]);
+            OrbitSession::where('user_id', $user->id)->whereNull('revoked_at')
+                ->update(['revoked_at' => $now]);
+            $tokens->event($user->id, $session->device_id,
+                'account.deletion_requested', 'grace_period_30_days');
+            return ['request_id' => $requestId,
+                'eligible_for_erasure_at' => $deadline->toIso8601String()];
         });
-        return response()->json(['message' => 'Account deletion request recorded. All sessions were signed out. Final deletion is pending processing.'], 202)
+
+        return response()->json(['message' => 'Deletion request recorded. Access is restricted. Erasure is not complete.',
+            'data' => ['status' => 'pending', ...$result]], 202)
+            ->header('Cache-Control', 'no-store');
+    }
+
+    public function deletionStatus(Request $request): JsonResponse
+    {
+        $session = $request->attributes->get('orbit_session');
+        $row = DB::table('orbit_account_deletion_requests')->where('user_id', $session->user_id)->first();
+        if (!$row || $row->status !== 'pending') {
+            return response()->json(['data' => ['status' => 'none']])
+                ->header('Cache-Control', 'no-store');
+        }
+        return response()->json(['data' => [
+            'status' => $row->status, 'request_id' => $row->request_id,
+            'eligible_for_erasure_at' => $row->eligible_for_erasure_at,
+            'can_cancel' => now()->lt($row->eligible_for_erasure_at),
+        ]])->header('Cache-Control', 'no-store');
+    }
+
+    /** Cancellation requires reauthentication by OTP/password within 10 minutes. */
+    public function cancelDeletion(Request $request, TokenService $tokens): JsonResponse
+    {
+        $request->validate(['confirm' => ['required', 'accepted']]);
+        $session = $request->attributes->get('orbit_session');
+        if ($session->created_at->lt(now()->subMinutes(10))) {
+            return response()->json(['message' => 'Please sign in again before cancelling deletion.'], 403)
+                ->header('Cache-Control', 'no-store');
+        }
+        $cancelled = DB::transaction(function () use ($session, $tokens): bool {
+            $user = OrbitUser::whereKey($session->user_id)->lockForUpdate()->firstOrFail();
+            $record = DB::table('orbit_account_deletion_requests')
+                ->where('user_id', $user->id)->lockForUpdate()->first();
+            if (!$record || $record->status !== 'pending'
+                || now()->gte($record->eligible_for_erasure_at)) return false;
+            DB::table('orbit_account_deletion_requests')->where('user_id', $user->id)
+                ->update(['status' => 'cancelled', 'cancelled_at' => now(), 'updated_at' => now()]);
+            $user->update(['deletion_requested_at' => null]);
+            $tokens->event($user->id, $session->device_id,
+                'account.deletion_cancelled', 'verified_recent_login');
+            return true;
+        });
+        if (!$cancelled) {
+            return response()->json(['message' => 'There is no cancellable deletion request.'], 409)
+                ->header('Cache-Control', 'no-store');
+        }
+        return response()->json(['data' => ['status' => 'cancelled']])
             ->header('Cache-Control', 'no-store');
     }
 

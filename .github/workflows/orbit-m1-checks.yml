@@ -1,9 +1,9 @@
-name: Orbit Laravel validation (M1 + M2)
+name: Orbit Laravel validation (M1 + M2 + M3)
 on:
   pull_request:
-    branches: [main, feature/m1-foundation-config]
+    branches: [main, feature/m1-foundation-config, feature/m2-auth-identity]
   push:
-    branches: [feature/m1-foundation-config, feature/m2-auth-identity]
+    branches: [feature/m1-foundation-config, feature/m2-auth-identity, feature/m3-profiles-settings]
 jobs:
   php-tests:
     runs-on: ubuntu-latest
