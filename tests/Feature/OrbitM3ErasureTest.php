@@ -6,6 +6,7 @@ use App\Models\AdminRole;
 use App\Models\AdminUser;
 use App\Models\OrbitUser;
 use App\Models\UserIdentity;
+use App\Modules\Config\Services\Totp;
 use App\Modules\Profile\Services\M3ErasureProcessor;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -24,6 +25,7 @@ final class OrbitM3ErasureTest extends TestCase
         $operator = AdminUser::create([
             'name' => 'Erasure reviewer', 'email' => Str::uuid().'@test.example',
             'password' => 'Secure123!password',
+            'totp_secret' => (new Totp())->generateSecret(),
             'status' => 'active',
         ]);
         $operator->roles()->attach($role->id);
