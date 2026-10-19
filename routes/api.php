@@ -27,6 +27,8 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('/me/profile', [ProfileSettingsController::class, 'update']);
         Route::get('/me/preferences/notifications', [ProfileSettingsController::class, 'notifications']);
         Route::patch('/me/preferences/notifications', [ProfileSettingsController::class, 'updateNotifications']);
+        Route::get('/me/preferences/general', [ProfileSettingsController::class, 'general']);
+        Route::patch('/me/preferences/general', [ProfileSettingsController::class, 'updateGeneral']);
         Route::get('/me/preferences/privacy', [ProfileSettingsController::class, 'privacy']);
         Route::patch('/me/preferences/privacy', [ProfileSettingsController::class, 'updatePrivacy']);
         Route::patch('/me/profile-basics', [IdentityController::class, 'updateProfileBasics']);
