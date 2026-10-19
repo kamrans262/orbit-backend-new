@@ -187,6 +187,26 @@ final class OrbitIdentityTest extends TestCase
         $this->assertDatabaseCount('otp_challenges', 0);
     }
 
+    public function test_logout_all_revokes_every_session(): void
+    {
+        $first = $this->signIn();
+        $this->registerTrustedDevice($first);
+        $this->withToken($first['access_token'])->postJson('/api/v1/auth/logout-all')->assertOk();
+        $this->withToken($first['access_token'])->getJson('/api/v1/me')->assertUnauthorized();
+        $this->assertSame(0, OrbitSession::whereNull('revoked_at')->count());
+    }
+
+    public function test_deletion_request_records_pending_erasure_and_revokes_tokens(): void
+    {
+        $first = $this->signIn();
+        $this->registerTrustedDevice($first);
+        $this->withToken($first['access_token'])->postJson('/api/v1/me/deletion-request', ['confirm' => true])
+            ->assertStatus(202)->assertJsonFragment(['message' => 'Account deletion request recorded. All sessions were signed out. Final deletion is pending processing.']);
+        $this->assertNotNull(OrbitUser::firstOrFail()->deletion_requested_at);
+        $this->assertDatabaseCount('orbit_users', 1);
+        $this->withToken($first['access_token'])->getJson('/api/v1/me')->assertUnauthorized();
+    }
+
     public function test_admin_user_view_is_not_public(): void
     {
         $this->get('/admin/users')->assertRedirect(route('orbit.admin.login'));

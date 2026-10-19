@@ -16,6 +16,8 @@ Route::prefix('v1')->group(function (): void {
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
         Route::post('/auth/logout', [IdentityController::class, 'logout']);
+        Route::post('/auth/logout-all', [IdentityController::class, 'logoutAll']);
+        Route::post('/me/deletion-request', [IdentityController::class, 'requestDeletion']);
         Route::get('/me', [IdentityController::class, 'me']);
         Route::patch('/me/profile-basics', [IdentityController::class, 'updateProfileBasics']);
         Route::get('/me/devices', [IdentityController::class, 'listDevices']);

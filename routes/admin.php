@@ -29,6 +29,8 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
             ->middleware(RequireAdminPermission::class.':users.read')->name('users.index');
         Route::get('/users/{user}', [AdminIdentityController::class, 'show'])
             ->middleware(RequireAdminPermission::class.':users.read')->name('users.show');
+        Route::post('/users/{user}/status', [AdminIdentityController::class, 'updateStatus'])
+            ->middleware(RequireAdminPermission::class.':users.manage')->name('users.status');
     });
     Route::middleware([EnsureAdmin::class, RequireAdminPermission::class])->group(function (): void {
         Route::get('/', [AdminConfigController::class, 'dashboard'])->name('dashboard');

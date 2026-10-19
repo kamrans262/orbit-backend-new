@@ -47,3 +47,10 @@
 - User identity linking/account recovery, credential/email change and full account deletion are cross-module planned items.
 - Operational cleanup: rate-limit event metrics, identity event retention, replay family history pruning.
 - Mark user-facing auth functional completion only after live OTP, device registration, mobile tests and client sign-in flow acceptance.
+
+## Additional Milestone 2 security/account flows
+- POST /api/v1/auth/logout-all signs out all user sessions and preserves registered-device records.
+- POST /api/v1/me/deletion-request {confirm:true} records a non-destructive deletion request, revokes all sessions and never falsely claims final erasure; approved retention/privacy deletion service is still required.
+- POST /admin/users/{user}/status requires users.manage, a reason >=10 chars, and audits active/suspended changes. Suspension revokes all existing sessions.
+- Admin-only controls cannot read OTPs, private messages, secret tokens, or private precise locations.
+- The Apple/Google provider integrations and disputed password UI remain documented client dependencies; this code does not silently remove them.

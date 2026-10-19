@@ -14,4 +14,18 @@
 <section class="panel"><div class="panel-head"><div><h2>Registered devices</h2><p>Device approval remains a consumer-side trusted-device action.</p></div></div><div class="table-scroll"><table><thead><tr><th>DEVICE</th><th>PLATFORM</th><th>TRUST</th><th>REVOKED</th></tr></thead><tbody>
 @foreach($orbitUser->devices as $device)<tr><td>{{ $device->name }}</td><td>{{ $device->platform }}</td><td>{{ $device->trust_state }}</td><td>{{ $device->revoked_at ? 'Yes' : 'No' }}</td></tr>@endforeach
 </tbody></table></div></section></div>
+@if(auth()->guard('admin')->user()->canPerform('users.manage'))
+<section class="panel" style="margin-top:20px;padding:22px">
+  <h2>Account access controls</h2>
+  <p class="subtle">Suspension revokes all sessions. This action is permission-restricted and recorded in the audit log.</p>
+  <form action="{{ route('orbit.admin.users.status', $orbitUser) }}" method="post" data-confirm="Change this account status and revoke existing sessions if suspended?">
+    @csrf
+    <div class="form-grid">
+      <label>Status <select name="status"><option value="active" {{ $orbitUser->status === 'active' ? 'selected' : '' }}>Active</option><option value="suspended" {{ $orbitUser->status === 'suspended' ? 'selected' : '' }}>Suspended</option></select></label>
+      <label>Documented justification <textarea name="reason" minlength="10" maxlength="500" rows="3" required placeholder="Enter ticket ID and reason"></textarea></label>
+    </div>
+    <div class="form-actions"><button class="btn primary" type="submit">Save audited status</button></div>
+  </form>
+</section>
+@endif
 @endsection

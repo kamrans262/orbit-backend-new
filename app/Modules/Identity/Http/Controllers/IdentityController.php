@@ -89,6 +89,37 @@ final class IdentityController extends Controller
         return response()->json(['data' => ['id' => $user->id, 'display_name' => $user->display_name, 'username' => $user->username]]);
     }
 
+    /** Revokes all mobile sessions, preserving identity records and device keys. */
+    public function logoutAll(Request $request, TokenService $tokens): JsonResponse
+    {
+        $current = $request->attributes->get('orbit_session');
+        DB::transaction(function () use ($current, $tokens): void {
+            OrbitSession::where('user_id', $current->user_id)->whereNull('revoked_at')
+                ->update(['revoked_at' => now()]);
+            $tokens->event($current->user_id, $current->device_id, 'auth.logout_all');
+        });
+        return response()->json(['message' => 'All sessions revoked.'])->header('Cache-Control', 'no-store');
+    }
+
+    /**
+     * Non-destructive privacy request. The separate retention/deletion workstream
+     * must implement verified erasure; never claim that data has been deleted here.
+     */
+    public function requestDeletion(Request $request, TokenService $tokens): JsonResponse
+    {
+        $data = $request->validate(['confirm' => ['required', 'accepted']]);
+        $current = $request->attributes->get('orbit_session');
+        DB::transaction(function () use ($current, $tokens): void {
+            OrbitUser::whereKey($current->user_id)->whereNull('deletion_requested_at')
+                ->update(['deletion_requested_at' => now()]);
+            OrbitSession::where('user_id', $current->user_id)->whereNull('revoked_at')
+                ->update(['revoked_at' => now()]);
+            $tokens->event($current->user_id, $current->device_id, 'account.deletion_requested', 'pending_privacy_erasure');
+        });
+        return response()->json(['message' => 'Account deletion request recorded. All sessions were signed out. Final deletion is pending processing.'], 202)
+            ->header('Cache-Control', 'no-store');
+    }
+
     public function listDevices(Request $request): JsonResponse
     {
         $session = $request->attributes->get('orbit_session');
