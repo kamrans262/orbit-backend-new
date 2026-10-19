@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Modules\Config\Http\Controllers\ConfigBootstrapController;
 use App\Modules\Identity\Http\Controllers\IdentityController;
+use App\Modules\Profile\Http\Controllers\ProfileSettingsController;
 use App\Modules\Identity\Http\Middleware\AuthenticateOrbitToken;
 
 Route::prefix('v1')->group(function (): void {
@@ -22,6 +23,12 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/auth/logout-all', [IdentityController::class, 'logoutAll']);
         Route::post('/me/deletion-request', [IdentityController::class, 'requestDeletion']);
         Route::get('/me', [IdentityController::class, 'me']);
+        Route::get('/me/profile', [ProfileSettingsController::class, 'show']);
+        Route::patch('/me/profile', [ProfileSettingsController::class, 'update']);
+        Route::get('/me/preferences/notifications', [ProfileSettingsController::class, 'notifications']);
+        Route::patch('/me/preferences/notifications', [ProfileSettingsController::class, 'updateNotifications']);
+        Route::get('/me/preferences/privacy', [ProfileSettingsController::class, 'privacy']);
+        Route::patch('/me/preferences/privacy', [ProfileSettingsController::class, 'updatePrivacy']);
         Route::patch('/me/profile-basics', [IdentityController::class, 'updateProfileBasics']);
         Route::post('/me/password', [IdentityController::class, 'enrollPassword']);
         Route::post('/me/identities/link', [IdentityController::class, 'linkIdentity']);
