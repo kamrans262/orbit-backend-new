@@ -27,6 +27,15 @@ final class AuthenticateOrbitToken
                 'device_requires_approval' => $approval,
             ], 403)->header('Cache-Control', 'no-store');
         }
+        $user = \App\Models\OrbitUser::query()->find($session->user_id);
+        if ($user && $user->deletion_requested_at
+            && !$request->is('api/v1/me/deletion-status', 'api/v1/me/deletion-cancel',
+                'api/v1/auth/logout')) {
+            return response()->json([
+                'code' => 'account_deletion_pending',
+                'message' => 'Your account is pending deletion. Sign in on a trusted device to review or cancel the request.',
+            ], 409)->header('Cache-Control', 'no-store');
+        }
         $request->attributes->set('orbit_session', $session);
         return $next($request);
     }
