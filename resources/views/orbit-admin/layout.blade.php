@@ -9,26 +9,23 @@
 <body>
 <div class="shell" data-shell>
   <aside class="sidebar" data-sidebar aria-label="Admin navigation">
-    <a href="{{ route('orbit.admin.dashboard') }}" class="brand"><img class="brand-logo" src="{{ route('orbit.admin.asset', ['file' => 'orbit-logo.png']) }}" width="44" height="44" alt="Orbit logo"><span>Orbit<small>ADMINISTRATION</small></span></a>
+    <a href="{{ route('orbit.admin.landing') }}" class="brand"><img class="brand-logo" src="{{ route('orbit.admin.asset', ['file' => 'orbit-logo.png']) }}" width="44" height="44" alt="Orbit logo"><span>Orbit<small>ADMINISTRATION</small></span></a>
     <div class="nav-caption">WORKSPACE</div>
-    <nav>
-      <a href="{{ route('orbit.admin.dashboard') }}" class="nav-item {{ request()->routeIs('orbit.admin.dashboard', 'orbit.admin.flags.edit', 'orbit.admin.flags.preview', 'orbit.admin.config.edit') ? 'active' : '' }}" {{ request()->routeIs('orbit.admin.dashboard') ? 'aria-current=page' : '' }}><span>◫</span> Configuration</a>
-      <a href="{{ route('orbit.admin.flags.new') }}" class="nav-item {{ request()->routeIs('orbit.admin.flags.new') ? 'active' : '' }}" {{ request()->routeIs('orbit.admin.flags.new') ? 'aria-current=page' : '' }}><span>◇</span> New feature flag</a>
-      <a href="{{ route('orbit.admin.config.new') }}" class="nav-item {{ request()->routeIs('orbit.admin.config.new') ? 'active' : '' }}" {{ request()->routeIs('orbit.admin.config.new') ? 'aria-current=page' : '' }}><span>⚙</span> New remote config</a>
-      <a href="{{ route('orbit.admin.users.index') }}" class="nav-item {{ request()->routeIs('orbit.admin.users.*') ? 'active' : '' }}" {{ request()->routeIs('orbit.admin.users.*') ? 'aria-current=page' : '' }}><span>◎</span> Users &amp; Devices</a>
+    <nav aria-label="Main administration sections">
+      @include('orbit-admin.partials.sidebar-navigation')
     </nav>
     <div class="nav-caption space-top">UPCOMING MODULES</div>
     <div class="nav-item disabled"><span>◌</span> Circles <small>Upcoming</small></div>
     <div class="nav-item disabled"><span>✚</span> SOS operations <small>Upcoming</small></div>
     <div class="nav-item disabled"><span>▤</span> Billing &amp; Ads <small>Upcoming</small></div>
     <div class="nav-item disabled"><span>▦</span> System health <small>Upcoming</small></div>
-    <div class="sidebar-bottom"><span class="online-dot"></span> {{ strtoupper(app()->environment()) }} environment <p>Module 01 · Platform configuration</p></div>
+    <div class="sidebar-bottom"><span class="online-dot"></span> {{ strtoupper(app()->environment()) }} environment <p>Role-restricted operations</p></div>
   </aside>
   <div class="sidebar-scrim" data-scrim></div>
   <div class="main">
     <header class="topbar">
       <button type="button" class="menu-trigger" aria-label="Toggle menu" data-menu>☰</button>
-      <div class="breadcrumb">ORBIT <span>/</span> ADMIN <span>/</span> @yield('crumb','CONFIGURATION')</div>
+      <div class="breadcrumb">ORBIT <span>/</span> ADMIN <span>/</span> @yield('crumb','OVERVIEW')</div>
       <div class="topbar-right"><span class="security-indicator"><i></i> SECURE SESSION</span><span class="avatar">{{ strtoupper(substr(auth()->guard('admin')->user()->name ?? 'A', 0, 1)) }}</span><span class="admin-name">{{ auth()->guard('admin')->user()->name ?? 'Admin' }}</span>
         <form action="{{ route('orbit.admin.logout') }}" method="post">@csrf<button class="link-button" type="submit">Sign out</button></form>
       </div>
@@ -37,7 +34,7 @@
       @if(session('status'))<div class="notice success" role="status">{{ session('status') }}</div>@endif
       @if($errors->any())<div class="notice danger" role="alert">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
       @yield('content')
-      <footer>Orbit Administration · All configuration mutations require an audit reason · Private user content is not exposed</footer>
+      <footer>Orbit Administration · Role-gated controls and audited changes · Private content is not exposed</footer>
     </main>
   </div>
 </div>
