@@ -69,14 +69,23 @@ final class M3ErasureProcessor
         }
 
         return DB::transaction(function () use ($requestId, $operator, $ticket): array {
-            $record = DB::table('orbit_account_deletion_requests')
-                ->where('request_id', $requestId)->lockForUpdate()->first();
-            if (!$record) {
+            $initial = DB::table('orbit_account_deletion_requests')
+                ->where('request_id', $requestId)->first();
+            if (!$initial) {
                 $receipt = DB::table('orbit_erasure_receipts')
                     ->where('request_id', $requestId)->first();
                 if ($receipt) return ['status' => 'completed', 'scope' => $receipt->scope];
                 throw new DomainException('Deletion request not found.');
             }
+            // Match request/cancellation lock ordering (user, then request).
+            // Otherwise concurrent cancellation could deadlock or erase a
+            // request already cancelled on another connection.
+            $user = OrbitUser::query()->whereKey($initial->user_id)
+                ->lockForUpdate()->firstOrFail();
+            $record = DB::table('orbit_account_deletion_requests')
+                ->where('request_id', $requestId)->where('user_id', $user->id)
+                ->lockForUpdate()->first();
+            if (!$record) throw new DomainException('Deletion request was changed concurrently.');
             if ($record->status !== 'pending' ||
                 now()->lt($record->eligible_for_erasure_at)) {
                 throw new DomainException('Deletion request is cancelled or still within the grace period.');
@@ -88,7 +97,6 @@ final class M3ErasureProcessor
             if ($this->unregisteredUserTables() !== []) {
                 throw new DomainException('Unregistered user-owned tables block erasure; register their cleanup.');
             }
-            $user = OrbitUser::query()->whereKey($record->user_id)->lockForUpdate()->firstOrFail();
             if (!$user->deletion_requested_at) {
                 throw new DomainException('Account has no active deletion request.');
             }
