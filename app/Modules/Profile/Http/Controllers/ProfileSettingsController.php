@@ -142,7 +142,7 @@ final class ProfileSettingsController extends Controller
     private function saveSettings(Request $request, string $column, array $defaults, array $changes): array
     {
         $id = $this->user($request)->id;
-        return DB::transaction(function () use ($id, $column, $defaults, $changes): array {
+        return DB::transaction(function () use ($id, $column, $defaults, $changes, $request): array {
             // Two rapid first-time saves must not race to insert the same user.
             DB::table('orbit_user_preferences')->insertOrIgnore([
                 'user_id' => $id, 'created_at' => now(), 'updated_at' => now(),
