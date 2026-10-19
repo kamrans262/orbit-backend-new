@@ -35,8 +35,17 @@ tbody td{color:#64748B}
 .btn.danger{background:var(--red);color:var(--white);border-color:var(--red);box-shadow:0 5px 14px rgba(214,61,81,.12)}
 .btn.danger:hover{background:#b72c40}.btn.danger:disabled{opacity:.48;cursor:not-allowed;transform:none}
 .danger-zone{margin-top:20px;border-color:#f4c8d0}.danger-text{color:var(--red)}
-.danger-zone-action{padding:0 22px 22px;display:flex;gap:18px;align-items:center;justify-content:space-between;flex-wrap:wrap}
-.danger-zone-action p{margin:0;flex:1;min-width:220px;line-height:1.6}
+.danger-zone-layout{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:26px;align-items:center;padding:24px;min-width:0}
+.danger-zone-heading{display:flex;align-items:flex-start;gap:16px;min-width:0}
+.danger-zone-symbol{flex:0 0 42px;width:42px;height:42px;display:grid;place-items:center;border-radius:12px;background:var(--red-soft);color:var(--red);font-size:23px;font-weight:800}
+.danger-zone-copy{min-width:0;overflow-wrap:anywhere}
+.danger-zone-copy .eyebrow{margin:0 0 8px;color:var(--red)}
+.danger-zone-copy h2{margin:0 0 10px;color:var(--ink);font-size:16px;line-height:1.45;letter-spacing:-.2px}
+.danger-zone-copy .subtle{margin:0;color:var(--muted);font-size:12px;line-height:1.7;max-width:750px}
+.danger-zone-note{color:var(--red);font-size:11px;line-height:1.6;margin:10px 0 0;font-weight:600}
+.danger-zone-cta{justify-self:end;align-self:center;flex-shrink:0}
+@media(max-width:880px){.danger-zone-layout{grid-template-columns:minmax(0,1fr);gap:20px}.danger-zone-cta{justify-self:start}}
+@media(max-width:480px){.danger-zone-layout{padding:18px}.danger-zone-heading{gap:12px}.danger-zone-symbol{width:36px;height:36px;flex-basis:36px}.danger-zone-cta{width:100%}}
 .admin-confirm-dialog{width:min(calc(100vw - 32px),510px);padding:30px;border:1px solid var(--line);border-radius:18px;box-shadow:0 35px 95px rgba(17,28,57,.23);color:var(--ink);background:var(--white)}
 .admin-confirm-dialog::backdrop{background:rgba(16,26,49,.62);backdrop-filter:blur(3px)}
 .admin-confirm-dialog h2{font-size:21px;margin:14px 0 10px;letter-spacing:-.5px}

@@ -17,7 +17,9 @@
   const deleteSubmit = deleteDialog?.querySelector('[data-submit-delete-user]');
   const deleteReason = deleteDialog?.querySelector('textarea[name="reason"]');
   const syncDelete = () => {
-    if (deleteSubmit) deleteSubmit.disabled = deleteConfirm?.value !== 'DELETE';
+    const reason = deleteReason?.value.trim() || '';
+    const valid = deleteConfirm?.value === 'DELETE' && reason.length >= 10 && reason.length <= 500;
+    if (deleteSubmit) deleteSubmit.disabled = !valid;
   };
   document.querySelector('[data-open-delete-user]')?.addEventListener('click', () => {
     deleteDialog?.showModal();
@@ -26,6 +28,7 @@
   });
   deleteDialog?.querySelector('[data-cancel-delete-user]')?.addEventListener('click', () => deleteDialog.close());
   deleteConfirm?.addEventListener('input', syncDelete);
+  deleteReason?.addEventListener('input', syncDelete);
   deleteForm?.addEventListener('submit', (event) => {
     if (deleteConfirm?.value !== 'DELETE' || !deleteReason?.value.trim() ||
         deleteReason.value.trim().length < 10) {

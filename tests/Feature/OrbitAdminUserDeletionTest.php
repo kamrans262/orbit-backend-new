@@ -160,4 +160,38 @@ final class OrbitAdminUserDeletionTest extends TestCase
         $this->assertStringNotContainsString($target->id, $audit->target);
         $this->get('/admin/users/'.$target->id)->assertNotFound();
     }
+    public function test_users_menu_highlight_follows_active_admin_page_and_danger_zone_is_aligned(): void
+    {
+        [$user] = $this->fixture('ui@example.test');
+        $this->admin(['*']);
+
+        $users = $this->get('/admin/users')->assertOk();
+        $this->assertMatchesRegularExpression(
+            '/class="nav-item active" aria-current=page><span>◎<\\/span> Users &amp; Devices/',
+            $users->getContent()
+        );
+        $this->assertStringNotContainsString(
+            'class="nav-item active"><span>◫</span> Configuration',
+            $users->getContent()
+        );
+
+        $details = $this->get('/admin/users/'.$user->id)->assertOk();
+        $this->assertMatchesRegularExpression(
+            '/class="nav-item active" aria-current=page><span>◎<\\/span> Users &amp; Devices/',
+            $details->getContent()
+        );
+        $details->assertSee('danger-zone-layout', false)
+            ->assertSee('danger-zone-heading', false)
+            ->assertSee('danger-zone-copy', false)
+            ->assertSee('danger-zone-cta', false)
+            ->assertSee('data-open-delete-user', false)
+            ->assertSee('data-delete-user-form', false);
+
+        $dashboard = $this->get('/admin')->assertOk();
+        $this->assertMatchesRegularExpression(
+            '/class="nav-item active" aria-current=page><span>◫<\\/span> Configuration/',
+            $dashboard->getContent()
+        );
+    }
+
 }

@@ -30,14 +30,17 @@
 @endif
 @if(auth()->guard('admin')->user()->canPerform('users.delete'))
 <section class="panel danger-zone" aria-labelledby="delete-user-heading">
-  <div class="panel-head"><div>
-    <p class="eyebrow danger-text">DANGER ZONE</p>
-    <h2 id="delete-user-heading">Delete this user</h2>
-    <p>Remove the account and all currently linked identities, devices, sessions, refresh history, OTP challenges, and identity activity.</p>
-  </div></div>
-  <div class="danger-zone-action">
-    <p class="subtle">This action cannot be undone. Historical administrator audit records are retained.</p>
-    <button type="button" class="btn danger" data-open-delete-user>Delete user</button>
+  <div class="danger-zone-layout">
+    <div class="danger-zone-heading">
+      <span class="danger-zone-symbol" aria-hidden="true">!</span>
+      <div class="danger-zone-copy">
+        <p class="eyebrow danger-text">DANGER ZONE</p>
+        <h2 id="delete-user-heading">Delete this user</h2>
+        <p class="subtle">Permanently remove this account and its linked identities, devices, sessions, refresh history, OTP challenges, and identity activity.</p>
+        <p class="danger-zone-note">This cannot be undone. Administrator audit records are retained.</p>
+      </div>
+    </div>
+    <button type="button" class="btn danger danger-zone-cta" data-open-delete-user>Delete user</button>
   </div>
 </section>
 <dialog class="admin-confirm-dialog" id="delete-user-dialog" aria-labelledby="delete-user-title" aria-describedby="delete-user-description">
