@@ -343,6 +343,21 @@ final class OrbitIdentityTest extends TestCase
     }
 
 
+    public function test_existing_account_signup_request_is_rejected_without_sending_otp(): void
+    {
+        $this->signIn('member@example.test');
+        Mail::fake();
+        $before = DB::table('otp_challenges')->count();
+        $this->postJson('/api/v1/auth/otp/request', [
+            'channel' => 'email', 'recipient' => 'MEMBER@example.test', 'purpose' => 'signup',
+        ])->assertStatus(409)->assertJsonFragment([
+            'message' => 'An account already exists. Please log in instead.',
+        ]);
+        $this->assertSame($before, DB::table('otp_challenges')->count());
+        $this->assertDatabaseCount('orbit_users', 1);
+        Mail::assertNothingSent();
+    }
+
     public function test_signup_cannot_log_in_as_an_existing_verified_identity(): void
     {
         $tokens = $this->signIn();
