@@ -67,7 +67,7 @@
   </form>
 </section>
 @endif
-@if(auth()->guard('admin')->user()->canPerform('users.delete'))
+@if(auth()->guard('admin')->user()->canPerform('users.delete') && !$orbitUser->deletion_requested_at)
 <section class="panel danger-zone" aria-labelledby="delete-user-heading">
   <div class="danger-zone-layout">
     <div class="danger-zone-heading">
