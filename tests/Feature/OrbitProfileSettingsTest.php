@@ -124,4 +124,79 @@ final class OrbitProfileSettingsTest extends TestCase
             'location_visibility' => 'Public',
         ])->assertUnprocessable();
     }
+
+    public function test_privacy_controls_and_audit_log_do_not_record_private_values(): void
+    {
+        $tokens = $this->signIn('privacy-audit@example.test');
+        $this->withToken($tokens['access_token'])
+            ->patchJson('/api/v1/me/preferences/privacy', [
+                'presence_visibility' => 'Friends',
+                'activity_visibility' => 'My Circle',
+                'read_receipts_enabled' => true,
+                'moment_default_audience' => 'Selected People',
+            ])->assertOk()
+            ->assertJsonPath('data.presence_visibility', 'Friends')
+            ->assertJsonPath('data.read_receipts_enabled', true);
+        $this->getJson('/api/v1/me/preferences/privacy')
+            ->assertJsonPath('data.activity_visibility', 'My Circle');
+        $this->patchJson('/api/v1/me/preferences/privacy', [
+            'message_eligibility' => 'Public',
+        ])->assertUnprocessable()->assertJsonValidationErrors('message_eligibility');
+        $event = DB::table('orbit_identity_events')->where('action', 'settings.privacy_updated')
+            ->orderByDesc('created_at')->first();
+        $this->assertNotNull($event);
+        $this->assertStringContainsString('presence_visibility', $event->reason_code);
+        $this->assertStringNotContainsString('Friends', $event->reason_code);
+        $this->assertStringNotContainsString('My Circle', $event->reason_code);
+    }
+
+    public function test_user_locale_and_timezone_are_independent_private_settings(): void
+    {
+        $first = $this->signIn('general-one@example.test');
+        $this->withToken($first['access_token'])->getJson('/api/v1/me/preferences/general')
+            ->assertOk()->assertJsonPath('data.timezone', 'UTC');
+        $this->patchJson('/api/v1/me/preferences/general', [
+            'locale' => 'en-PK', 'timezone' => 'Asia/Karachi',
+        ])->assertOk()->assertJsonPath('data.locale', 'en-PK')
+            ->assertJsonPath('data.timezone', 'Asia/Karachi');
+        $this->patchJson('/api/v1/me/preferences/general', [
+            'timezone' => 'Invalid/Zone',
+        ])->assertUnprocessable();
+        $second = $this->signIn('general-two@example.test');
+        $this->withToken($second['access_token'])->getJson('/api/v1/me/preferences/general')
+            ->assertJsonPath('data.timezone', 'UTC');
+    }
+
+    public function test_deletion_request_is_restricted_reversible_and_does_not_claim_erasure(): void
+    {
+        $first = $this->signIn('delete-me@example.test');
+        $this->withToken($first['access_token'])->postJson('/api/v1/me/deletion-request', [
+            'confirm' => true,
+        ])->assertStatus(202)->assertJsonPath('data.status', 'pending')
+            ->assertJsonPath('message', 'Deletion request recorded. Access is restricted. Erasure is not complete.');
+        $this->getJson('/api/v1/me/profile')->assertUnauthorized();
+        $record = DB::table('orbit_account_deletion_requests')
+            ->where('user_id', $first['user']['id'])->first();
+        $this->assertSame('pending', $record->status);
+        $this->assertNull($record->completed_at);
+
+        // Simulate the token created by a fresh trusted-device OTP re-login.
+        $user = \App\Models\OrbitUser::findOrFail($first['user']['id']);
+        $device = \App\Models\OrbitDevice::findOrFail($first['device']['id']);
+        $new = app(\App\Modules\Identity\Services\TokenService::class)->issue($user, $device, '127.0.0.1');
+
+        $this->withToken($new['access_token'])->getJson('/api/v1/me/profile')
+            ->assertStatus(409)->assertJsonPath('code', 'account_deletion_pending');
+        $this->getJson('/api/v1/me/deletion-status')->assertOk()
+            ->assertJsonPath('data.status', 'pending')->assertJsonPath('data.can_cancel', true);
+        $this->postJson('/api/v1/me/deletion-cancel', [
+            'confirm' => true,
+        ])->assertOk()->assertJsonPath('data.status', 'cancelled');
+        $this->getJson('/api/v1/me/profile')->assertOk();
+        $this->assertNull($user->fresh()->deletion_requested_at);
+        $this->assertDatabaseHas('orbit_account_deletion_requests', [
+            'user_id' => $user->id, 'status' => 'cancelled',
+        ]);
+    }
+
 }
