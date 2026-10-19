@@ -52,6 +52,13 @@ final class OrbitProfileSettingsTest extends TestCase
         $this->patchJson('/api/v1/me/profile', $data)->assertOk()
             ->assertJsonPath('data.username', 'person.one')->assertJsonPath('data.bio', 'Hello Orbit');
         $this->getJson('/api/v1/me/profile')->assertJsonPath('data.bio', 'Hello Orbit');
+        $fields = DB::table('orbit_identity_events')
+            ->where('user_id', $session['user']['id'])
+            ->where('action', 'settings.profile_updated')
+            ->pluck('reason_code')->all();
+        $this->assertEqualsCanonicalizing(['display_name', 'username', 'bio'], $fields);
+        $this->assertNotContains('Hello Orbit', $fields);
+        $this->assertNotContains('First Person', $fields);
         $this->patchJson('/api/v1/me/profile', [
             'display_name' => 'Another Name', 'username' => 'bad space',
         ])->assertUnprocessable();

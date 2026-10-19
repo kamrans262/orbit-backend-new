@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Modules\Config\Http\Controllers\AdminAuthController;
 use App\Modules\Config\Http\Controllers\AdminConfigController;
 use App\Modules\Identity\Http\Controllers\AdminIdentityController;
+use App\Modules\Profile\Http\Controllers\AdminProfileController;
 use App\Modules\Config\Http\Middleware\EnsureAdmin;
 use App\Modules\Config\Http\Middleware\RequireAdminPermission;
 
@@ -25,6 +26,23 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
     Route::post('/mfa', [AdminAuthController::class, 'verifyMfa'])->middleware('throttle:8,1')->name('mfa.verify');
     Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
     Route::middleware([EnsureAdmin::class])->group(function (): void {
+        Route::get('/start', function () {
+            $actor = auth()->guard('admin')->user();
+            foreach ([
+                'config.manage' => 'orbit.admin.dashboard',
+                'users.read' => 'orbit.admin.users.index',
+                'deletions.read' => 'orbit.admin.deletions.index',
+                'settings.audit.read' => 'orbit.admin.settings.activity',
+            ] as $permission => $route) {
+                if ($actor?->canPerform($permission)) return redirect()->route($route);
+            }
+            abort(403);
+        })->name('landing');
+
+        Route::get('/deletion-requests', [AdminProfileController::class, 'deletionRequests'])
+            ->middleware(RequireAdminPermission::class.':deletions.read')->name('deletions.index');
+        Route::get('/settings-activity', [AdminProfileController::class, 'settingsActivity'])
+            ->middleware(RequireAdminPermission::class.':settings.audit.read')->name('settings.activity');
         Route::get('/users', [AdminIdentityController::class, 'index'])
             ->middleware(RequireAdminPermission::class.':users.read')->name('users.index');
         Route::get('/users/{user}', [AdminIdentityController::class, 'show'])
@@ -36,6 +54,8 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
     });
     Route::middleware([EnsureAdmin::class, RequireAdminPermission::class])->group(function (): void {
         Route::get('/', [AdminConfigController::class, 'dashboard'])->name('dashboard');
+        Route::get('/flags', [AdminConfigController::class, 'flagsIndex'])->name('flags.index');
+        Route::get('/config', [AdminConfigController::class, 'configsIndex'])->name('config.index');
         Route::get('/flags/new', [AdminConfigController::class, 'flagForm'])->name('flags.new');
         Route::post('/flags', [AdminConfigController::class, 'storeFlag'])->name('flags.store');
         Route::get('/flags/{flag}/edit', [AdminConfigController::class, 'flagForm'])->name('flags.edit');

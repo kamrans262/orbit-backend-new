@@ -20,6 +20,20 @@ final class AdminConfigController extends Controller
         ]);
     }
 
+    public function flagsIndex()
+    {
+        return response()->view('orbit-admin.flags-index', [
+            'flags' => FeatureFlag::query()->orderBy('key')->paginate(25),
+        ])->header('Cache-Control', 'private, no-store');
+    }
+
+    public function configsIndex()
+    {
+        return response()->view('orbit-admin.configs-index', [
+            'configs' => RemoteConfig::query()->orderBy('key')->paginate(25),
+        ])->header('Cache-Control', 'private, no-store');
+    }
+
     public function flagForm(?FeatureFlag $flag = null)
     {
         return view('orbit-admin.flag', [

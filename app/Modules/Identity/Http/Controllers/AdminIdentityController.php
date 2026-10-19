@@ -41,7 +41,19 @@ final class AdminIdentityController extends Controller
     public function show(OrbitUser $user)
     {
         $user->load(['identities','devices']);
-        return view('orbit-admin.user-detail', ['orbitUser'=>$user]);
+        // Support can inspect non-sensitive account metadata but never raw
+        // notification/privacy values, precise location, or private bio.
+        $preferences = DB::table('orbit_user_preferences')->where('user_id', $user->id)
+            ->first(['notifications', 'privacy', 'created_at', 'updated_at']);
+        $deletion = auth()->guard('admin')->user()?->canPerform('deletions.read')
+            ? DB::table('orbit_account_deletion_requests')
+                ->where('user_id', $user->id)
+                ->first(['status', 'requested_at', 'eligible_for_erasure_at', 'completed_at'])
+            : null;
+        return response()->view('orbit-admin.user-detail', [
+            'orbitUser' => $user, 'preferenceRecord' => $preferences,
+            'deletionRecord' => $deletion,
+        ])->header('Cache-Control', 'private, no-store');
     }
 
     public function destroy(Request $request, OrbitUser $user, DeleteOrbitUser $deletion)
