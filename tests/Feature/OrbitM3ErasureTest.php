@@ -139,4 +139,20 @@ final class OrbitM3ErasureTest extends TestCase
         $this->expectException(DomainException::class);
         app(M3ErasureProcessor::class)->execute($id,$this->operator(),'CHANGE-123456');
     }
+
+    public function test_admin_cannot_bypass_pending_grace_period_by_direct_delete(): void
+    {
+        [$user, $id] = $this->request();
+        $this->be($this->operator(['users.delete', 'users.read']), 'admin');
+        $this->delete('/admin/users/'.$user->id, [
+            'confirmation' => 'DELETE',
+            'reason' => 'Reviewed user privacy request',
+        ])->assertStatus(409);
+        $this->assertDatabaseHas('orbit_users', ['id' => $user->id]);
+        $this->assertDatabaseHas('orbit_account_deletion_requests', [
+            'request_id' => $id, 'status' => 'pending',
+        ]);
+        $this->get('/admin/users/'.$user->id)->assertOk()
+            ->assertDontSee('data-open-delete-user', false);
+    }
 }
