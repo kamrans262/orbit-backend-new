@@ -130,7 +130,7 @@ final class OrbitIdentityTest extends TestCase
         $this->assertTrue($second['device_requires_approval']);
 
         $status = '/api/v1/devices/registration-status';
-        $this->getJson($status)->assertUnauthorized();
+        $this->withToken('not-a-valid-token')->getJson($status)->assertUnauthorized();
         $this->withToken($second['access_token'])->getJson($status)->assertOk()
             ->assertJsonPath('data.trust_state', 'pending')
             ->assertJsonPath('data.key_registered', false)
