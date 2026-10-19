@@ -95,9 +95,10 @@ final class IdentityController extends Controller
             ->where('provider_subject', $recipient)->first();
         $user = $identity ? OrbitUser::find($identity->user_id) : null;
         if ($user && $user->status === 'active') {
-            $result = $otp->request($channel, $recipient, (string) $request->ip(), 'reset');
-            if ($result === 'rate_limited') return response()->json(['message' => 'Too many requests. Please try later.'], 429);
-            if ($result !== 'sent') return response()->json(['message' => 'Verification service unavailable.'], 503);
+            // Deliberately use the same public response whether an account is
+            // found, rate-limited, or its delivery provider is unavailable.
+            // Global per-IP route throttling remains active for every caller.
+            $otp->request($channel, $recipient, (string) $request->ip(), 'reset');
         }
         return response()->json(['message' => 'If the account exists, a password reset code has been sent.'], 202)
             ->header('Cache-Control', 'no-store');
