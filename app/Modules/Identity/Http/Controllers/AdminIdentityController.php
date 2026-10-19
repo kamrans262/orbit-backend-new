@@ -5,6 +5,7 @@ namespace App\Modules\Identity\Http\Controllers;
 use App\Models\OrbitUser;
 use App\Models\OrbitSession;
 use App\Models\AdminUser;
+use App\Modules\Identity\Services\DeleteOrbitUser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -41,6 +42,25 @@ final class AdminIdentityController extends Controller
     {
         $user->load(['identities','devices']);
         return view('orbit-admin.user-detail', ['orbitUser'=>$user]);
+    }
+
+    public function destroy(Request $request, OrbitUser $user, DeleteOrbitUser $deletion)
+    {
+        $data = $request->validate([
+            'confirmation' => ['required', 'in:DELETE'],
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+        $actor = auth()->guard('admin')->user();
+        abort_unless($actor?->canPerform('users.delete'), 403);
+        $deletion->execute(
+            $user->id,
+            $actor,
+            $data['reason'],
+            $request->ip(),
+            $request->header('X-Request-ID'),
+        );
+        return redirect()->route('orbit.admin.users.index')
+            ->with('status', 'User account and current database-linked devices, sessions and identities permanently deleted. Audit entry recorded.');
     }
 
     public function updateStatus(Request $request, OrbitUser $user)

@@ -31,6 +31,8 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
             ->middleware(RequireAdminPermission::class.':users.read')->name('users.show');
         Route::post('/users/{user}/status', [AdminIdentityController::class, 'updateStatus'])
             ->middleware(RequireAdminPermission::class.':users.manage')->name('users.status');
+        Route::delete('/users/{user}', [AdminIdentityController::class, 'destroy'])
+            ->middleware([RequireAdminPermission::class.':users.delete', 'throttle:6,1'])->name('users.destroy');
     });
     Route::middleware([EnsureAdmin::class, RequireAdminPermission::class])->group(function (): void {
         Route::get('/', [AdminConfigController::class, 'dashboard'])->name('dashboard');

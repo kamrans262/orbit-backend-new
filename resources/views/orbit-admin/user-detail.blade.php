@@ -28,4 +28,37 @@
   </form>
 </section>
 @endif
+@if(auth()->guard('admin')->user()->canPerform('users.delete'))
+<section class="panel danger-zone" aria-labelledby="delete-user-heading">
+  <div class="panel-head"><div>
+    <p class="eyebrow danger-text">DANGER ZONE</p>
+    <h2 id="delete-user-heading">Delete this user</h2>
+    <p>Remove the account and all currently linked identities, devices, sessions, refresh history, OTP challenges, and identity activity.</p>
+  </div></div>
+  <div class="danger-zone-action">
+    <p class="subtle">This action cannot be undone. Historical administrator audit records are retained.</p>
+    <button type="button" class="btn danger" data-open-delete-user>Delete user</button>
+  </div>
+</section>
+<dialog class="admin-confirm-dialog" id="delete-user-dialog" aria-labelledby="delete-user-title" aria-describedby="delete-user-description">
+  <form method="post" action="{{ route('orbit.admin.users.destroy', $orbitUser) }}" data-delete-user-form>
+    @csrf
+    @method('DELETE')
+    <div class="confirm-icon" aria-hidden="true">!</div>
+    <h2 id="delete-user-title">Permanently delete user?</h2>
+    <p id="delete-user-description">You are about to permanently remove <strong>{{ $orbitUser->display_name ?: ($orbitUser->username ?: 'this account') }}</strong> and their registered devices, verified contacts, active sessions and related identity records. This cannot be undone.</p>
+    <p class="subtle">Account ID: {{ $orbitUser->id }}</p>
+    <label>Reason for deletion (10–500 characters)
+      <textarea name="reason" rows="3" minlength="10" maxlength="500" required placeholder="Enter an administrative reason; avoid private account details"></textarea>
+    </label>
+    <label>Type <strong>DELETE</strong> to confirm
+      <input type="text" name="confirmation" autocomplete="off" autocapitalize="characters" spellcheck="false" pattern="DELETE" maxlength="6" required placeholder="DELETE" data-delete-user-confirm>
+    </label>
+    <div class="confirm-actions">
+      <button type="button" class="btn secondary" data-cancel-delete-user>Cancel</button>
+      <button type="submit" class="btn danger" data-submit-delete-user disabled>Permanently delete</button>
+    </div>
+  </form>
+</dialog>
+@endif
 @endsection

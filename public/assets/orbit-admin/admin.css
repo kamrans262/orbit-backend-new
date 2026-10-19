@@ -30,3 +30,20 @@ body{font-family:Poppins,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 tbody td{color:#64748B}
 .stat-card strong,.panel-head h2,.page-heading h1{color:#0D1726}
 @media(max-width:600px){.auth-mark{width:72px;height:72px}}
+
+/* User deletion: reuse Orbit Admin fonts, tokens, panels and buttons. */
+.btn.danger{background:var(--red);color:var(--white);border-color:var(--red);box-shadow:0 5px 14px rgba(214,61,81,.12)}
+.btn.danger:hover{background:#b72c40}.btn.danger:disabled{opacity:.48;cursor:not-allowed;transform:none}
+.danger-zone{margin-top:20px;border-color:#f4c8d0}.danger-text{color:var(--red)}
+.danger-zone-action{padding:0 22px 22px;display:flex;gap:18px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.danger-zone-action p{margin:0;flex:1;min-width:220px;line-height:1.6}
+.admin-confirm-dialog{width:min(calc(100vw - 32px),510px);padding:30px;border:1px solid var(--line);border-radius:18px;box-shadow:0 35px 95px rgba(17,28,57,.23);color:var(--ink);background:var(--white)}
+.admin-confirm-dialog::backdrop{background:rgba(16,26,49,.62);backdrop-filter:blur(3px)}
+.admin-confirm-dialog h2{font-size:21px;margin:14px 0 10px;letter-spacing:-.5px}
+.admin-confirm-dialog p{color:var(--muted);font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+.admin-confirm-dialog label{display:block;font-size:11px;font-weight:700;color:#48536c;margin-top:16px}
+.admin-confirm-dialog :is(input,textarea){display:block;width:100%;background:#fff;border:1px solid #dfe4ed;border-radius:9px;padding:11px 12px;margin-top:7px;outline:none;color:var(--ink)}
+.admin-confirm-dialog :is(input,textarea):focus{border-color:var(--purple);box-shadow:0 0 0 3px var(--purple-soft)}
+.admin-confirm-dialog textarea{resize:vertical}.confirm-icon{background:var(--red-soft);color:var(--red);font-size:23px;font-weight:800;width:42px;height:42px;border-radius:12px;display:grid;place-items:center}
+.confirm-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:24px;flex-wrap:wrap}
+@media(max-width:600px){.admin-confirm-dialog{padding:22px}.confirm-actions .btn{flex:1}}
