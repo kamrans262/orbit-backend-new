@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main, feature/m1-foundation-config, feature/m2-auth-identity, feature/m3-profiles-settings, feature/m3-admin-console, feature/admin-ui-layout-polish]
   push:
-    branches: [feature/m1-foundation-config, feature/m2-auth-identity, feature/m3-profiles-settings, feature/m3-admin-console]
+    branches: [feature/m1-foundation-config, feature/m2-auth-identity, feature/m3-profiles-settings, feature/m3-admin-console, feature/admin-ui-layout-polish]
 jobs:
   php-tests:
     runs-on: ubuntu-latest
