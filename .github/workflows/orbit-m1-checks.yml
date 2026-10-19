@@ -1,7 +1,7 @@
 name: Orbit Laravel validation (M1 + M2 + M3 + Admin UI)
 on:
   pull_request:
-    branches: [main, feature/m1-foundation-config, feature/m2-auth-identity, feature/m3-profiles-settings, feature/m3-admin-console, feature/admin-ui-layout-polish]
+    branches: [main, feature/m1-foundation-config, feature/m2-auth-identity, feature/m3-profiles-settings, feature/m3-admin-console, feature/admin-ui-layout-polish, feature/m3-completion-erasure]
   push:
     branches: [feature/m1-foundation-config, feature/m2-auth-identity, feature/m3-profiles-settings, feature/m3-admin-console, feature/admin-ui-layout-polish]
 jobs:
