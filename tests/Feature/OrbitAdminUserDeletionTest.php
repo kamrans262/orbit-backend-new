@@ -166,20 +166,16 @@ final class OrbitAdminUserDeletionTest extends TestCase
         $this->admin(['*']);
 
         $users = $this->get('/admin/users')->assertOk();
+        $this->assertStringContainsString('nav-item nav-parent active', $users->getContent());
+        $this->assertStringContainsString('nav-subitem active', $users->getContent());
+        $this->assertStringContainsString('Users &amp; Devices', $users->getContent());
         $this->assertMatchesRegularExpression(
-            '/class="nav-item active" aria-current=page><span>◎<\\/span> Users &amp; Devices/',
-            $users->getContent()
-        );
-        $this->assertStringNotContainsString(
-            'class="nav-item active"><span>◫</span> Configuration',
+            '/<details\\s+class="nav-group"\\s+open\\b/',
             $users->getContent()
         );
 
         $details = $this->get('/admin/users/'.$user->id)->assertOk();
-        $this->assertMatchesRegularExpression(
-            '/class="nav-item active" aria-current=page><span>◎<\\/span> Users &amp; Devices/',
-            $details->getContent()
-        );
+        $this->assertStringContainsString('nav-item nav-parent active', $details->getContent());
         $details->assertSee('danger-zone-layout', false)
             ->assertSee('danger-zone-heading', false)
             ->assertSee('danger-zone-copy', false)
@@ -188,10 +184,10 @@ final class OrbitAdminUserDeletionTest extends TestCase
             ->assertSee('data-delete-user-form', false);
 
         $dashboard = $this->get('/admin')->assertOk();
-        $this->assertMatchesRegularExpression(
-            '/class="nav-item active" aria-current=page><span>◫<\\/span> Configuration/',
-            $dashboard->getContent()
-        );
+        $this->assertStringContainsString('nav-item nav-parent active', $dashboard->getContent());
+        $dashboard->assertSee('Configurations');
+        $dashboard->assertSee('Feature Flags');
+        $dashboard->assertSee('Remote Config');
     }
 
 }
