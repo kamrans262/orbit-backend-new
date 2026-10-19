@@ -94,7 +94,7 @@ final class IdentityController extends Controller
         $identity = UserIdentity::query()->where('provider', $channel === 'sms' ? 'phone' : 'email')
             ->where('provider_subject', $recipient)->first();
         $user = $identity ? OrbitUser::find($identity->user_id) : null;
-        if ($user && $user->status === 'active' && $user->password_hash) {
+        if ($user && $user->status === 'active') {
             $result = $otp->request($channel, $recipient, (string) $request->ip(), 'reset');
             if ($result === 'rate_limited') return response()->json(['message' => 'Too many requests. Please try later.'], 429);
             if ($result !== 'sent') return response()->json(['message' => 'Verification service unavailable.'], 503);
@@ -118,7 +118,7 @@ final class IdentityController extends Controller
             $identity = UserIdentity::query()->where('provider', $channel === 'sms' ? 'phone' : 'email')
                 ->where('provider_subject', $recipient)->first();
             $user = $identity ? OrbitUser::whereKey($identity->user_id)->lockForUpdate()->first() : null;
-            if (!$user || $user->status !== 'active' || !$user->password_hash) return false;
+            if (!$user || $user->status !== 'active') return false;
             if (!$otp->consumeRecoveryCode($channel, $recipient, $data['code'])) return false;
             $user->update(['password_hash' => Hash::make($data['password'])]);
             OrbitSession::where('user_id', $user->id)->whereNull('revoked_at')->update(['revoked_at' => now()]);

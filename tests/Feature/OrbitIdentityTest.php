@@ -414,6 +414,23 @@ final class OrbitIdentityTest extends TestCase
         $this->assertDatabaseHas('orbit_identity_events', ['action' => 'auth.password_reset']);
     }
 
+
+    public function test_legacy_otp_only_account_can_enroll_first_password_through_verified_recovery(): void
+    {
+        $tokens = $this->signIn('legacy@example.test');
+        $account = OrbitUser::firstOrFail();
+        $this->assertNull($account->password_hash);
+        $this->createdCode('legacy@example.test', '472819', 'reset');
+        $this->postJson('/api/v1/auth/password/reset/confirm', [
+            'recipient' => 'legacy@example.test',
+            'code' => '472819',
+            'password' => 'NewLegacyPassword123',
+        ])->assertOk();
+        $this->assertTrue(Hash::check('NewLegacyPassword123', $account->fresh()->password_hash));
+        $this->assertDatabaseCount('orbit_users', 1);
+        $this->withToken($tokens['access_token'])->getJson('/api/v1/me')->assertUnauthorized();
+    }
+
     public function test_unknown_recovery_request_is_generic_and_creates_no_account_or_otp(): void
     {
         Mail::fake();
