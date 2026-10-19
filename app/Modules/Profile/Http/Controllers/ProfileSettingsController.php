@@ -99,6 +99,10 @@ final class ProfileSettingsController extends Controller
     {
         $id = $this->user($request)->id;
         return DB::transaction(function () use ($id, $column, $defaults, $changes): array {
+            // Two rapid first-time saves must not race to insert the same user.
+            DB::table('orbit_user_preferences')->insertOrIgnore([
+                'user_id' => $id, 'created_at' => now(), 'updated_at' => now(),
+            ]);
             $row = DB::table('orbit_user_preferences')->where('user_id', $id)
                 ->lockForUpdate()->first();
             $prior = $row ? json_decode((string) $row->{$column}, true) : null;
