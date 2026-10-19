@@ -57,3 +57,10 @@
 
 - POST /api/v1/me/identities/link links a newly OTP-verified email/phone to an existing signed-in trusted-device account. Existing identity in a different account returns 409; no silent account merging.
 - Full merging of existing independent accounts, sensitive identity unlink/change policy, and recovery from loss of every trusted device require separately agreed security flows.
+
+## Password-enabled standard sign-up, without bypassing OTP/device trust
+- New nullable `orbit_users.password_hash` column is added via forward-only migration; no existing account/password data is replaced.
+- POST /api/v1/me/password enrolls a first-time password after OTP and trusted device registration within ten minutes; Hash::make is used, and existing password hashes cannot be overwritten.
+- POST /api/v1/auth/password/otp/request validates the enrolled password and sends the same email/SMS OTP. It returns no token; only successful OTP verification and device checks can issue sessions.
+- The approved Flutter Sign Up and Login layouts stay intact, while the primary buttons enter the same six-digit OTP journey with the supplied email/phone prefilled.
+- Password recovery/change still requires a separate verified recovery workflow; Apple/Google are client-access deferred.

@@ -11,6 +11,7 @@ Route::prefix('v1')->group(function (): void {
 
     // Never expose OTP codes or verification-provider credentials to consumers.
     Route::post('/auth/otp/request', [IdentityController::class, 'requestOtp'])->middleware('throttle:20,1');
+    Route::post('/auth/password/otp/request', [IdentityController::class, 'requestPasswordOtp'])->middleware('throttle:8,1');
     Route::post('/auth/otp/verify', [IdentityController::class, 'verifyOtp'])->middleware('throttle:25,1');
     Route::post('/auth/refresh', [IdentityController::class, 'refresh'])->middleware('throttle:30,1');
 
@@ -20,6 +21,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/me/deletion-request', [IdentityController::class, 'requestDeletion']);
         Route::get('/me', [IdentityController::class, 'me']);
         Route::patch('/me/profile-basics', [IdentityController::class, 'updateProfileBasics']);
+        Route::post('/me/password', [IdentityController::class, 'enrollPassword']);
         Route::post('/me/identities/link', [IdentityController::class, 'linkIdentity']);
         Route::get('/me/devices', [IdentityController::class, 'listDevices']);
         Route::get('/me/sessions', [IdentityController::class, 'listSessions']);

@@ -11,6 +11,7 @@ final class OrbitUser extends Model
     use HasUuids;
     protected $table = 'orbit_users';
     protected $guarded = ['id'];
+    protected $hidden = ['password_hash'];
     protected function casts(): array { return ['deletion_requested_at' => 'datetime']; }
     public function identities(): HasMany { return $this->hasMany(UserIdentity::class, 'user_id'); }
     public function devices(): HasMany { return $this->hasMany(OrbitDevice::class, 'user_id'); }

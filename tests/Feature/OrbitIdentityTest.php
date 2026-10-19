@@ -9,6 +9,7 @@ use App\Modules\Identity\Services\TokenService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -284,6 +285,46 @@ final class OrbitIdentityTest extends TestCase
             'action' => 'users.status', 'target' => 'user:'.$user->id,
         ]);
         $this->withToken($tokens['access_token'])->getJson('/api/v1/me')->assertUnauthorized();
+    }
+
+    public function test_password_enrollment_requires_verified_trusted_device_and_never_overwrites(): void
+    {
+        $tokens = $this->signIn();
+        $endpoint = '/api/v1/me/password';
+        $this->withToken($tokens['access_token'])->postJson($endpoint, [
+            'password' => 'StrongAndUniquePass123!',
+        ])->assertForbidden();
+        $this->registerTrustedDevice($tokens);
+        $this->withToken($tokens['access_token'])->postJson($endpoint, [
+            'password' => 'short',
+        ])->assertUnprocessable();
+        $this->withToken($tokens['access_token'])->postJson($endpoint, [
+            'password' => 'StrongAndUniquePass123!',
+        ])->assertOk();
+        $user = OrbitUser::firstOrFail();
+        $this->assertTrue(Hash::check('StrongAndUniquePass123!', $user->password_hash));
+        $this->assertNotSame('StrongAndUniquePass123!', $user->password_hash);
+        $this->withToken($tokens['access_token'])->postJson($endpoint, [
+            'password' => 'AnotherSecretPassword456!',
+        ])->assertStatus(409);
+        $this->assertTrue(Hash::check('StrongAndUniquePass123!', $user->fresh()->password_hash));
+    }
+
+    public function test_password_login_starts_same_otp_flow_but_does_not_issue_tokens(): void
+    {
+        $tokens = $this->signIn();
+        $this->registerTrustedDevice($tokens);
+        $this->withToken($tokens['access_token'])->postJson('/api/v1/me/password', [
+            'password' => 'StrongAndUniquePass123!',
+        ])->assertOk();
+        Mail::fake();
+        $this->postJson('/api/v1/auth/password/otp/request', [
+            'recipient' => 'member@example.test', 'password' => 'IncorrectPassword123!',
+        ])->assertUnprocessable();
+        $this->postJson('/api/v1/auth/password/otp/request', [
+            'recipient' => 'member@example.test', 'password' => 'StrongAndUniquePass123!',
+        ])->assertStatus(202)->assertJsonMissingPath('data.access_token');
+        $this->assertDatabaseCount('orbit_sessions', 1);
     }
 
     public function test_admin_user_view_is_not_public(): void

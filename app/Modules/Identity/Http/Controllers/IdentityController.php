@@ -11,10 +11,75 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+use App\Models\UserIdentity;
 use Illuminate\Validation\Rule;
 
 final class IdentityController extends Controller
 {
+    /**
+     * Password sign-in is still verified by the same OTP + device-trust flow.
+     * Never issue a session on password alone or expose whether an account exists.
+     */
+    public function requestPasswordOtp(Request $request, OtpService $otp): JsonResponse
+    {
+        $data = $request->validate([
+            'recipient' => ['required','string','max:190'],
+            'password' => ['required','string','max:256'],
+        ]);
+        $channel = str_contains($data['recipient'], '@') ? 'email' : 'sms';
+        $recipient = $otp->normalized($channel, $data['recipient']);
+        if (!$recipient) {
+            return response()->json(['message' => 'Please enter a valid email or international phone number.'], 422);
+        }
+        $limitKey = 'orbit:password:'.$channel.':'.hash_hmac('sha256', $recipient, (string) config('app.key'));
+        if (RateLimiter::tooManyAttempts($limitKey, 6)) {
+            return response()->json(['message' => 'Please wait before trying again.'], 429);
+        }
+        RateLimiter::hit($limitKey, 900);
+        $identity = UserIdentity::query()->where('provider', $channel === 'email' ? 'email' : 'phone')
+            ->where('provider_subject', $recipient)->first();
+        $user = $identity ? OrbitUser::find($identity->user_id) : null;
+        if (!$user || $user->status !== 'active' || !$user->password_hash
+            || !Hash::check($data['password'], $user->password_hash)) {
+            return response()->json(['message' => 'Invalid credentials.'], 422)->header('Cache-Control', 'no-store');
+        }
+        $result = $otp->request($channel, $recipient, (string) $request->ip());
+        if ($result === 'rate_limited') {
+            return response()->json(['message' => 'Too many requests. Try again later.'], 429);
+        }
+        if ($result !== 'sent') {
+            return response()->json(['message' => 'Verification service unavailable.'], 503);
+        }
+        return response()->json(['message' => 'Verification code sent.', 'expires_in' => 300], 202)
+            ->header('Cache-Control', 'no-store');
+    }
+
+    /**
+     * First password creation only; requires a recently OTP-verified,
+     * registered and trusted device. Existing passwords cannot be overwritten.
+     */
+    public function enrollPassword(Request $request, TokenService $tokens): JsonResponse
+    {
+        $data = $request->validate([
+            'password' => ['required', 'string', 'min:10', 'max:256'],
+        ]);
+        $session = $request->attributes->get('orbit_session');
+        if ($session->created_at->lt(now()->subMinutes(10))) {
+            return response()->json(['message' => 'Verify a fresh code before setting your password.'], 403);
+        }
+        $saved = DB::transaction(function () use ($data, $session, $tokens): bool {
+            $user = OrbitUser::whereKey($session->user_id)->lockForUpdate()->firstOrFail();
+            if ($user->password_hash) return false;
+            $user->update(['password_hash' => Hash::make($data['password'])]);
+            $tokens->event($user->id, $session->device_id, 'auth.password_enrolled', 'verified_device');
+            return true;
+        });
+        if (!$saved) return response()->json(['message' => 'A password is already configured for this account.'], 409);
+        return response()->json(['message' => 'Password secured.'])->header('Cache-Control', 'no-store');
+    }
+
     public function requestOtp(Request $request, OtpService $otp): JsonResponse
     {
         $data = $request->validate([
