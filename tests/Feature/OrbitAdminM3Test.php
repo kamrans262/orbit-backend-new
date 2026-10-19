@@ -38,6 +38,50 @@ final class OrbitAdminM3Test extends TestCase
         ]);
     }
 
+    public function test_admin_navigation_uses_stable_shell_and_professional_icons(): void
+    {
+        $this->be($this->admin(), 'admin');
+        $response = $this->get('/admin/deletion-requests')->assertOk();
+        $response->assertSee('class="sidebar-brand"', false)
+            ->assertSee('class="sidebar-scroll"', false)
+            ->assertSee('class="sidebar-bottom"', false)
+            ->assertSee('class="nav-chevron"', false)
+            ->assertSee('aria-label="Main administration sections"', false)
+            ->assertSee('id="orbit-admin-sidebar"', false)
+            ->assertSee('class="nav-subitem active"', false)
+            ->assertSee('stat-grid--compact', false)
+            ->assertSee('class="stat-value"', false)
+            ->assertSee('Review required — not automatically erased.');
+        $this->assertMatchesRegularExpression(
+            '/<details class="nav-group"\\s+open/', $response->getContent()
+        );
+        $this->assertStringContainsString('viewBox="0 0 24 24"',
+            $response->getContent());
+        $this->assertStringNotContainsString(
+            '<strong>not automatically erased</strong>',
+            $response->getContent()
+        );
+        $css = file_get_contents(public_path('assets/orbit-admin/admin.css'));
+        $this->assertStringContainsString('grid-template-rows:auto minmax(0,1fr) auto', $css);
+        $this->assertStringContainsString('scrollbar-gutter:stable', $css);
+        $this->assertStringContainsString('.stat-card > strong', $css);
+        $this->assertStringNotContainsString('.stat-card strong{display:block;font-size:30px', $css);
+    }
+
+    public function test_new_admin_sidebar_does_not_restrict_existing_secure_workflows(): void
+    {
+        $this->be($this->admin(), 'admin');
+        foreach (['/admin','/admin/users','/admin/flags','/admin/config',
+            '/admin/deletion-requests','/admin/settings-activity'] as $uri) {
+            $this->get($uri)->assertOk()
+                ->assertSee('Configurations')
+                ->assertSee('Accounts');
+        }
+        $js = file_get_contents(public_path('assets/orbit-admin/admin.js'));
+        $this->assertStringContainsString("aria-expanded", $js);
+        $this->assertStringContainsString("event.key === 'Escape'", $js);
+    }
+
     public function test_configurations_and_accounts_show_expandable_subsections_and_real_links(): void
     {
         $this->be($this->admin(), 'admin');
