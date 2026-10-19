@@ -238,6 +238,22 @@ final class OrbitIdentityTest extends TestCase
         $this->assertDatabaseCount('user_identities', 2);
     }
 
+    public function test_admin_user_lookup_filters_by_public_username_and_status(): void
+    {
+        $admin = \App\Models\AdminUser::create([
+            'name' => 'Support', 'email' => 'support@example.test',
+            'password' => 'TestingPassword123!', 'totp_secret' => (new \App\Modules\Config\Services\Totp())->generateSecret(),
+            'status' => 'active',
+        ]);
+        $role = \App\Models\AdminRole::create(['name' => 'Support', 'permissions' => ['users.read']]);
+        $admin->roles()->attach($role->id);
+        OrbitUser::create(['display_name' => 'First', 'username' => 'alpha_test', 'status' => 'active']);
+        OrbitUser::create(['display_name' => 'Second', 'username' => 'beta_test', 'status' => 'suspended']);
+        $this->be($admin, 'admin');
+        $this->get('/admin/users?query=alpha&status=active')
+            ->assertOk()->assertSee('alpha_test')->assertDontSee('beta_test');
+    }
+
     public function test_admin_user_view_is_not_public(): void
     {
         $this->get('/admin/users')->assertRedirect(route('orbit.admin.login'));

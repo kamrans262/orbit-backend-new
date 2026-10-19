@@ -12,10 +12,24 @@ use Illuminate\Routing\Controller;
 
 final class AdminIdentityController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $users = OrbitUser::query()->withCount(['identities','devices','sessions'])
-            ->orderByDesc('created_at')->paginate(25);
+        $filters = $request->validate([
+            'query' => ['nullable', 'string', 'max:60', 'regex:/^[A-Za-z0-9_-]+$/D'],
+            'status' => ['nullable', 'in:active,suspended'],
+        ]);
+        $users = OrbitUser::query()->withCount(['identities','devices','sessions']);
+        if (!empty($filters['query'])) {
+            // Search only public username or exact UUID; no unmasked contact
+            // identifiers are placed in GET queries or access logs.
+            $search = $filters['query'];
+            $users->where(fn ($q) => $q->where('id', $search)
+                ->orWhere('username', 'like', addcslashes($search, '%_').'%', 'and'));
+        }
+        if (!empty($filters['status'])) {
+            $users->where('status', $filters['status']);
+        }
+        $users = $users->orderByDesc('created_at')->paginate(25)->withQueryString();
         return view('orbit-admin.users', [
             'users' => $users,
             'activeUsers' => OrbitUser::where('status','active')->count(),
