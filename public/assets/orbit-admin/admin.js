@@ -1,10 +1,25 @@
 (() => {
   'use strict';
   const shell = document.querySelector('[data-shell]');
-  const closeMenu = () => shell?.classList.remove('sidebar-open');
-  document.querySelector('[data-menu]')?.addEventListener('click', () => shell?.classList.toggle('sidebar-open'));
-  document.querySelector('[data-scrim]')?.addEventListener('click', closeMenu);
-  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeMenu(); });
+  const menuButton = document.querySelector('[data-menu]');
+  const syncMenu = (expanded) => {
+    shell?.classList.toggle('sidebar-open', expanded);
+    menuButton?.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    menuButton?.setAttribute('aria-label', expanded ? 'Close navigation' : 'Open navigation');
+  };
+  const closeMenu = () => syncMenu(false);
+  menuButton?.addEventListener('click', () => syncMenu(!shell?.classList.contains('sidebar-open')));
+  document.querySelector('[data-scrim]')?.addEventListener('click', () => {
+    closeMenu();
+    menuButton?.focus();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && shell?.classList.contains('sidebar-open')) {
+      closeMenu();
+      menuButton?.focus();
+    }
+  });
+  window.matchMedia('(min-width: 901px)').addEventListener('change', closeMenu);
   document.querySelectorAll('form[data-confirm]').forEach((form) => {
     form.addEventListener('submit', (event) => {
       if (!window.confirm(form.dataset.confirm || 'Confirm this operation?')) event.preventDefault();
