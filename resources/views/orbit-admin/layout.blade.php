@@ -22,10 +22,10 @@
       </nav>
       <div class="nav-caption space-top">UPCOMING MODULES</div>
       <div class="upcoming-list" aria-label="Future modules">
-        <div class="nav-item disabled"><span class="upcoming-icon" aria-hidden="true">◌</span><span>Circles</span><small>Upcoming</small></div>
-        <div class="nav-item disabled"><span class="upcoming-icon" aria-hidden="true">✚</span><span>SOS operations</span><small>Upcoming</small></div>
-        <div class="nav-item disabled"><span class="upcoming-icon" aria-hidden="true">▤</span><span>Billing &amp; Ads</span><small>Upcoming</small></div>
-        <div class="nav-item disabled"><span class="upcoming-icon" aria-hidden="true">▦</span><span>System health</span><small>Upcoming</small></div>
+        <div class="nav-item disabled"><span class="upcoming-icon" aria-hidden="true">@include('orbit-admin.partials.icon', ['name'=>'circles'])</span><span>Circles</span><small>Upcoming</small></div>
+        <div class="nav-item disabled"><span class="upcoming-icon" aria-hidden="true">@include('orbit-admin.partials.icon', ['name'=>'sos'])</span><span>SOS operations</span><small>Upcoming</small></div>
+        <div class="nav-item disabled"><span class="upcoming-icon" aria-hidden="true">@include('orbit-admin.partials.icon', ['name'=>'billing'])</span><span>Billing &amp; Ads</span><small>Upcoming</small></div>
+        <div class="nav-item disabled"><span class="upcoming-icon" aria-hidden="true">@include('orbit-admin.partials.icon', ['name'=>'health'])</span><span>System health</span><small>Upcoming</small></div>
       </div>
     </div>
     <div class="sidebar-bottom"><span class="online-dot"></span> {{ strtoupper(app()->environment()) }} environment <p>Role-restricted operations</p></div>
