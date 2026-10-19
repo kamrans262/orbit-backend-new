@@ -56,7 +56,18 @@ final class ProfileSettingsController extends Controller
         ]);
         // Uploads are not part of M3; never treat arbitrary client paths as URLs.
         $data['username'] = strtolower($data['username']);
-        $user->update($data);
+        $user->fill($data);
+        $changedFields = array_intersect(array_keys($user->getDirty()),
+            ['display_name', 'username', 'bio']);
+        $session = $request->attributes->get('orbit_session');
+        DB::transaction(function () use ($user, $session, $changedFields): void {
+            $user->save();
+            foreach ($changedFields as $field) {
+                // Field name only. Never log the new/old bio or contact details.
+                app(TokenService::class)->event($user->id, $session->device_id,
+                    'settings.profile_updated', $field);
+            }
+        });
         return $this->show($request);
     }
 
