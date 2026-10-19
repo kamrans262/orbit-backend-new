@@ -75,7 +75,7 @@ final class IdentityController extends Controller
         if ($session->created_at->lt(now()->subMinutes(10))) {
             return response()->json(['message' => 'Verify a fresh code before setting your password.'], 403);
         }
-        $saved = DB::transaction(function () use ($data, $session, $tokens): bool {
+        $saved = DB::transaction(function () use ($data, $session, $tokens, $passwords): bool {
             $user = OrbitUser::whereKey($session->user_id)->lockForUpdate()->firstOrFail();
             if ($user->password_hash) return false;
             $user->update(['password_hash' => $passwords->make($data['password'])]);
@@ -120,7 +120,7 @@ final class IdentityController extends Controller
         $channel = str_contains($data['recipient'], '@') ? 'email' : 'sms';
         $recipient = $otp->normalized($channel, $data['recipient']);
         if (!$recipient) return response()->json(['message' => 'Invalid or expired code.'], 422);
-        $result = DB::transaction(function () use ($otp, $tokens, $channel, $recipient, $data): bool {
+        $result = DB::transaction(function () use ($otp, $tokens, $channel, $recipient, $data, $passwords): bool {
             $identity = UserIdentity::query()->where('provider', $channel === 'sms' ? 'phone' : 'email')
                 ->where('provider_subject', $recipient)->first();
             $user = $identity ? OrbitUser::whereKey($identity->user_id)->lockForUpdate()->first() : null;
