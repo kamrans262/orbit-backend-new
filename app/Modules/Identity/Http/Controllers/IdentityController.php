@@ -6,12 +6,12 @@ use App\Models\OrbitDevice;
 use App\Models\OrbitSession;
 use App\Models\OrbitUser;
 use App\Modules\Identity\Services\OtpService;
+use App\Modules\Identity\Services\OrbitPasswordHasher;
 use App\Modules\Identity\Services\TokenService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use App\Models\UserIdentity;
 use Illuminate\Validation\Rule;
@@ -22,7 +22,7 @@ final class IdentityController extends Controller
      * Password sign-in is still verified by the same OTP + device-trust flow.
      * Never issue a session on password alone or expose whether an account exists.
      */
-    public function requestPasswordOtp(Request $request, OtpService $otp): JsonResponse
+    public function requestPasswordOtp(Request $request, OtpService $otp, OrbitPasswordHasher $passwords): JsonResponse
     {
         $data = $request->validate([
             'recipient' => ['required','string','max:190'],
@@ -42,8 +42,13 @@ final class IdentityController extends Controller
             ->where('provider_subject', $recipient)->first();
         $user = $identity ? OrbitUser::find($identity->user_id) : null;
         if (!$user || $user->status !== 'active' || !$user->password_hash
-            || !Hash::check($data['password'], $user->password_hash)) {
+            || !$passwords->check($data['password'], $user->password_hash)) {
             return response()->json(['message' => 'Invalid credentials.'], 422)->header('Cache-Control', 'no-store');
+        }
+        // Upgrade only a verified password hash; the conditional write protects resets.
+        if ($passwords->needsRehash($user->password_hash)) {
+            OrbitUser::whereKey($user->id)->where('password_hash', $user->password_hash)
+                ->update(['password_hash' => $passwords->make($data['password'])]);
         }
         $result = $otp->request($channel, $recipient, (string) $request->ip(), 'login');
         if ($result === 'rate_limited') {
@@ -60,7 +65,7 @@ final class IdentityController extends Controller
      * First password creation only; requires a recently OTP-verified,
      * registered and trusted device. Existing passwords cannot be overwritten.
      */
-    public function enrollPassword(Request $request, TokenService $tokens): JsonResponse
+    public function enrollPassword(Request $request, TokenService $tokens, OrbitPasswordHasher $passwords): JsonResponse
     {
         $data = $request->validate([
             'password' => ['required', 'string', 'min:10', 'max:256',
@@ -73,7 +78,7 @@ final class IdentityController extends Controller
         $saved = DB::transaction(function () use ($data, $session, $tokens): bool {
             $user = OrbitUser::whereKey($session->user_id)->lockForUpdate()->firstOrFail();
             if ($user->password_hash) return false;
-            $user->update(['password_hash' => Hash::make($data['password'])]);
+            $user->update(['password_hash' => $passwords->make($data['password'])]);
             $tokens->event($user->id, $session->device_id, 'auth.password_enrolled', 'verified_device');
             return true;
         });
@@ -104,7 +109,7 @@ final class IdentityController extends Controller
             ->header('Cache-Control', 'no-store');
     }
 
-    public function confirmPasswordReset(Request $request, OtpService $otp, TokenService $tokens): JsonResponse
+    public function confirmPasswordReset(Request $request, OtpService $otp, TokenService $tokens, OrbitPasswordHasher $passwords): JsonResponse
     {
         $data = $request->validate([
             'recipient' => ['required', 'string', 'max:190'],
@@ -121,7 +126,7 @@ final class IdentityController extends Controller
             $user = $identity ? OrbitUser::whereKey($identity->user_id)->lockForUpdate()->first() : null;
             if (!$user || $user->status !== 'active') return false;
             if (!$otp->consumeRecoveryCode($channel, $recipient, $data['code'])) return false;
-            $user->update(['password_hash' => Hash::make($data['password'])]);
+            $user->update(['password_hash' => $passwords->make($data['password'])]);
             OrbitSession::where('user_id', $user->id)->whereNull('revoked_at')->update(['revoked_at' => now()]);
             $tokens->event($user->id, null, 'auth.password_reset', 'verified_otp');
             return true;
@@ -280,6 +285,20 @@ final class IdentityController extends Controller
         $data = OrbitDevice::query()->where('user_id', $session->user_id)->orderByDesc('last_seen_at')->get()
             ->map(fn (OrbitDevice $d): array => $this->deviceData($d, $session->device_id));
         return response()->json(['data' => $data])->header('Cache-Control', 'no-store');
+    }
+
+    /**
+     * Only returns this device's trust and public-key state. No private data.
+     */
+    public function deviceRegistrationStatus(Request $request): JsonResponse
+    {
+        $session = $request->attributes->get('orbit_session');
+        $device = OrbitDevice::query()->whereKey($session->device_id)
+            ->where('user_id', $session->user_id)->firstOrFail();
+        return response()->json(['data' => [
+            'key_registered' => (bool) $device->public_key,
+            'trust_state' => $device->trust_state,
+        ]])->header('Cache-Control', 'no-store');
     }
 
     public function registerDevice(Request $request, TokenService $tokens): JsonResponse
