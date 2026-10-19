@@ -48,7 +48,8 @@ final class OrbitAdminM3Test extends TestCase
             ->assertSee('Accounts')
             ->assertSee('Deletion Requests')
             ->assertSee('Settings Audit')
-            ->assertSee('class="nav-group" open', false);
+            ->assertSee('class="nav-group"', false);
+        $this->assertMatchesRegularExpression('/<details\\s+class="nav-group"\\s+open\\b/', $response->getContent());
         $this->get('/admin/flags')->assertOk()->assertSee('Configured flags');
         $this->get('/admin/config')->assertOk()->assertSee('Configuration registry');
     }
@@ -75,7 +76,7 @@ final class OrbitAdminM3Test extends TestCase
             ->assertDontSee('SECRET_NOTIFICATION_MARKER')
             ->assertDontSee('Asia/Karachi')
             ->assertDontSee('Settings Audit');
-        $res->assertHeader('Cache-Control', 'private, no-store');
+        $res->assertHeader('Cache-Control', 'no-store, private');
     }
 
     public function test_delete_requests_queue_is_read_only_and_never_claims_completion(): void
