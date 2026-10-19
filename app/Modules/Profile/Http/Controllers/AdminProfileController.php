@@ -32,8 +32,14 @@ final class AdminProfileController extends Controller
         $eligibleCount = DB::table('orbit_account_deletion_requests')
             ->where('status', 'pending')
             ->where('eligible_for_erasure_at', '<=', now())->count();
+        // Receipt is intentionally detached from the removed OrbitUser.
+        // It shows exactly which current-schema cleanup completed, not a
+        // misleading whole-product erasure claim.
+        $completedReceipts = DB::table('orbit_erasure_receipts')
+            ->select(['request_id', 'scope', 'completed_at'])
+            ->orderByDesc('completed_at')->limit(25)->get();
         return response()->view('orbit-admin.deletion-requests', compact(
-            'requests', 'pendingCount', 'eligibleCount'
+            'requests', 'pendingCount', 'eligibleCount', 'completedReceipts'
         ))->header('Cache-Control', 'private, no-store');
     }
 
