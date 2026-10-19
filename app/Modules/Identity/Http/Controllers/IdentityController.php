@@ -139,10 +139,22 @@ final class IdentityController extends Controller
             'recipient' => ['required', 'string', 'max:190'],
             'purpose' => ['sometimes', Rule::in(['signup', 'link'])],
         ]);
-        if (!$otp->normalized($data['channel'], $data['recipient'])) {
+        $normalized = $otp->normalized($data['channel'], $data['recipient']);
+        if (!$normalized) {
             return response()->json(['message' => 'Enter a valid email or E.164 international phone number.'], 422);
         }
-        $result = $otp->request($data['channel'], $data['recipient'], (string) $request->ip(), $data['purpose'] ?? 'signup');
+        // Reject duplicate signups before creating or delivering any OTP.
+        // Verification also checks for duplicates to close the race window.
+        if (($data['purpose'] ?? 'signup') === 'signup') {
+            $provider = $data['channel'] === 'sms' ? 'phone' : 'email';
+            $exists = UserIdentity::query()->where('provider', $provider)
+                ->where('provider_subject', $normalized)->exists();
+            if ($exists) {
+                return response()->json(['message' => 'An account already exists. Please log in instead.'], 409)
+                    ->header('Cache-Control', 'no-store');
+            }
+        }
+        $result = $otp->request($data['channel'], $normalized, (string) $request->ip(), $data['purpose'] ?? 'signup');
         if ($result === 'rate_limited') return response()->json(['message' => 'Too many requests. Please try later.'], 429);
         if ($result === 'delivery_unavailable') return response()->json(['message' => 'Verification service is unavailable. Please try later.'], 503);
         return response()->json(['message' => 'If the destination can receive messages, a verification code has been sent.',
