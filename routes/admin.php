@@ -26,6 +26,19 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
     Route::post('/mfa', [AdminAuthController::class, 'verifyMfa'])->middleware('throttle:8,1')->name('mfa.verify');
     Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
     Route::middleware([EnsureAdmin::class])->group(function (): void {
+        Route::get('/start', function () {
+            $actor = auth()->guard('admin')->user();
+            foreach ([
+                'config.manage' => 'orbit.admin.dashboard',
+                'users.read' => 'orbit.admin.users.index',
+                'deletions.read' => 'orbit.admin.deletions.index',
+                'settings.audit.read' => 'orbit.admin.settings.activity',
+            ] as $permission => $route) {
+                if ($actor?->canPerform($permission)) return redirect()->route($route);
+            }
+            abort(403);
+        })->name('landing');
+
         Route::get('/deletion-requests', [AdminProfileController::class, 'deletionRequests'])
             ->middleware(RequireAdminPermission::class.':deletions.read')->name('deletions.index');
         Route::get('/settings-activity', [AdminProfileController::class, 'settingsActivity'])
