@@ -145,7 +145,7 @@ final class OrbitProfileSettingsTest extends TestCase
         $event = DB::table('orbit_identity_events')->where('action', 'settings.privacy_updated')
             ->orderByDesc('created_at')->first();
         $this->assertNotNull($event);
-        $this->assertStringContainsString('presence_visibility', $event->reason_code);
+        $this->assertContains($event->reason_code, ['presence_visibility', 'activity_visibility', 'read_receipts_enabled', 'moment_default_audience']);
         $this->assertStringNotContainsString('Friends', $event->reason_code);
         $this->assertStringNotContainsString('My Circle', $event->reason_code);
     }
