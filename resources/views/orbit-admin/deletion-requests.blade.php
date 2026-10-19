@@ -45,5 +45,28 @@
  </tbody></table></div>
  <div class="admin-pagination">{{ $requests->links() }}</div>
 </section>
+<section class="panel" style="margin-top:22px">
+ <div class="panel-head">
+  <div>
+   <p class="eyebrow">PROCESSED / PRIVACY AUDIT</p>
+   <h2>Completed M1–M3 database cleanup</h2>
+   <p>Non-identifying receipts for reviewed, current-schema erasure only. Media, backup and future-module erasure are not implied.</p>
+  </div>
+ </div>
+ <div class="table-scroll">
+  <table>
+   <thead><tr><th>REQUEST ID</th><th>COMPLETED (UTC)</th><th>VERIFIED SCOPE</th></tr></thead>
+   <tbody>
+    @forelse($completedReceipts as $receipt)
+      <tr><td>{{ $receipt->request_id }}</td><td>{{ $receipt->completed_at }}</td>
+      <td><span class="pill success">{{ $receipt->scope }}</span></td></tr>
+    @empty
+      <tr><td colspan="3"><div class="empty-state"><strong>No completed M1–M3 cleanup receipts</strong>
+      <p>No erasure has been recorded by the reviewed processor.</p></div></td></tr>
+    @endforelse
+   </tbody>
+  </table>
+ </div>
+</section>
 <div class="admin-guidance" role="note"><strong>Release dependency:</strong> Complete erasure, backup retention and legal holds require the dedicated privacy-erasure service. Do not manually treat an elapsed deadline as completed deletion.</div>
 @endsection
