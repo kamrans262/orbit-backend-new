@@ -6,9 +6,17 @@
   <div><p class="eyebrow">ACCOUNTS / MILESTONE 03</p><h1>Account deletion requests</h1>
     <p>Operational request states and deadlines only. A request is not proof of erasure; no private content is exposed.</p></div>
 </div>
-<div class="stat-grid">
-  <article class="stat-card"><span class="stat-label">Pending requests</span><strong>{{ $pendingCount }}</strong><p>Waiting for cancellation or approved erasure processing</p></article>
-  <article class="stat-card"><span class="stat-label">Past eligibility date</span><strong>{{ $eligibleCount }}</strong><p>Eligible for review; <strong>not automatically erased</strong></p></article>
+<div class="stat-grid stat-grid--compact">
+  <article class="stat-card">
+    <span class="stat-label">Pending requests</span>
+    <span class="stat-value">{{ $pendingCount }}</span>
+    <p>Waiting for cancellation or erasure review.</p>
+  </article>
+  <article class="stat-card stat-card--attention">
+    <span class="stat-label">Past eligibility date</span>
+    <span class="stat-value">{{ $eligibleCount }}</span>
+    <p>Review required — not automatically erased.</p>
+  </article>
 </div>
 <section class="panel">
  <div class="panel-head"><div><p class="eyebrow">PRIVACY WORKFLOW</p><h2>Deletion request queue</h2><p>Read-only review. User reauthentication and cancellation happen in the mobile app.</p></div></div>
