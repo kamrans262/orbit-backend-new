@@ -23,7 +23,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/auth/logout-all', [IdentityController::class, 'logoutAll']);
         Route::post('/me/deletion-request', [IdentityController::class, 'requestDeletion']);
         Route::get('/me/deletion-status', [IdentityController::class, 'deletionStatus']);
-        Route::post('/me/deletion-cancel', [IdentityController::class, 'cancelDeletion'])->middleware('throttle:5,1');
+        Route::post('/me/deletion-cancel', [IdentityController::class, 'cancelDeletion'])->middleware('throttle:30,1');
         Route::get('/me', [IdentityController::class, 'me']);
         Route::get('/me/profile', [ProfileSettingsController::class, 'show']);
         Route::patch('/me/profile', [ProfileSettingsController::class, 'update']);
