@@ -14,9 +14,9 @@ use Illuminate\Support\Str;
  */
 final class DeleteOrbitUser
 {
-    public function execute(string $userId, AdminUser $actor, string $reason, ?string $ip, ?string $requestId): void
+    public function execute(string $userId, AdminUser $actor, string $reason, ?string $ip, ?string $requestId): array
     {
-        DB::transaction(function () use ($userId, $actor, $reason, $ip, $requestId): void {
+        return DB::transaction(function () use ($userId, $actor, $reason, $ip, $requestId): array {
             $user = OrbitUser::query()->whereKey($userId)->lockForUpdate()->firstOrFail();
             $identities = DB::table('user_identities')->where('user_id', $userId)
                 ->get(['provider', 'provider_subject']);
@@ -76,6 +76,7 @@ final class DeleteOrbitUser
                 'previous_hash' => $prev, 'event_hash' => $eventHash,
                 'created_at' => now(),
             ]);
+            return $summary;
         }, 3);
     }
 }
