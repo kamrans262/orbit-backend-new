@@ -239,13 +239,17 @@ final class IdentityController extends Controller
     {
         $data = $request->validate([
             'display_name' => ['required', 'string', 'min:2', 'max:120'],
-            'username' => ['required', 'alpha_dash:ascii', 'min:3', 'max:32', Rule::unique('orbit_users', 'username')
-                ->ignore($request->attributes->get('orbit_session')->user_id)],
+            'username' => ['required', 'string', 'min:3', 'max:32', 'regex:/^[A-Za-z0-9._]+$/D',
+                Rule::unique('orbit_users', 'username')
+                    ->ignore($request->attributes->get('orbit_session')->user_id)],
+            'bio' => ['sometimes', 'nullable', 'string', 'max:280'],
         ]);
         $session = $request->attributes->get('orbit_session');
         $user = OrbitUser::findOrFail($session->user_id);
+        $data['username'] = strtolower($data['username']);
         $user->update($data);
-        return response()->json(['data' => ['id' => $user->id, 'display_name' => $user->display_name, 'username' => $user->username]]);
+        return response()->json(['data' => ['id' => $user->id, 'display_name' => $user->display_name,
+            'username' => $user->username, 'bio' => $user->bio]])->header('Cache-Control','no-store');
     }
 
     /** Revokes all mobile sessions, preserving identity records and device keys. */
