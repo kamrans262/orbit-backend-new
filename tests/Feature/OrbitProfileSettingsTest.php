@@ -199,4 +199,35 @@ final class OrbitProfileSettingsTest extends TestCase
         ]);
     }
 
+
+    public function test_deletion_requires_recent_authentication_and_cannot_cancel_after_grace_period(): void
+    {
+        $tokens = $this->signIn('grace@example.test');
+        // A stale session cannot initiate a sensitive deletion operation.
+        \App\Models\OrbitSession::whereKey(
+            \App\Models\OrbitSession::where('user_id', $tokens['user']['id'])->value('id')
+        )->update(['created_at' => now()->subMinutes(11)]);
+        $this->withToken($tokens['access_token'])->postJson('/api/v1/me/deletion-request',
+            ['confirm' => true])->assertForbidden();
+        $this->assertDatabaseCount('orbit_account_deletion_requests', 0);
+
+        \App\Models\OrbitSession::where('user_id', $tokens['user']['id'])
+            ->update(['created_at' => now()]);
+        $this->postJson('/api/v1/me/deletion-request', ['confirm' => true])
+            ->assertStatus(202);
+        $user = \App\Models\OrbitUser::findOrFail($tokens['user']['id']);
+        $device = \App\Models\OrbitDevice::findOrFail($tokens['device']['id']);
+        $again = app(\App\Modules\Identity\Services\TokenService::class)
+            ->issue($user, $device, '127.0.0.1');
+        DB::table('orbit_account_deletion_requests')->where('user_id', $user->id)
+            ->update(['eligible_for_erasure_at' => now()->subMinute()]);
+        $this->withToken($again['access_token'])->getJson('/api/v1/me/deletion-status')
+            ->assertOk()->assertJsonPath('data.can_cancel', false);
+        $this->postJson('/api/v1/me/deletion-cancel', ['confirm' => true])
+            ->assertStatus(409);
+        $this->assertNotNull($user->fresh()->deletion_requested_at);
+        $this->assertDatabaseHas('orbit_account_deletion_requests',
+            ['user_id' => $user->id, 'status' => 'pending']);
+    }
+
 }
