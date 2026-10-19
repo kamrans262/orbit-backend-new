@@ -4,6 +4,7 @@ namespace App\Modules\Profile\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\OrbitUser;
+use App\Modules\Identity\Services\TokenService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,13 @@ final class ProfileSettingsController extends Controller
         'location_activity' => 'Off',
         'location_sharing_enabled' => false,
         'ghost_mode_enabled' => true,
+        // Future consumers must enforce these policies server-side, never only in UI.
+        'presence_visibility' => 'Nobody',
+        'activity_visibility' => 'Nobody',
+        'ping_eligibility' => 'Nobody',
+        'message_eligibility' => 'Nobody',
+        'moment_default_audience' => 'Nobody',
+        'read_receipts_enabled' => false,
     ];
 
     private const NOTIFICATIONS = [
@@ -47,6 +55,7 @@ final class ProfileSettingsController extends Controller
             'bio' => ['sometimes', 'nullable', 'string', 'max:280'],
         ]);
         // Uploads are not part of M3; never treat arbitrary client paths as URLs.
+        $data['username'] = strtolower($data['username']);
         $user->update($data);
         return $this->show($request);
     }
@@ -78,8 +87,43 @@ final class ProfileSettingsController extends Controller
             'location_activity' => ['sometimes', 'required', Rule::in(['Active', 'While moving', 'Off'])],
             'location_sharing_enabled' => ['sometimes', 'required', 'boolean'],
             'ghost_mode_enabled' => ['sometimes', 'required', 'boolean'],
+            'presence_visibility' => ['sometimes', 'required', Rule::in(['My Circle', 'Friends', 'Nobody'])],
+            'activity_visibility' => ['sometimes', 'required', Rule::in(['My Circle', 'Friends', 'Nobody'])],
+            'ping_eligibility' => ['sometimes', 'required', Rule::in(['My Circle', 'Friends', 'Nobody'])],
+            'message_eligibility' => ['sometimes', 'required', Rule::in(['My Circle', 'Friends', 'Nobody'])],
+            'moment_default_audience' => ['sometimes', 'required', Rule::in(['My Circle', 'Selected People', 'Nobody'])],
+            'read_receipts_enabled' => ['sometimes', 'required', 'boolean'],
         ]);
         return $this->respond($this->saveSettings($request, 'privacy', self::PRIVACY, $changes));
+    }
+
+    /** Device-independent locale and IANA timezone preferences. */
+    public function general(Request $request): JsonResponse
+    {
+        $row = DB::table('orbit_user_preferences')->where('user_id', $this->user($request)->id)->first();
+        return $this->respond(['locale' => $row?->locale ?? 'en',
+            'timezone' => $row?->timezone ?? 'UTC']);
+    }
+
+    public function updateGeneral(Request $request, TokenService $tokens): JsonResponse
+    {
+        $data = $request->validate([
+            'locale' => ['sometimes', 'required', 'string', 'max:20', 'regex:/^[a-z]{2,3}(?:-[A-Z]{2})?$/D'],
+            'timezone' => ['sometimes', 'required', 'timezone:all'],
+        ]);
+        $session = $request->attributes->get('orbit_session');
+        DB::transaction(function () use ($session, $data, $tokens): void {
+            DB::table('orbit_user_preferences')->insertOrIgnore([
+                'user_id' => $session->user_id, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            if ($data !== []) {
+                DB::table('orbit_user_preferences')->where('user_id', $session->user_id)
+                    ->update([...$data, 'updated_at' => now()]);
+                $tokens->event($session->user_id, $session->device_id,
+                    'settings.general_updated', implode(',', array_keys($data)));
+            }
+        });
+        return $this->general($request);
     }
 
     private function user(Request $request): OrbitUser
@@ -121,6 +165,13 @@ final class ProfileSettingsController extends Controller
                 DB::table('orbit_user_preferences')->insert([
                     'user_id' => $id, $column => $value, 'created_at' => now(), 'updated_at' => now(),
                 ]);
+            }
+            if ($changes !== []) {
+                $session = $request->attributes->get('orbit_session');
+                app(TokenService::class)->event($id, $session->device_id,
+                    $column === 'privacy' ? 'settings.privacy_updated' : 'settings.notifications_updated',
+                    // Log names only; never precise locations or sensitive preference values.
+                    implode(',', array_keys($changes)));
             }
             return $saved;
         });
