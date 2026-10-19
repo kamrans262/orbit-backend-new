@@ -54,3 +54,6 @@
 - POST /admin/users/{user}/status requires users.manage, a reason >=10 chars, and audits active/suspended changes. Suspension revokes all existing sessions.
 - Admin-only controls cannot read OTPs, private messages, secret tokens, or private precise locations.
 - The Apple/Google provider integrations and disputed password UI remain documented client dependencies; this code does not silently remove them.
+
+- POST /api/v1/me/identities/link links a newly OTP-verified email/phone to an existing signed-in trusted-device account. Existing identity in a different account returns 409; no silent account merging.
+- Full merging of existing independent accounts, sensitive identity unlink/change policy, and recovery from loss of every trusted device require separately agreed security flows.

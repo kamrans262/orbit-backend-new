@@ -207,6 +207,37 @@ final class OrbitIdentityTest extends TestCase
         $this->withToken($first['access_token'])->getJson('/api/v1/me')->assertUnauthorized();
     }
 
+    public function test_linking_verified_email_preserves_original_account_and_is_single_use(): void
+    {
+        $initial = $this->signIn();
+        $this->registerTrustedDevice($initial);
+        $this->createdCode('linked@example.test');
+        $payload = ['channel' => 'email', 'recipient' => 'linked@example.test', 'code' => '472819'];
+        $this->withToken($initial['access_token'])->postJson('/api/v1/me/identities/link', $payload)->assertOk();
+        $this->assertDatabaseCount('orbit_users', 1);
+        $this->assertDatabaseCount('user_identities', 2);
+        $this->withToken($initial['access_token'])->getJson('/api/v1/me')
+            ->assertJsonPath('data.verified_methods.1', 'email');
+        $this->withToken($initial['access_token'])->postJson('/api/v1/me/identities/link', $payload)
+            ->assertStatus(409);
+        $this->assertDatabaseCount('user_identities', 2);
+    }
+
+    public function test_cannot_link_identity_already_used_by_another_account(): void
+    {
+        $first = $this->signIn();
+        $this->registerTrustedDevice($first);
+        $second = $this->signIn('second@example.test', 'cc2dca36-eb23-4a02-92bf-af94d7f58000');
+        $this->registerTrustedDevice($second);
+        $this->createdCode('member@example.test');
+        $this->withToken($second['access_token'])
+            ->postJson('/api/v1/me/identities/link', [
+                'channel' => 'email', 'recipient' => 'member@example.test', 'code' => '472819',
+            ])->assertStatus(409);
+        $this->assertDatabaseCount('orbit_users', 2);
+        $this->assertDatabaseCount('user_identities', 2);
+    }
+
     public function test_admin_user_view_is_not_public(): void
     {
         $this->get('/admin/users')->assertRedirect(route('orbit.admin.login'));

@@ -86,6 +86,44 @@ final class OtpService
         RateLimiter::hit($byIp, 3600);
         return 'sent';
     }
+    /** Link a new contact identifier only after a fresh OTP and trusted session. */
+    public function linkIdentity(string $channel, string $recipient, string $code, OrbitUser $user, TokenService $tokens): string
+    {
+        $normalized = $this->normalized($channel, $recipient);
+        if (!$normalized || !preg_match('/^\\d{6}$/D', $code)) return 'invalid';
+        $digest = $this->digest($channel, $normalized);
+        $key = 'orbit:otp:link:'.$digest;
+        if (RateLimiter::tooManyAttempts($key, 5)) return 'rate_limited';
+        RateLimiter::hit($key, 600);
+        return DB::transaction(function () use ($channel, $normalized, $code, $digest, $key, $user, $tokens): string {
+            $provider = $channel === 'sms' ? 'phone' : 'email';
+            $already = UserIdentity::query()->where('provider', $provider)
+                ->where('provider_subject', $normalized)->lockForUpdate()->first();
+            if ($already) return $already->user_id === $user->id ? 'already_linked' : 'unavailable';
+
+            $challenge = DB::table('otp_challenges')
+                ->where('recipient_hash', $digest)->where('channel', $channel)
+                ->whereNull('consumed_at')->orderByDesc('created_at')->lockForUpdate()->first();
+            if (!$challenge || now()->greaterThan($challenge->expires_at) || $challenge->attempts >= 5) return 'invalid';
+            DB::table('otp_challenges')->where('id', $challenge->id)->increment('attempts');
+            $approved = ($channel === 'sms' && app(TwilioVerifyGateway::class)->enabled())
+                ? app(TwilioVerifyGateway::class)->check($normalized, $code)
+                : hash_equals($challenge->code_hash, hash_hmac('sha256', $challenge->id.'|'.$code, $this->secret()));
+            if (!$approved) return 'invalid';
+            DB::table('otp_challenges')->where('id', $challenge->id)->update(['consumed_at' => now()]);
+            UserIdentity::create([
+                'user_id' => $user->id, 'provider' => $provider,
+                'provider_subject' => $normalized,
+                'email_norm' => $provider === 'email' ? $normalized : null,
+                'phone_e164' => $provider === 'phone' ? $normalized : null,
+                'verified_at' => now(),
+            ]);
+            $tokens->event($user->id, null, 'identity.linked', $provider);
+            RateLimiter::clear($key);
+            return 'linked';
+        });
+    }
+
     public function verify(string $channel, string $recipient, string $code, string $devicePublicId, string $platform, string $deviceName, TokenService $tokens, ?string $ip): ?array
     {
         $normalized = $this->normalized($channel, $recipient);

@@ -76,6 +76,25 @@ final class IdentityController extends Controller
         ]])->header('Cache-Control', 'no-store');
     }
 
+    public function linkIdentity(Request $request, OtpService $otp, TokenService $tokens): JsonResponse
+    {
+        $data = $request->validate([
+            'channel' => ['required', Rule::in(['email', 'sms'])],
+            'recipient' => ['required', 'string', 'max:190'],
+            'code' => ['required', 'digits:6'],
+        ]);
+        $session = $request->attributes->get('orbit_session');
+        $user = OrbitUser::findOrFail($session->user_id);
+        $status = $otp->linkIdentity($data['channel'], $data['recipient'], $data['code'], $user, $tokens);
+        return match ($status) {
+            'linked' => response()->json(['message' => 'Verified identity linked.'])->header('Cache-Control','no-store'),
+            'already_linked' => response()->json(['message' => 'This identity is already on your account.'], 409),
+            'unavailable' => response()->json(['message' => 'This identity cannot be linked.'], 409),
+            'rate_limited' => response()->json(['message' => 'Too many attempts.'], 429),
+            default => response()->json(['message' => 'Invalid or expired verification code.'], 422),
+        };
+    }
+
     public function updateProfileBasics(Request $request): JsonResponse
     {
         $data = $request->validate([

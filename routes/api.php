@@ -20,6 +20,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/me/deletion-request', [IdentityController::class, 'requestDeletion']);
         Route::get('/me', [IdentityController::class, 'me']);
         Route::patch('/me/profile-basics', [IdentityController::class, 'updateProfileBasics']);
+        Route::post('/me/identities/link', [IdentityController::class, 'linkIdentity']);
         Route::get('/me/devices', [IdentityController::class, 'listDevices']);
         Route::get('/me/sessions', [IdentityController::class, 'listSessions']);
         Route::delete('/me/sessions/{session}', [IdentityController::class, 'revokeSession']);
