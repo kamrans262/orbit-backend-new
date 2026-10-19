@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <title>@yield('title', 'Administration') · Orbit</title>
-<link rel="stylesheet" href="{{ route('orbit.admin.asset', ['file' => 'admin.css']) }}">
+<link rel="stylesheet" href="{{ route('orbit.admin.asset', ['file' => 'admin.css', 'v' => filemtime(public_path('assets/orbit-admin/admin.css'))]) }}">
 </head>
 <body>
 <div class="shell" data-shell>
@@ -12,12 +12,13 @@
     <a href="{{ route('orbit.admin.dashboard') }}" class="brand"><img class="brand-logo" src="{{ route('orbit.admin.asset', ['file' => 'orbit-logo.png']) }}" width="44" height="44" alt="Orbit logo"><span>Orbit<small>ADMINISTRATION</small></span></a>
     <div class="nav-caption">WORKSPACE</div>
     <nav>
-      <a href="{{ route('orbit.admin.dashboard') }}" class="nav-item active"><span>◫</span> Configuration</a>
-      <a href="{{ route('orbit.admin.flags.new') }}" class="nav-item"><span>◇</span> New feature flag</a>
-      <a href="{{ route('orbit.admin.config.new') }}" class="nav-item"><span>⚙</span> New remote config</a>
+      <a href="{{ route('orbit.admin.dashboard') }}" class="nav-item {{ request()->routeIs('orbit.admin.dashboard', 'orbit.admin.flags.edit', 'orbit.admin.flags.preview', 'orbit.admin.config.edit') ? 'active' : '' }}" {{ request()->routeIs('orbit.admin.dashboard') ? 'aria-current=page' : '' }}><span>◫</span> Configuration</a>
+      <a href="{{ route('orbit.admin.flags.new') }}" class="nav-item {{ request()->routeIs('orbit.admin.flags.new') ? 'active' : '' }}" {{ request()->routeIs('orbit.admin.flags.new') ? 'aria-current=page' : '' }}><span>◇</span> New feature flag</a>
+      <a href="{{ route('orbit.admin.config.new') }}" class="nav-item {{ request()->routeIs('orbit.admin.config.new') ? 'active' : '' }}" {{ request()->routeIs('orbit.admin.config.new') ? 'aria-current=page' : '' }}><span>⚙</span> New remote config</a>
+      <a href="{{ route('orbit.admin.users.index') }}" class="nav-item {{ request()->routeIs('orbit.admin.users.*') ? 'active' : '' }}" {{ request()->routeIs('orbit.admin.users.*') ? 'aria-current=page' : '' }}><span>◎</span> Users &amp; Devices</a>
     </nav>
     <div class="nav-caption space-top">UPCOMING MODULES</div>
-    <div class="nav-item disabled"><span>◎</span> Users &amp; Circles <small>Upcoming</small></div>
+    <div class="nav-item disabled"><span>◌</span> Circles <small>Upcoming</small></div>
     <div class="nav-item disabled"><span>✚</span> SOS operations <small>Upcoming</small></div>
     <div class="nav-item disabled"><span>▤</span> Billing &amp; Ads <small>Upcoming</small></div>
     <div class="nav-item disabled"><span>▦</span> System health <small>Upcoming</small></div>
@@ -40,6 +41,6 @@
     </main>
   </div>
 </div>
-<script src="{{ route('orbit.admin.asset', ['file' => 'admin.js']) }}" defer></script>
+<script src="{{ route('orbit.admin.asset', ['file' => 'admin.js', 'v' => filemtime(public_path('assets/orbit-admin/admin.js'))]) }}" defer></script>
 @stack('scripts')
 </body></html>

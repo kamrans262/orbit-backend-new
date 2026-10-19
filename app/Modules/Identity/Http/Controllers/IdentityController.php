@@ -1,0 +1,398 @@
+<?php
+
+namespace App\Modules\Identity\Http\Controllers;
+
+use App\Models\OrbitDevice;
+use App\Models\OrbitSession;
+use App\Models\OrbitUser;
+use App\Modules\Identity\Services\OtpService;
+use App\Modules\Identity\Services\OrbitPasswordHasher;
+use App\Modules\Identity\Services\TokenService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
+use App\Models\UserIdentity;
+use Illuminate\Validation\Rule;
+
+final class IdentityController extends Controller
+{
+    /**
+     * Password sign-in is still verified by the same OTP + device-trust flow.
+     * Never issue a session on password alone or expose whether an account exists.
+     */
+    public function requestPasswordOtp(Request $request, OtpService $otp, OrbitPasswordHasher $passwords): JsonResponse
+    {
+        $data = $request->validate([
+            'recipient' => ['required','string','max:190'],
+            'password' => ['required','string','max:256'],
+        ]);
+        $channel = str_contains($data['recipient'], '@') ? 'email' : 'sms';
+        $recipient = $otp->normalized($channel, $data['recipient']);
+        if (!$recipient) {
+            return response()->json(['message' => 'Please enter a valid email or international phone number.'], 422);
+        }
+        $limitKey = 'orbit:password:'.$channel.':'.hash_hmac('sha256', $recipient, (string) config('app.key'));
+        if (RateLimiter::tooManyAttempts($limitKey, 6)) {
+            return response()->json(['message' => 'Please wait before trying again.'], 429);
+        }
+        RateLimiter::hit($limitKey, 900);
+        $identity = UserIdentity::query()->where('provider', $channel === 'email' ? 'email' : 'phone')
+            ->where('provider_subject', $recipient)->first();
+        $user = $identity ? OrbitUser::find($identity->user_id) : null;
+        if (!$user || $user->status !== 'active' || !$user->password_hash
+            || !$passwords->check($data['password'], $user->password_hash)) {
+            return response()->json(['message' => 'Invalid credentials.'], 422)->header('Cache-Control', 'no-store');
+        }
+        // Upgrade only a verified password hash; the conditional write protects resets.
+        if ($passwords->needsRehash($user->password_hash)) {
+            OrbitUser::whereKey($user->id)->where('password_hash', $user->password_hash)
+                ->update(['password_hash' => $passwords->make($data['password'])]);
+        }
+        $result = $otp->request($channel, $recipient, (string) $request->ip(), 'login');
+        if ($result === 'rate_limited') {
+            return response()->json(['message' => 'Too many requests. Try again later.'], 429);
+        }
+        if ($result !== 'sent') {
+            return response()->json(['message' => 'Verification service unavailable.'], 503);
+        }
+        return response()->json(['message' => 'Verification code sent.', 'expires_in' => 300], 202)
+            ->header('Cache-Control', 'no-store');
+    }
+
+    /**
+     * First password creation only; requires a recently OTP-verified,
+     * registered and trusted device. Existing passwords cannot be overwritten.
+     */
+    public function enrollPassword(Request $request, TokenService $tokens, OrbitPasswordHasher $passwords): JsonResponse
+    {
+        $data = $request->validate([
+            'password' => ['required', 'string', 'min:10', 'max:256',
+                'regex:/[A-Za-z]/', 'regex:/[0-9]/'],
+        ]);
+        $session = $request->attributes->get('orbit_session');
+        if ($session->created_at->lt(now()->subMinutes(10))) {
+            return response()->json(['message' => 'Verify a fresh code before setting your password.'], 403);
+        }
+        $saved = DB::transaction(function () use ($data, $session, $tokens, $passwords): bool {
+            $user = OrbitUser::whereKey($session->user_id)->lockForUpdate()->firstOrFail();
+            if ($user->password_hash) return false;
+            $user->update(['password_hash' => $passwords->make($data['password'])]);
+            $tokens->event($user->id, $session->device_id, 'auth.password_enrolled', 'verified_device');
+            return true;
+        });
+        if (!$saved) return response()->json(['message' => 'A password is already configured for this account.'], 409);
+        return response()->json(['message' => 'Password secured.'])->header('Cache-Control', 'no-store');
+    }
+
+    /**
+     * Send a neutral response for unknown identities; no account enumeration.
+     * A reset code can change only an existing active password account.
+     */
+    public function requestPasswordReset(Request $request, OtpService $otp): JsonResponse
+    {
+        $data = $request->validate(['recipient' => ['required', 'string', 'max:190']]);
+        $channel = str_contains($data['recipient'], '@') ? 'email' : 'sms';
+        $recipient = $otp->normalized($channel, $data['recipient']);
+        if (!$recipient) return response()->json(['message' => 'Enter a valid email or international phone number.'], 422);
+        $identity = UserIdentity::query()->where('provider', $channel === 'sms' ? 'phone' : 'email')
+            ->where('provider_subject', $recipient)->first();
+        $user = $identity ? OrbitUser::find($identity->user_id) : null;
+        if ($user && $user->status === 'active') {
+            // Deliberately use the same public response whether an account is
+            // found, rate-limited, or its delivery provider is unavailable.
+            // Global per-IP route throttling remains active for every caller.
+            $otp->request($channel, $recipient, (string) $request->ip(), 'reset');
+        }
+        return response()->json(['message' => 'If the account exists, a password reset code has been sent.'], 202)
+            ->header('Cache-Control', 'no-store');
+    }
+
+    public function confirmPasswordReset(Request $request, OtpService $otp, TokenService $tokens, OrbitPasswordHasher $passwords): JsonResponse
+    {
+        $data = $request->validate([
+            'recipient' => ['required', 'string', 'max:190'],
+            'code' => ['required', 'digits:6'],
+            'password' => ['required', 'string', 'min:10', 'max:256',
+                'regex:/[A-Za-z]/', 'regex:/[0-9]/'],
+        ]);
+        $channel = str_contains($data['recipient'], '@') ? 'email' : 'sms';
+        $recipient = $otp->normalized($channel, $data['recipient']);
+        if (!$recipient) return response()->json(['message' => 'Invalid or expired code.'], 422);
+        $result = DB::transaction(function () use ($otp, $tokens, $channel, $recipient, $data, $passwords): bool {
+            $identity = UserIdentity::query()->where('provider', $channel === 'sms' ? 'phone' : 'email')
+                ->where('provider_subject', $recipient)->first();
+            $user = $identity ? OrbitUser::whereKey($identity->user_id)->lockForUpdate()->first() : null;
+            if (!$user || $user->status !== 'active') return false;
+            if (!$otp->consumeRecoveryCode($channel, $recipient, $data['code'])) return false;
+            $user->update(['password_hash' => $passwords->make($data['password'])]);
+            OrbitSession::where('user_id', $user->id)->whereNull('revoked_at')->update(['revoked_at' => now()]);
+            $tokens->event($user->id, null, 'auth.password_reset', 'verified_otp');
+            return true;
+        });
+        if (!$result) return response()->json(['message' => 'Invalid or expired code.'], 422)
+            ->header('Cache-Control', 'no-store');
+        return response()->json(['message' => 'Password updated. Please log in.'])
+            ->header('Cache-Control', 'no-store');
+    }
+
+    public function requestOtp(Request $request, OtpService $otp): JsonResponse
+    {
+        $data = $request->validate([
+            'channel' => ['required', Rule::in(['email', 'sms'])],
+            'recipient' => ['required', 'string', 'max:190'],
+            'purpose' => ['sometimes', Rule::in(['signup', 'link'])],
+        ]);
+        $normalized = $otp->normalized($data['channel'], $data['recipient']);
+        if (!$normalized) {
+            return response()->json(['message' => 'Enter a valid email or E.164 international phone number.'], 422);
+        }
+        // Reject duplicate signups before creating or delivering any OTP.
+        // Verification also checks for duplicates to close the race window.
+        if (($data['purpose'] ?? 'signup') === 'signup') {
+            $provider = $data['channel'] === 'sms' ? 'phone' : 'email';
+            $exists = UserIdentity::query()->where('provider', $provider)
+                ->where('provider_subject', $normalized)->exists();
+            if ($exists) {
+                return response()->json(['message' => 'An account already exists. Please log in instead.'], 409)
+                    ->header('Cache-Control', 'no-store');
+            }
+        }
+        $result = $otp->request($data['channel'], $normalized, (string) $request->ip(), $data['purpose'] ?? 'signup');
+        if ($result === 'rate_limited') return response()->json(['message' => 'Too many requests. Please try later.'], 429);
+        if ($result === 'delivery_unavailable') return response()->json(['message' => 'Verification service is unavailable. Please try later.'], 503);
+        return response()->json(['message' => 'If the destination can receive messages, a verification code has been sent.',
+            'expires_in' => (int) config('orbit_identity.otp_minutes', 5) * 60], 202)->header('Cache-Control', 'no-store');
+    }
+
+    public function verifyOtp(Request $request, OtpService $otp, TokenService $tokens): JsonResponse
+    {
+        $data = $request->validate([
+            'channel' => ['required', Rule::in(['email', 'sms'])],
+            'recipient' => ['required', 'string', 'max:190'],
+            'code' => ['required', 'digits:6'],
+            'purpose' => ['required', Rule::in(['signup', 'login'])],
+            'device_public_id' => ['required', 'uuid'],
+            'platform' => ['required', Rule::in(['android','ios'])],
+            'device_name' => ['required', 'string', 'min:1', 'max:80'],
+        ]);
+        $result = $otp->verify($data['channel'], $data['recipient'], $data['code'],
+            $data['device_public_id'], $data['platform'], $data['device_name'], $tokens, $request->ip(), $data['purpose']);
+        if (is_array($result) && ($result['account_exists'] ?? false)) {
+            return response()->json(['message' => 'An account already exists. Please log in instead.'], 409)
+                ->header('Cache-Control', 'no-store');
+        }
+        if (!$result) return response()->json(['message' => 'Invalid or expired code.'], 422)->header('Cache-Control', 'no-store');
+        return response()->json(['data' => $result])->header('Cache-Control', 'no-store');
+    }
+
+    public function refresh(Request $request, TokenService $tokens): JsonResponse
+    {
+        $data = $request->validate(['refresh_token' => ['required', 'string', 'max:1000']]);
+        $result = $tokens->rotate($data['refresh_token']);
+        if (!$result) return response()->json(['message' => 'Invalid or revoked session.'], 401);
+        return response()->json(['data' => $result])->header('Cache-Control', 'no-store');
+    }
+
+    public function logout(Request $request, TokenService $tokens): JsonResponse
+    {
+        /** @var OrbitSession $session */
+        $session = $request->attributes->get('orbit_session');
+        $session->update(['revoked_at' => now()]);
+        $tokens->event($session->user_id, $session->device_id, 'auth.logout');
+        return response()->json(['message' => 'Signed out.']);
+    }
+
+    public function me(Request $request): JsonResponse
+    {
+        $session = $request->attributes->get('orbit_session');
+        $user = OrbitUser::findOrFail($session->user_id);
+        return response()->json(['data' => [
+            'id' => $user->id, 'display_name' => $user->display_name, 'username' => $user->username,
+            'status' => $user->status,
+            'verified_methods' => $user->identities()->pluck('provider')->all(),
+            'device_id' => $session->device_id,
+        ]])->header('Cache-Control', 'no-store');
+    }
+
+    public function linkIdentity(Request $request, OtpService $otp, TokenService $tokens): JsonResponse
+    {
+        $data = $request->validate([
+            'channel' => ['required', Rule::in(['email', 'sms'])],
+            'recipient' => ['required', 'string', 'max:190'],
+            'code' => ['required', 'digits:6'],
+        ]);
+        $session = $request->attributes->get('orbit_session');
+        $user = OrbitUser::findOrFail($session->user_id);
+        $status = $otp->linkIdentity($data['channel'], $data['recipient'], $data['code'], $user, $tokens);
+        return match ($status) {
+            'linked' => response()->json(['message' => 'Verified identity linked.'])->header('Cache-Control','no-store'),
+            'already_linked' => response()->json(['message' => 'This identity is already on your account.'], 409),
+            'unavailable' => response()->json(['message' => 'This identity cannot be linked.'], 409),
+            'rate_limited' => response()->json(['message' => 'Too many attempts.'], 429),
+            default => response()->json(['message' => 'Invalid or expired verification code.'], 422),
+        };
+    }
+
+    public function updateProfileBasics(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'display_name' => ['required', 'string', 'min:2', 'max:120'],
+            'username' => ['required', 'alpha_dash:ascii', 'min:3', 'max:32', Rule::unique('orbit_users', 'username')
+                ->ignore($request->attributes->get('orbit_session')->user_id)],
+        ]);
+        $session = $request->attributes->get('orbit_session');
+        $user = OrbitUser::findOrFail($session->user_id);
+        $user->update($data);
+        return response()->json(['data' => ['id' => $user->id, 'display_name' => $user->display_name, 'username' => $user->username]]);
+    }
+
+    /** Revokes all mobile sessions, preserving identity records and device keys. */
+    public function logoutAll(Request $request, TokenService $tokens): JsonResponse
+    {
+        $current = $request->attributes->get('orbit_session');
+        DB::transaction(function () use ($current, $tokens): void {
+            OrbitSession::where('user_id', $current->user_id)->whereNull('revoked_at')
+                ->update(['revoked_at' => now()]);
+            $tokens->event($current->user_id, $current->device_id, 'auth.logout_all');
+        });
+        return response()->json(['message' => 'All sessions revoked.'])->header('Cache-Control', 'no-store');
+    }
+
+    /**
+     * Non-destructive privacy request. The separate retention/deletion workstream
+     * must implement verified erasure; never claim that data has been deleted here.
+     */
+    public function requestDeletion(Request $request, TokenService $tokens): JsonResponse
+    {
+        $data = $request->validate(['confirm' => ['required', 'accepted']]);
+        $current = $request->attributes->get('orbit_session');
+        DB::transaction(function () use ($current, $tokens): void {
+            OrbitUser::whereKey($current->user_id)->whereNull('deletion_requested_at')
+                ->update(['deletion_requested_at' => now()]);
+            OrbitSession::where('user_id', $current->user_id)->whereNull('revoked_at')
+                ->update(['revoked_at' => now()]);
+            $tokens->event($current->user_id, $current->device_id, 'account.deletion_requested', 'pending_privacy_erasure');
+        });
+        return response()->json(['message' => 'Account deletion request recorded. All sessions were signed out. Final deletion is pending processing.'], 202)
+            ->header('Cache-Control', 'no-store');
+    }
+
+    public function listDevices(Request $request): JsonResponse
+    {
+        $session = $request->attributes->get('orbit_session');
+        $data = OrbitDevice::query()->where('user_id', $session->user_id)->orderByDesc('last_seen_at')->get()
+            ->map(fn (OrbitDevice $d): array => $this->deviceData($d, $session->device_id));
+        return response()->json(['data' => $data])->header('Cache-Control', 'no-store');
+    }
+
+    /**
+     * Only returns this device's trust and public-key state. No private data.
+     */
+    public function deviceRegistrationStatus(Request $request): JsonResponse
+    {
+        $session = $request->attributes->get('orbit_session');
+        $device = OrbitDevice::query()->whereKey($session->device_id)
+            ->where('user_id', $session->user_id)->firstOrFail();
+        return response()->json(['data' => [
+            'key_registered' => (bool) $device->public_key,
+            'trust_state' => $device->trust_state,
+        ]])->header('Cache-Control', 'no-store');
+    }
+
+    public function registerDevice(Request $request, TokenService $tokens): JsonResponse
+    {
+        $data = $request->validate([
+            'public_key' => ['required', 'string', 'max:200'],
+            'push_token' => ['nullable', 'string', 'max:4096'],
+            'device_name' => ['nullable', 'string', 'min:1', 'max:80'],
+        ]);
+        $bytes = base64_decode($data['public_key'], true);
+        if (!is_string($bytes) || strlen($bytes) !== 32) {
+            return response()->json(['message' => 'Expected a 32-byte base64 X25519 public key.'], 422);
+        }
+        $session = $request->attributes->get('orbit_session');
+        $device = OrbitDevice::query()->where('id', $session->device_id)->where('user_id', $session->user_id)->firstOrFail();
+        if ($device->public_key && !hash_equals($device->public_key, $data['public_key'])) {
+            return response()->json(['message' => 'Device key changes require a new verified registration.'], 409);
+        }
+        $device->update(array_filter([
+            'public_key' => $data['public_key'], 'push_token_enc' => $data['push_token'] ?? null,
+            'name' => $data['device_name'] ?? null, 'last_seen_at' => now(),
+        ], fn ($v) => $v !== null));
+        $tokens->event($device->user_id, $device->id, 'device.registered');
+        return response()->json(['data' => $this->deviceData($device->fresh(), $device->id)]);
+    }
+
+    public function renameDevice(Request $request, OrbitDevice $device): JsonResponse
+    {
+        $session = $request->attributes->get('orbit_session');
+        abort_unless($device->user_id === $session->user_id && !$device->revoked_at, 404);
+        $data = $request->validate(['name' => ['required', 'string', 'max:80']]);
+        $device->update(['name' => $data['name']]);
+        return response()->json(['data' => $this->deviceData($device->fresh(), $session->device_id)]);
+    }
+
+    public function approveDevice(Request $request, OrbitDevice $device, TokenService $tokens): JsonResponse
+    {
+        $session = $request->attributes->get('orbit_session');
+        $approver = OrbitDevice::findOrFail($session->device_id);
+        abort_unless($device->user_id === $session->user_id && $approver->user_id === $session->user_id, 404);
+        abort_unless($approver->trust_state === 'trusted' && $approver->public_key && !$approver->revoked_at, 403);
+        abort_unless($device->trust_state === 'pending' && !$device->revoked_at && $device->public_key, 409);
+        $device->update(['trust_state' => 'trusted', 'approved_at' => now()]);
+        $tokens->event($device->user_id, $device->id, 'device.approved');
+        return response()->json(['data' => $this->deviceData($device->fresh(), $session->device_id)]);
+    }
+
+    public function revokeDevice(Request $request, OrbitDevice $device, TokenService $tokens): JsonResponse
+    {
+        $session = $request->attributes->get('orbit_session');
+        abort_unless($device->user_id === $session->user_id && !$device->revoked_at, 404);
+        $tokens->revokeDevice($device, 'user_revoke');
+        return response()->json(['message' => 'Device and associated sessions revoked.']);
+    }
+
+
+    public function listSessions(Request $request): JsonResponse
+    {
+        $current = $request->attributes->get('orbit_session');
+        $sessions = OrbitSession::query()->where('user_id', $current->user_id)
+            ->orderByDesc('created_at')->limit(100)->get();
+        $devices = OrbitDevice::query()->whereIn('id', $sessions->pluck('device_id'))->get()->keyBy('id');
+        return response()->json(['data' => $sessions->map(function (OrbitSession $session) use ($current, $devices): array {
+            $device = $devices->get($session->device_id);
+            return [
+                'id' => $session->id, 'device_id' => $session->device_id,
+                'device_name' => $device?->name ?? 'Unknown device',
+                'is_current' => $session->id === $current->id,
+                'created_at' => $session->created_at?->toIso8601String(),
+                'expires_at' => $session->expires_at?->toIso8601String(),
+                'last_used_at' => $session->last_used_at?->toIso8601String(),
+                'revoked' => (bool) $session->revoked_at,
+            ];
+        })->values()])->header('Cache-Control', 'no-store');
+    }
+
+    public function revokeSession(Request $request, OrbitSession $session, TokenService $tokens): JsonResponse
+    {
+        $current = $request->attributes->get('orbit_session');
+        abort_unless($session->user_id === $current->user_id, 404);
+        if (!$session->revoked_at) {
+            $session->update(['revoked_at' => now()]);
+            $tokens->event($session->user_id, $session->device_id, 'session.revoked', 'user_revoke');
+        }
+        return response()->json(['message' => 'Session revoked.']);
+    }
+
+    private function deviceData(OrbitDevice $device, string $currentId): array
+    {
+        return [
+            'id' => $device->id, 'name' => $device->name, 'platform' => $device->platform,
+            'is_current' => $device->id === $currentId, 'trust_state' => $device->trust_state,
+            'key_registered' => (bool) $device->public_key, 'last_seen_at' => $device->last_seen_at?->toIso8601String(),
+            'revoked_at' => $device->revoked_at?->toIso8601String(),
+        ];
+    }
+}

@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Modules\Config\Http\Controllers\AdminAuthController;
 use App\Modules\Config\Http\Controllers\AdminConfigController;
+use App\Modules\Identity\Http\Controllers\AdminIdentityController;
 use App\Modules\Config\Http\Middleware\EnsureAdmin;
 use App\Modules\Config\Http\Middleware\RequireAdminPermission;
 
@@ -23,6 +24,16 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
     Route::get('/mfa', [AdminAuthController::class, 'mfaForm'])->name('mfa');
     Route::post('/mfa', [AdminAuthController::class, 'verifyMfa'])->middleware('throttle:8,1')->name('mfa.verify');
     Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
+    Route::middleware([EnsureAdmin::class])->group(function (): void {
+        Route::get('/users', [AdminIdentityController::class, 'index'])
+            ->middleware(RequireAdminPermission::class.':users.read')->name('users.index');
+        Route::get('/users/{user}', [AdminIdentityController::class, 'show'])
+            ->middleware(RequireAdminPermission::class.':users.read')->name('users.show');
+        Route::post('/users/{user}/status', [AdminIdentityController::class, 'updateStatus'])
+            ->middleware(RequireAdminPermission::class.':users.manage')->name('users.status');
+        Route::delete('/users/{user}', [AdminIdentityController::class, 'destroy'])
+            ->middleware([RequireAdminPermission::class.':users.delete', 'throttle:6,1'])->name('users.destroy');
+    });
     Route::middleware([EnsureAdmin::class, RequireAdminPermission::class])->group(function (): void {
         Route::get('/', [AdminConfigController::class, 'dashboard'])->name('dashboard');
         Route::get('/flags/new', [AdminConfigController::class, 'flagForm'])->name('flags.new');
