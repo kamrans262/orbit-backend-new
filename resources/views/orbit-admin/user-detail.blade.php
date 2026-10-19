@@ -14,6 +14,45 @@
 <section class="panel"><div class="panel-head"><div><h2>Registered devices</h2><p>Device approval remains a consumer-side trusted-device action.</p></div></div><div class="table-scroll"><table><thead><tr><th>DEVICE</th><th>PLATFORM</th><th>TRUST</th><th>REVOKED</th></tr></thead><tbody>
 @foreach($orbitUser->devices as $device)<tr><td>{{ $device->name }}</td><td>{{ $device->platform }}</td><td>{{ $device->trust_state }}</td><td>{{ $device->revoked_at ? 'Yes' : 'No' }}</td></tr>@endforeach
 </tbody></table></div></section></div>
+<div class="two-col" style="margin-top:20px">
+  <section class="panel">
+    <div class="panel-head"><div><p class="eyebrow">PROFILE / MILESTONE 03</p><h2>Account profile metadata</h2>
+      <p>Non-sensitive account data only. Biography text, private content and contact identifiers are not shown here.</p></div></div>
+    <div class="admin-kv">
+      <div class="kv"><small>Display name</small><strong>{{ $orbitUser->display_name ?: 'Not supplied' }}</strong></div>
+      <div class="kv"><small>Username</small><strong>{{ $orbitUser->username ?: 'Not supplied' }}</strong></div>
+      <div class="kv"><small>Biography status</small><strong>{{ filled($orbitUser->bio) ? 'On file · Private' : 'Not supplied' }}</strong></div>
+      <div class="kv"><small>Account created (UTC)</small><strong>{{ $orbitUser->created_at?->format('Y-m-d H:i') ?: 'Unavailable' }}</strong></div>
+      <div class="kv"><small>Profile updated (UTC)</small><strong>{{ $orbitUser->updated_at?->format('Y-m-d H:i') ?: 'Unavailable' }}</strong></div>
+      <div class="kv"><small>Deletion request</small><strong>{{ $orbitUser->deletion_requested_at ? 'Pending request' : 'No pending request' }}</strong></div>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><div><p class="eyebrow">SETTINGS / MILESTONE 03</p><h2>Settings record status</h2>
+      <p>Only whether preferences have been saved is visible. Actual privacy, location and notification choices remain private.</p></div></div>
+    <div class="admin-kv">
+      <div class="kv"><small>Privacy preferences</small><strong>{{ $preferenceRecord?->privacy !== null ? 'Saved on server' : 'Default policy' }}</strong></div>
+      <div class="kv"><small>Notification preferences</small><strong>{{ $preferenceRecord?->notifications !== null ? 'Saved on server' : 'Default policy' }}</strong></div>
+      <div class="kv"><small>Preferences last updated (UTC)</small><strong>{{ $preferenceRecord?->updated_at ?: 'Not configured' }}</strong></div>
+    </div>
+    @if(auth()->guard('admin')->user()->canPerform('settings.audit.read'))
+      <div style="padding:0 22px 20px"><a href="{{ route('orbit.admin.settings.activity', ['user_id'=>$orbitUser->id]) }}">View authorized field-only settings audit →</a></div>
+    @endif
+  </section>
+</div>
+@if($deletionRecord)
+<section class="panel" style="margin-top:20px">
+  <div class="panel-head"><div><p class="eyebrow">ACCOUNT LIFECYCLE / MILESTONE 03</p><h2>Deletion request status</h2>
+  <p>Eligibility date does not mean the user has been erased. Final retention/erasure processing is a separate controlled workflow.</p></div></div>
+  <div class="admin-kv">
+    <div class="kv"><small>Current status</small><strong>{{ ucfirst($deletionRecord->status) }}</strong></div>
+    <div class="kv"><small>Requested (UTC)</small><strong>{{ $deletionRecord->requested_at }}</strong></div>
+    <div class="kv"><small>Eligible (UTC)</small><strong>{{ $deletionRecord->eligible_for_erasure_at }}</strong></div>
+    <div class="kv"><small>Completed (UTC)</small><strong>{{ $deletionRecord->completed_at ?: 'Not completed' }}</strong></div>
+  </div>
+  <div style="padding:0 22px 20px"><a href="{{ route('orbit.admin.deletions.index') }}">View authorized deletion queue →</a></div>
+</section>
+@endif
 @if(auth()->guard('admin')->user()->canPerform('users.manage'))
 <section class="panel" style="margin-top:20px;padding:22px">
   <h2>Account access controls</h2>
