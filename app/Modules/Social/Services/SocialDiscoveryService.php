@@ -26,6 +26,16 @@ final class SocialDiscoveryService
             ]);
             DB::table('social_discovery_settings')->where('user_id', $userId)
                 ->update([...$updates, 'updated_at' => now()]);
+            DB::table('social_graph_revisions')->insertOrIgnore([
+                'user_id' => $userId, 'revision' => 0, 'updated_at' => now(),
+            ]);
+            DB::table('social_graph_revisions')->where('user_id', $userId)
+                ->increment('revision', 1, ['updated_at' => now()]);
+            DB::table('social_graph_outbox')->insert([
+                'id' => (string) \Illuminate\Support\Str::uuid7(),
+                'actor_id' => $userId, 'subject_id' => null,
+                'event_type' => 'social.discovery_updated', 'created_at' => now(),
+            ]);
             DB::table('orbit_identity_events')->insert([
                 'id' => (string) \Illuminate\Support\Str::uuid7(),
                 'user_id' => $userId, 'device_id' => null,
