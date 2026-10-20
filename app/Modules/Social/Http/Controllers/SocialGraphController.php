@@ -23,30 +23,55 @@ final class SocialGraphController extends Controller
         return response()->json(['data' => $data], $status)->header('Cache-Control', 'no-store');
     }
 
-    /** Exact username lookup only until product signs off public discoverability. */
-    public function search(Request $request, SocialGraphService $social): JsonResponse
+    /** Bounded, optional public discovery by username or display name. */
+    public function search(Request $request, SocialGraphService $social,
+        \App\Modules\Social\Services\SocialDiscoveryService $discovery): JsonResponse
     {
         $data = $request->validate([
-            'username' => ['required', 'string', 'min:3', 'max:32', 'regex:/^[A-Za-z0-9._]+$/D'],
+            'q' => ['nullable', 'string', 'min:2', 'max:80'],
+            // Backward compatible with the M4 draft client query shape.
+            'username' => ['nullable', 'string', 'min:2', 'max:32'],
+            'page' => ['nullable', 'integer', 'between:1,20'],
+        ]);
+        $query = trim((string) ($data['q'] ?? $data['username'] ?? ''));
+        if (mb_strlen($query) < 2) {
+            return response()->json(['message' => 'Search requires at least two characters.'], 422);
+        }
+        [$viewer] = $this->identity($request);
+        return $this->send($discovery->find($viewer, $query,
+            (int) ($data['page'] ?? 1), $social));
+    }
+
+    public function discovery(Request $request,
+        \App\Modules\Social\Services\SocialDiscoveryService $discovery): JsonResponse
+    {
+        [$viewer] = $this->identity($request);
+        return $this->send($discovery->settings($viewer));
+    }
+
+    public function updateDiscovery(Request $request,
+        \App\Modules\Social\Services\SocialDiscoveryService $discovery): JsonResponse
+    {
+        $updates = $request->validate([
+            'discoverable' => ['sometimes','required','boolean'],
+            'discoverable_by_name' => ['sometimes','required','boolean'],
+            'discoverable_by_contacts' => ['sometimes','required','boolean'],
+            'allow_friend_requests' => ['sometimes','required','boolean'],
         ]);
         [$viewer] = $this->identity($request);
-        $username = strtolower($data['username']);
-        $user = OrbitUser::query()->where('username', $username)
-            ->where('status', 'active')->whereNull('deletion_requested_at')->first();
-        if (!$user || $user->id === $viewer || $social->isBlockedEitherWay($viewer, $user->id)) {
-            return $this->send([]);
-        }
-        return $this->send([[
-            'id' => $user->id, 'username' => $user->username,
-            'display_name' => $user->display_name,
-            'relationship' => $social->relationship($viewer, $user->id),
-        ]]);
+        return $this->send($discovery->update($viewer, $updates));
     }
 
     public function preview(Request $request, SocialGraphService $social, string $user): JsonResponse
     {
         [$viewer] = $this->identity($request);
         $subject = $social->assertVisible($viewer, $user);
+        $discovery = app(\App\Modules\Social\Services\SocialDiscoveryService::class);
+        if (!$discovery->visibleForSearch($viewer, $subject->id)
+            && !$social->isFriend($viewer, $subject->id)
+            && $social->relationship($viewer, $subject->id) === 'none') {
+            abort(404, 'Person unavailable.');
+        }
         // Bio, contact details, location, presence, Circle lists and mutual counts stay private.
         return $this->send([
             'id' => $subject->id, 'display_name' => $subject->display_name,
