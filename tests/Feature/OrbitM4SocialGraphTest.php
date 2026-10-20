@@ -376,6 +376,51 @@ final class OrbitM4SocialGraphTest extends TestCase
             ['recipient_id'=>$b->id])->assertStatus(429);
     }
 
+    public function test_relationship_events_and_privacy_updates_are_durable_and_minimal(): void
+    {
+        [$a,$ta] = $this->identity('a');
+        [$b,$tb] = $this->identity('b');
+        $this->auth($ta)->postJson('/api/v1/friends/requests',
+            ['recipient_id'=>$b->id])->assertCreated();
+        $this->assertDatabaseHas('social_graph_outbox',[
+            'actor_id'=>$a->id,'subject_id'=>$b->id,
+            'event_type'=>'social.request_sent',
+        ]);
+        $before = app(SocialGraphService::class)->currentRevision($b->id);
+        $this->auth($tb)->patchJson('/api/v1/me/preferences/privacy',[
+            'message_eligibility'=>'Friends',
+        ])->assertOk();
+        $this->assertDatabaseHas('social_graph_outbox',[
+            'actor_id'=>$b->id,'event_type'=>'social.privacy_changed',
+        ]);
+        $this->assertGreaterThan($before,
+            app(SocialGraphService::class)->currentRevision($b->id));
+        $this->auth($ta)->getJson('/api/v1/people/'.$b->id.'/preview')->assertOk()
+            ->assertJsonMissingPath('data.message_eligibility');
+    }
+
+    public function test_social_deletion_cleans_invites_preferences_and_outbox(): void
+    {
+        [$a,$ta] = $this->identity('a');
+        [$b,$tb] = $this->identity('b');
+        $this->auth($ta)->patchJson('/api/v1/me/social/discovery',[
+            'discoverable_by_contacts'=>true,
+        ])->assertOk();
+        $this->auth($ta)->postJson('/api/v1/friends/invites')->assertCreated();
+        $this->auth($ta)->postJson('/api/v1/friends/requests',
+            ['recipient_id'=>$b->id])->assertCreated();
+        $admin = $this->admin(['users.read','users.delete']);
+        $this->be($admin,'admin');
+        $this->delete('/admin/users/'.$a->id,[
+            'confirmation'=>'DELETE','reason'=>'Reviewed test account purge',
+        ])->assertRedirect();
+        $this->assertDatabaseMissing('social_discovery_settings',['user_id'=>$a->id]);
+        $this->assertDatabaseMissing('social_friend_invites',['creator_id'=>$a->id]);
+        $this->assertDatabaseMissing('social_graph_outbox',['actor_id'=>$a->id]);
+        $this->assertDatabaseMissing('social_graph_outbox',['subject_id'=>$a->id]);
+        $this->assertDatabaseHas('orbit_users',['id'=>$b->id]);
+    }
+
     public function test_new_account_daily_cap_is_enforced_without_a_global_directory(): void
     {
         config()->set('orbit_social.new_account_daily_limit',1);
