@@ -21,6 +21,17 @@ final class CircleLifecycleIntegrity
             ->where('one.user_id',$a)->whereNull('one.removed_at')
             ->where('two.user_id',$b)->whereNull('two.removed_at')
             ->pluck('one.circle_id')->unique()->all();
+        if (in_array($event,['circle.relationship_blocked','circle.relationship_unfriended'],true)) {
+            $pair=DB::table('circle_invites')->where('status','pending')
+                ->where(function ($q) use ($a,$b): void {
+                    $q->where(fn ($x) => $x->where('inviter_id',$a)->where('invitee_id',$b))
+                      ->orWhere(fn ($x) => $x->where('inviter_id',$b)->where('invitee_id',$a));
+                });
+            $pendingCircles=(clone $pair)->pluck('circle_id')->all();
+            $pair->update(['status'=>'revoked','pending_pair_key'=>null,'code_hash'=>null,
+                'resolved_at'=>now(),'updated_at'=>now()]);
+            $ids=array_values(array_unique(array_merge($ids,$pendingCircles)));
+        }
         foreach ($ids as $id) {
             DB::table('circles')->where('id',$id)->increment('revision',1,['updated_at'=>now()]);
             DB::table('circle_event_outbox')->insert([
