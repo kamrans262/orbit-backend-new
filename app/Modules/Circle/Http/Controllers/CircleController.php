@@ -38,7 +38,13 @@ final class CircleController extends Controller
         if (trim($data['name']) === '') {
             throw \Illuminate\Validation\ValidationException::withMessages(['name'=>'Circle name is required.']);
         }
-        return $this->result($circles->create($this->viewer($r),$data),201);
+        $key = $r->header('Idempotency-Key');
+        if ($key !== null && (!is_string($key) || !preg_match('/^[A-Za-z0-9._-]{8,128}$/D',$key))) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'Idempotency-Key'=>'Use 8-128 URL-safe characters.',
+            ]);
+        }
+        return $this->result($circles->create($this->viewer($r),$data,$key),201);
     }
     public function detail(Request $r, CircleService $circles, string $circle): JsonResponse
     {
