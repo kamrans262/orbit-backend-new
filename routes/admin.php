@@ -38,6 +38,7 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
                 'social.read' => 'orbit.admin.social.index',
                 'circles.read' => 'orbit.admin.circles.index',
             ] as $permission => $route) {
+                if ($permission === 'circles.read' && config('orbit_circle.enabled') !== true) continue;
                 if ($actor?->canPerform($permission)) return redirect()->route($route);
             }
             abort(403);
