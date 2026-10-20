@@ -68,6 +68,14 @@ return new class extends Migration {
             $table->foreign('circle_id')->references('id')->on('circles')->cascadeOnDelete();
             $table->foreign('subject_user_id')->references('id')->on('orbit_users')->cascadeOnDelete();
         });
+        Schema::create('circle_primary_selections', function (Blueprint $table): void {
+            $table->uuid('user_id')->primary();
+            $table->uuid('circle_id');
+            $table->timestamps();
+            $table->index(['circle_id']);
+            $table->foreign('user_id')->references('id')->on('orbit_users')->cascadeOnDelete();
+            $table->foreign('circle_id')->references('id')->on('circles')->cascadeOnDelete();
+        });
         Schema::create('circle_event_outbox', function (Blueprint $table): void {
             $table->uuid('id')->primary();
             $table->uuid('circle_id');
@@ -84,6 +92,7 @@ return new class extends Migration {
     public function down(): void
     {
         Schema::dropIfExists('circle_event_outbox');
+        Schema::dropIfExists('circle_primary_selections');
         Schema::dropIfExists('circle_permissions');
         Schema::dropIfExists('circle_invites');
         Schema::dropIfExists('circle_members');
