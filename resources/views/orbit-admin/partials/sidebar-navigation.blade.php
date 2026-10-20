@@ -26,10 +26,13 @@
   if ($navUser?->canPerform('settings.audit.read')) {
     $accountChildren[] = ['title'=>'Settings Audit','route'=>'orbit.admin.settings.activity','patterns'=>['orbit.admin.settings.*']];
   }
+  if ($navUser?->canPerform('social.read')) {
+    $accountChildren[] = ['title'=>'Friends & Blocking','route'=>'orbit.admin.social.index','patterns'=>['orbit.admin.social.*']];
+  }
   if ($accountChildren !== []) {
     $navGroups[] = [
       'title'=>'Accounts', 'icon'=>'users',
-      'patterns'=>['orbit.admin.users.*','orbit.admin.deletions.*','orbit.admin.settings.*'],
+      'patterns'=>['orbit.admin.users.*','orbit.admin.deletions.*','orbit.admin.settings.*','orbit.admin.social.*'],
       'children'=>$accountChildren,
     ];
   }
