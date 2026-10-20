@@ -200,7 +200,11 @@ final class SocialGraphService
             [$low, $high] = $this->canonical($actor, $other);
             $deleted = DB::table('friendships')->where('user_low_id', $low)
                 ->where('user_high_id', $high)->delete();
-            if ($deleted) $this->revision($actor, $other, $device, 'social.unfriended');
+            if ($deleted) {
+                $this->revision($actor, $other, $device, 'social.unfriended');
+                app(\App\Modules\Circle\Services\CircleLifecycleIntegrity::class)
+                    ->relationshipChanged($actor,$other,'circle.relationship_unfriended');
+            }
         }, 3);
     }
 
@@ -222,6 +226,8 @@ final class SocialGraphService
                 ->update(['status' => 'cancelled', 'active_pair_key' => null,
                     'responded_at' => now(), 'updated_at' => now()]);
             $this->revision($actor, $other, $device, 'social.blocked');
+            app(\App\Modules\Circle\Services\CircleLifecycleIntegrity::class)
+                ->relationshipChanged($actor,$other,'circle.relationship_blocked');
         }, 3);
     }
 
@@ -231,7 +237,11 @@ final class SocialGraphService
             $this->lockPeople($actor, $other, false);
             $deleted = DB::table('blocks')->where('blocker_id', $actor)
                 ->where('blocked_id', $other)->delete();
-            if ($deleted) $this->revision($actor, $other, $device, 'social.unblocked');
+            if ($deleted) {
+                $this->revision($actor, $other, $device, 'social.unblocked');
+                app(\App\Modules\Circle\Services\CircleLifecycleIntegrity::class)
+                    ->relationshipChanged($actor,$other,'circle.relationship_unblocked');
+            }
         }, 3);
     }
 }
