@@ -379,6 +379,75 @@ final class IdentityController extends Controller
         ]])->header('Cache-Control', 'no-store');
     }
 
+    /**
+     * Lost-all-devices recovery. The caller must already own a fresh,
+     * password + login-OTP session on a newly registered PENDING device.
+     * Device names and hardware resemblance are never trust evidence.
+     */
+    public function requestDeviceRecovery(
+        Request $request,
+        OtpService $otp,
+        OrbitPasswordHasher $passwords,
+        \App\Modules\Identity\Services\DeviceRecoveryService $recovery,
+    ): JsonResponse {
+        $data = $request->validate([
+            'recipient' => ['required', 'string', 'max:190'],
+            'password' => ['required', 'string', 'max:256'],
+        ]);
+        $session = $request->attributes->get('orbit_session');
+        if (!$recovery->eligible($session)) {
+            return response()->json(['message' => 'Sign in again to recover this device.'], 403)
+                ->header('Cache-Control', 'no-store');
+        }
+        $recipient = $recovery->verifiedRecipient($session->user_id, $data['recipient'], $otp);
+        $user = OrbitUser::find($session->user_id);
+        if (!$recipient || !$user || !$user->password_hash ||
+            !$passwords->check($data['password'], $user->password_hash)) {
+            return response()->json(['message' => 'Unable to verify recovery credentials.'], 422)
+                ->header('Cache-Control', 'no-store');
+        }
+        $result = $otp->request($recipient['channel'], $recipient['value'], (string) $request->ip(), 'device_recovery');
+        if ($result === 'rate_limited') {
+            return response()->json(['message' => 'Please wait before requesting another code.'], 429)
+                ->header('Cache-Control', 'no-store');
+        }
+        if ($result !== 'sent') {
+            return response()->json(['message' => 'Verification delivery is unavailable. Please try later.'], 503)
+                ->header('Cache-Control', 'no-store');
+        }
+        $recovery->event($session->user_id, $session->device_id, 'device.recovery_requested');
+        return response()->json([
+            'message' => 'Recovery verification code sent.',
+            'expires_in' => (int) config('orbit_identity.otp_minutes', 5) * 60,
+        ], 202)->header('Cache-Control', 'no-store');
+    }
+
+    public function completeDeviceRecovery(
+        Request $request,
+        OtpService $otp,
+        OrbitPasswordHasher $passwords,
+        \App\Modules\Identity\Services\DeviceRecoveryService $recovery,
+    ): JsonResponse {
+        $data = $request->validate([
+            'recipient' => ['required', 'string', 'max:190'],
+            'password' => ['required', 'string', 'max:256'],
+            'code' => ['required', 'digits:6'],
+            'confirm_revoke_others' => ['required', 'accepted'],
+        ]);
+        $session = $request->attributes->get('orbit_session');
+        $result = $recovery->complete($session, $data, $otp, $passwords);
+        if ($result !== 'recovered') {
+            return response()->json(['message' => match ($result) {
+                'ineligible' => 'Sign in again to recover this device.',
+                'rate_limited' => 'Too many attempts. Please try later.',
+                default => 'Unable to verify recovery credentials or code.',
+            }], $result === 'ineligible' ? 403 : ($result === 'rate_limited' ? 429 : 422))
+                ->header('Cache-Control', 'no-store');
+        }
+        return response()->json(['message' => 'Device access recovered. All older device sessions were revoked.',
+            'data' => ['trust_state' => 'trusted']])->header('Cache-Control', 'no-store');
+    }
+
     public function registerDevice(Request $request, TokenService $tokens): JsonResponse
     {
         $data = $request->validate([

@@ -40,6 +40,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/me/sessions', [IdentityController::class, 'listSessions']);
         Route::delete('/me/sessions/{session}', [IdentityController::class, 'revokeSession']);
         Route::post('/devices/register', [IdentityController::class, 'registerDevice']);
+        Route::post('/devices/recovery/request', [IdentityController::class, 'requestDeviceRecovery'])->middleware('throttle:5,15');
+        Route::post('/devices/recovery/complete', [IdentityController::class, 'completeDeviceRecovery'])->middleware('throttle:10,15');
         Route::get('/devices/registration-status', [IdentityController::class, 'deviceRegistrationStatus']);
         Route::patch('/me/devices/{device}', [IdentityController::class, 'renameDevice']);
         Route::post('/me/devices/{device}/approve', [IdentityController::class, 'approveDevice']);

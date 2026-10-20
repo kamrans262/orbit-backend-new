@@ -19,7 +19,7 @@ final class AuthenticateOrbitToken
         if (!$device) return response()->json(['message' => 'Unauthenticated.'], 401);
         $registration = !$device->public_key;
         $approval = $device->trust_state !== 'trusted';
-        if (($registration || $approval) && !$request->is('api/v1/devices/register', 'api/v1/devices/registration-status', 'api/v1/auth/logout')) {
+        if (($registration || $approval) && !$request->is('api/v1/devices/register', 'api/v1/devices/registration-status', 'api/v1/devices/recovery/request', 'api/v1/devices/recovery/complete', 'api/v1/auth/logout')) {
             return response()->json([
                 'message' => 'Device registration or trusted-device approval required.',
                 'code' => 'device_verification_required',
