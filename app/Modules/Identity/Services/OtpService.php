@@ -132,15 +132,26 @@ final class OtpService
      */
     public function consumeRecoveryCode(string $channel, string $recipient, string $code): bool
     {
+        return $this->consumePurposeCode($channel, $recipient, $code, 'reset');
+    }
+
+    /** A separate one-time challenge that cannot be exchanged for password reset or login. */
+    public function consumeDeviceRecoveryCode(string $channel, string $recipient, string $code): bool
+    {
+        return $this->consumePurposeCode($channel, $recipient, $code, 'device_recovery');
+    }
+
+    private function consumePurposeCode(string $channel, string $recipient, string $code, string $purpose): bool
+    {
         $normalized = $this->normalized($channel, $recipient);
         if (!$normalized || !preg_match('/^\\d{6}$/D', $code)) return false;
         $digest = $this->digest($channel, $normalized);
-        $key = 'orbit:otp:recovery:'.$digest;
+        $key = 'orbit:otp:recovery:'.$purpose.':'.$digest;
         if (RateLimiter::tooManyAttempts($key, 5)) return false;
         RateLimiter::hit($key, 600);
-        return DB::transaction(function () use ($channel, $digest, $code, $key, $normalized): bool {
+        return DB::transaction(function () use ($channel, $digest, $code, $key, $normalized, $purpose): bool {
             $challenge = DB::table('otp_challenges')->where('recipient_hash', $digest)
-                ->where('channel', $channel)->where('purpose', 'reset')
+                ->where('channel', $channel)->where('purpose', $purpose)
                 ->whereNull('consumed_at')->orderByDesc('created_at')->lockForUpdate()->first();
             if (!$challenge || now()->greaterThan($challenge->expires_at) || $challenge->attempts >= 5) return false;
             DB::table('otp_challenges')->where('id', $challenge->id)->increment('attempts');
