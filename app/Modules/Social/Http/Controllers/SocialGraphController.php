@@ -38,6 +38,14 @@ final class SocialGraphController extends Controller
             return response()->json(['message' => 'Search requires at least two characters.'], 422);
         }
         [$viewer] = $this->identity($request);
+        // Per-account limiter complements the outer per-IP middleware and
+        // cannot be bypassed by changing a device or network address.
+        $rateKey = 'orbit:social:search:'.$viewer;
+        if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($rateKey, 60)) {
+            return response()->json(['message'=>'Search limit reached. Please retry later.'], 429)
+                ->header('Cache-Control','no-store');
+        }
+        \Illuminate\Support\Facades\RateLimiter::hit($rateKey, 60);
         return $this->send($discovery->find($viewer, $query,
             (int) ($data['page'] ?? 1), $social));
     }
