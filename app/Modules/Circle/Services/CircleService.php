@@ -70,18 +70,36 @@ final class CircleService
         return ['items'=>$result,'page'=>$items->currentPage(),'has_more'=>$items->hasMorePages()];
     }
 
-    public function create(string $user, array $data): array
+    public function create(string $user, array $data, ?string $idempotencyKey = null): array
     {
-        return DB::transaction(function () use ($user,$data): array {
+        return DB::transaction(function () use ($user,$data,$idempotencyKey): array {
             $person = OrbitUser::query()->whereKey($user)->lockForUpdate()->first();
             if (!$person || $person->status !== 'active' || $person->deletion_requested_at) abort(403);
+            $idempotencyHash = $idempotencyKey === null ? null :
+                hash_hmac('sha256', $user.'|'.$idempotencyKey, (string) config('app.key'));
+            $payloadHash = hash('sha256', json_encode([
+                'name'=>trim($data['name']),
+                'icon_key'=>$data['icon_key'] ?? null,
+                'color_value'=>$data['color_value'] ?? null,
+            ], JSON_THROW_ON_ERROR));
+            if ($idempotencyHash) {
+                $existing = DB::table('circles')->where('creation_key_hash',$idempotencyHash)->first();
+                if ($existing) {
+                    if ($existing->creation_payload_hash !== $payloadHash) {
+                        abort(409,'Idempotency key already used for a different Circle.');
+                    }
+                    return $this->detail($existing->id,$user);
+                }
+            }
             $id = (string) Str::uuid7();
             $now = now();
             DB::table('circles')->insert([
                 'id'=>$id,'owner_id'=>$user,'name'=>trim($data['name']),
                 'icon_key'=>$data['icon_key'] ?? null,
                 'color_value'=>$data['color_value'] ?? null,
-                'revision'=>1,'created_at'=>$now,'updated_at'=>$now,
+                'revision'=>1,'creation_key_hash'=>$idempotencyHash,
+                'creation_payload_hash'=>$idempotencyHash ? $payloadHash : null,
+                'created_at'=>$now,'updated_at'=>$now,
             ]);
             DB::table('circle_members')->insert([
                 'circle_id'=>$id,'user_id'=>$user,'role'=>'owner','joined_at'=>$now,
