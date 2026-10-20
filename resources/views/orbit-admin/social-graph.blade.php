@@ -11,6 +11,8 @@
   <article class="stat-card"><span class="stat-label">Friendship pairs</span><strong>{{ $stats['friends'] }}</strong><p>Canonical accepted relationships</p></article>
   <article class="stat-card"><span class="stat-label">Active directional blocks</span><strong>{{ $stats['blocks'] }}</strong><p>Protected social access denied</p></article>
   <article class="stat-card"><span class="stat-label">Requests last 24 hours</span><strong>{{ $stats['requests_24h'] }}</strong><p>Coarse abuse review indicator</p></article>
+  <article class="stat-card"><span class="stat-label">Active friend invite links</span><strong>{{ $stats['active_invites'] }}</strong><p>Unredeemed, unrevoked, unexpired</p></article>
+  <article class="stat-card"><span class="stat-label">Contact-discovery opt-ins</span><strong>{{ $stats['contact_opted_in'] }}</strong><p>Users choosing to be found via contacts</p></article>
 </div>
 <section class="panel" style="margin-top:22px">
   <div class="panel-head"><div><p class="eyebrow">SUPPORT / AUTHORIZED METADATA</p><h2>Account relationship summary</h2>
@@ -18,7 +20,10 @@
   <form class="admin-filters" method="get" action="{{ route('orbit.admin.social.index') }}">
     <label>Orbit user UUID <input name="user_id" type="text" maxlength="36" value="{{ request('user_id') }}" placeholder="Exact UUID"></label>
     <label>Activity category <select name="action"><option value="">All social events</option>
-      @foreach(['social.request_sent'=>'Request sent','social.request_accepted'=>'Request accepted','social.request_declined'=>'Request declined','social.unfriended'=>'Unfriended','social.blocked'=>'Blocked','social.unblocked'=>'Unblocked'] as $code=>$title)
+      @foreach(['social.request_sent'=>'Request sent','social.request_accepted'=>'Request accepted','social.request_declined'=>'Request declined','social.unfriended'=>'Unfriended','social.blocked'=>'Blocked','social.unblocked'=>'Unblocked',
+        'social.request_cancelled'=>'Request cancelled',
+        'social.discovery_updated'=>'Discovery preferences',
+        'social.privacy_changed'=>'Privacy preferences'] as $code=>$title)
         <option value="{{ $code }}" @selected(request('action')===$code)>{{ $title }}</option>
       @endforeach
     </select></label>
