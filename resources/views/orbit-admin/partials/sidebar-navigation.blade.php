@@ -29,7 +29,7 @@
   if ($navUser?->canPerform('social.read')) {
     $accountChildren[] = ['title'=>'Friends & Blocking','route'=>'orbit.admin.social.index','patterns'=>['orbit.admin.social.*']];
   }
-  if ($navUser?->canPerform('circles.read')) {
+  if (config('orbit_circle.enabled') === true && $navUser?->canPerform('circles.read')) {
     $accountChildren[] = ['title'=>'Circle Management','route'=>'orbit.admin.circles.index','patterns'=>['orbit.admin.circles.*']];
   }
   if ($accountChildren !== []) {
