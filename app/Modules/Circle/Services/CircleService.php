@@ -194,7 +194,7 @@ final class CircleService
     {
         if (config('orbit_circle.targeted_invites_enabled') !== true) abort(404,'Invitation unavailable.');
         $ttl = (int) config('orbit_circle.targeted_invite_lifetime_hours',0);
-        if ($ttl < 1 || $ttl > 720) abort(404,'Invitation policy unavailable.');
+        if ($ttl !== 168) abort(404,'Invitation policy unavailable.');
         return DB::transaction(function () use ($id,$user,$invitee,$ttl): array {
             $this->authorizeInvites($id,$user,true);
             if ($user === $invitee || !$this->active($invitee)
@@ -203,6 +203,12 @@ final class CircleService
             if (!$this->social->isFriend($user,$invitee)) abort(404,'Person unavailable.');
             if (DB::table('circle_members')->where('circle_id',$id)
                 ->where('user_id',$invitee)->whereNull('removed_at')->exists()) abort(409,'Already a member.');
+            // Reissuing after expiry is safe; a stale unique pair must not lock out
+            // a recipient forever. Revoke the expired bearer credential too.
+            DB::table('circle_invites')->where('pending_pair_key',$id.':'.$invitee)
+                ->where('status','pending')->where('expires_at','<=',now())
+                ->update(['status'=>'expired','pending_pair_key'=>null,
+                    'code_hash'=>null,'resolved_at'=>now(),'updated_at'=>now()]);
             if (DB::table('circle_invites')->where('pending_pair_key',$id.':'.$invitee)->exists()) {
                 abort(409,'Invitation already pending.');
             }
