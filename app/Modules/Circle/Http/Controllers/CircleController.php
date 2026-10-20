@@ -23,6 +23,19 @@ final class CircleController extends Controller
         return (int) $r->validate(['page'=>['sometimes','integer','between:1,100']])['page'] ?? 1;
     }
 
+    public function primary(Request $r,
+        \App\Modules\Circle\Services\CirclePrimaryService $service): JsonResponse
+    {
+        return $this->result($service->current($this->viewer($r)));
+    }
+
+    public function choosePrimary(Request $r,
+        \App\Modules\Circle\Services\CirclePrimaryService $service): JsonResponse
+    {
+        $data=$r->validate(['circle_id'=>['present','nullable','uuid']]);
+        return $this->result($service->choose($this->viewer($r),$data['circle_id']));
+    }
+
     public function listing(Request $r, CircleService $circles): JsonResponse
     {
         $page = (int) ($r->validate(['page'=>['sometimes','integer','between:1,100']])['page'] ?? 1);
