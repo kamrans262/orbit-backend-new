@@ -15,6 +15,8 @@ return new class extends Migration {
             $table->string('color_value', 7)->nullable();
             $table->timestamp('archived_at')->nullable();
             $table->unsignedBigInteger('revision')->default(1);
+            $table->char('creation_key_hash',64)->nullable()->unique();
+            $table->char('creation_payload_hash',64)->nullable();
             $table->timestamps();
             $table->index(['owner_id', 'archived_at']);
             // No cascade: deleting an owner must never silently destroy other users' Circle.
