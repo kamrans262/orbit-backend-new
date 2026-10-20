@@ -17,6 +17,26 @@ final class OrbitM5CirclesTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config()->set('orbit_circle.enabled', true);
+        config()->set('orbit_circle.targeted_invites_enabled', true);
+        config()->set('orbit_circle.role_changes_enabled', true);
+    }
+
+    public function test_unapproved_rollout_gate_rejects_public_usage_and_admin_access(): void
+    {
+        [$a,$ta] = $this->person('alpha');
+        config()->set('orbit_circle.enabled', false);
+        $this->withToken($ta)->getJson('/api/v1/circles')->assertNotFound();
+        $this->withToken($ta)->postJson('/api/v1/circles',['name'=>'Private'])->assertNotFound();
+        $this->assertDatabaseCount('circles',0);
+        $admin = $this->admin(['circles.read']);
+        $this->be($admin,'admin');
+        $this->get('/admin/circles')->assertNotFound();
+    }
+
     private function person(string $name): array
     {
         $user = OrbitUser::create([
