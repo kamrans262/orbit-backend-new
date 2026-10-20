@@ -32,6 +32,27 @@ final class OrbitM5SocialInvalidationTest extends TestCase
         ]);
         return [$u,app(TokenService::class)->issue($u,$d,null)['access_token']];
     }
+    public function test_block_revokes_pending_invite_even_before_join(): void
+    {
+        [$a,$ta]=$this->person('alpha');
+        [$b,$tb]=$this->person('bravo');
+        $r=$this->withToken($ta)->postJson('/api/v1/friends/requests',
+            ['recipient_id'=>$b->id])->assertCreated()->json('data.id');
+        $this->withToken($tb)->postJson('/api/v1/friends/requests/'.$r.'/accept')->assertOk();
+        $id=$this->withToken($ta)->postJson('/api/v1/circles',
+            ['name'=>'Private'])->assertCreated()->json('data.id');
+        $invite=$this->withToken($ta)->postJson('/api/v1/circles/'.$id.'/invites',
+            ['invitee_id'=>$b->id])->assertCreated()->json('data');
+        $this->withToken($ta)->postJson('/api/v1/me/blocks',
+            ['user_id'=>$b->id])->assertCreated();
+        $this->assertDatabaseHas('circle_invites',
+            ['id'=>$invite['id'],'status'=>'revoked']);
+        $this->withToken($tb)->postJson('/api/v1/circles/invites/'.$invite['id'].'/accept')
+            ->assertStatus(409);
+        $this->withToken($ta)->deleteJson('/api/v1/me/blocks/'.$b->id)->assertOk();
+        $this->assertDatabaseCount('circle_members',1);
+    }
+
     public function test_block_and_unblock_change_circle_revision_but_never_grant_sharing(): void
     {
         [$a,$ta]=$this->person('alpha');
