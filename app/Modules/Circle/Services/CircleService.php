@@ -158,7 +158,9 @@ final class CircleService
     public function invite(string $id, string $user, string $invitee): array
     {
         if (config('orbit_circle.targeted_invites_enabled') !== true) abort(404,'Invitation unavailable.');
-        return DB::transaction(function () use ($id,$user,$invitee): array {
+        $ttl = (int) config('orbit_circle.targeted_invite_lifetime_hours',0);
+        if ($ttl < 1 || $ttl > 720) abort(404,'Invitation policy unavailable.');
+        return DB::transaction(function () use ($id,$user,$invitee,$ttl): array {
             $this->circle($id,$user,true,true);
             if ($user === $invitee || !$this->active($invitee)
                 || $this->social->isBlockedEitherWay($user,$invitee)) abort(404,'Person unavailable.');
@@ -174,6 +176,7 @@ final class CircleService
                 'id'=>$inviteId,'circle_id'=>$id,'inviter_id'=>$user,
                 'invitee_id'=>$invitee,'status'=>'pending',
                 'pending_pair_key'=>$id.':'.$invitee,
+                'expires_at'=>now()->addHours($ttl),
                 'created_at'=>now(),'updated_at'=>now(),
             ]);
             $this->change($id,'circle.invited');
@@ -195,6 +198,7 @@ final class CircleService
     {
         if (config('orbit_circle.targeted_invites_enabled') !== true) return ['items'=>[],'page'=>1,'has_more'=>false];
         $items = DB::table('circle_invites')->where('invitee_id',$user)->where('status','pending')
+            ->where('expires_at','>',now())
             ->orderByDesc('created_at')->paginate(20,['*'],'page',$page);
         $result = [];
         foreach ($items->items() as $invite) {
@@ -221,6 +225,7 @@ final class CircleService
             $invite = DB::table('circle_invites')->where('id',$id)
                 ->where('invitee_id',$user)->lockForUpdate()->first();
             if (!$invite || $invite->status !== 'pending') abort(409,'Invitation already resolved.');
+            if (!$invite->expires_at || now()->gte($invite->expires_at)) abort(409,'Invitation expired.');
             if (!$this->active($user) || !$this->active($circle->owner_id)
                 || $this->social->isBlockedEitherWay($user,$circle->owner_id)
                 || $this->social->isBlockedEitherWay($user,$invite->inviter_id)) abort(404,'Invitation unavailable.');
