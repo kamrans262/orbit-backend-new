@@ -189,8 +189,22 @@ final class CircleService
         if (config('orbit_circle.targeted_invites_enabled') !== true) abort(404,'Invitation unavailable.');
         $this->circle($id,$user,true);
         $items = DB::table('circle_invites')->where('circle_id',$id)
-            ->orderByDesc('created_at')->paginate(20,['id','status','created_at'],'page',$page);
-        return ['items'=>$items->items(),'page'=>$items->currentPage(),
+            ->orderByDesc('created_at')->paginate(20,['id','invitee_id','status','created_at','resolved_at'],'page',$page);
+        $safe = [];
+        foreach ($items->items() as $invite) {
+            if ($this->social->isBlockedEitherWay($user,$invite->invitee_id)) continue;
+            $person = OrbitUser::query()->whereKey($invite->invitee_id)
+                ->where('status','active')->whereNull('deletion_requested_at')
+                ->first(['id','username','display_name']);
+            if (!$person) continue;
+            $safe[] = [
+                'id'=>$invite->id,'status'=>$invite->status,
+                'created_at'=>$invite->created_at,'resolved_at'=>$invite->resolved_at,
+                'person'=>['id'=>$person->id,'username'=>$person->username,
+                    'display_name'=>$person->display_name],
+            ];
+        }
+        return ['items'=>$safe,'page'=>$items->currentPage(),
             'has_more'=>$items->hasMorePages()];
     }
 
