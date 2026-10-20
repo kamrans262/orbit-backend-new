@@ -18,6 +18,8 @@ final class AdminSocialGraphController extends Controller
             'action' => ['nullable', Rule::in([
                 'social.request_sent','social.request_accepted','social.request_declined',
                 'social.unfriended','social.blocked','social.unblocked',
+                'social.request_cancelled', 'social.discovery_updated',
+                'social.privacy_changed',
             ])],
         ]);
         $userId = $filters['user_id'] ?? null;
@@ -28,6 +30,11 @@ final class AdminSocialGraphController extends Controller
             'friends' => DB::table('friendships')->count(),
             'blocks' => DB::table('blocks')->count(),
             'requests_24h' => DB::table('friend_requests')->where('created_at', '>=', now()->subDay())->count(),
+            'active_invites' => DB::table('social_friend_invites')
+                ->whereNull('revoked_at')->whereNull('redeemed_at')
+                ->where('expires_at','>',now())->count(),
+            'contact_opted_in' => DB::table('social_discovery_settings')
+                ->where('discoverable',true)->where('discoverable_by_contacts',true)->count(),
         ];
         $userCounts = null;
         if ($account) {
