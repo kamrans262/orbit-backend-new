@@ -395,6 +395,13 @@ final class IdentityController extends Controller
             'password' => ['required', 'string', 'max:256'],
         ]);
         $session = $request->attributes->get('orbit_session');
+        $limitKey = 'orbit:device-recovery:request:'.hash_hmac('sha256',
+            $session->user_id, (string) config('app.key'));
+        if (RateLimiter::tooManyAttempts($limitKey, 5)) {
+            return response()->json(['message' => 'Please wait before trying again.'], 429)
+                ->header('Cache-Control', 'no-store');
+        }
+        RateLimiter::hit($limitKey, 900);
         if (!$recovery->eligible($session)) {
             return response()->json(['message' => 'Sign in again to recover this device.'], 403)
                 ->header('Cache-Control', 'no-store');
