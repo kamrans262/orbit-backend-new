@@ -5,6 +5,7 @@ use App\Modules\Config\Http\Controllers\AdminAuthController;
 use App\Modules\Config\Http\Controllers\AdminConfigController;
 use App\Modules\Identity\Http\Controllers\AdminIdentityController;
 use App\Modules\Profile\Http\Controllers\AdminProfileController;
+use App\Modules\Social\Http\Controllers\AdminSocialGraphController;
 use App\Modules\Config\Http\Middleware\EnsureAdmin;
 use App\Modules\Config\Http\Middleware\RequireAdminPermission;
 
@@ -33,12 +34,15 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
                 'users.read' => 'orbit.admin.users.index',
                 'deletions.read' => 'orbit.admin.deletions.index',
                 'settings.audit.read' => 'orbit.admin.settings.activity',
+                'social.read' => 'orbit.admin.social.index',
             ] as $permission => $route) {
                 if ($actor?->canPerform($permission)) return redirect()->route($route);
             }
             abort(403);
         })->name('landing');
 
+        Route::get('/social-graph', [AdminSocialGraphController::class, 'index'])
+            ->middleware(RequireAdminPermission::class.':social.read')->name('social.index');
         Route::get('/deletion-requests', [AdminProfileController::class, 'deletionRequests'])
             ->middleware(RequireAdminPermission::class.':deletions.read')->name('deletions.index');
         Route::get('/settings-activity', [AdminProfileController::class, 'settingsActivity'])
