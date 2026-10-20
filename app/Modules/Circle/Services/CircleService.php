@@ -157,6 +157,7 @@ final class CircleService
     /** Targeted invitation only; no reusable join links until token policy approval. */
     public function invite(string $id, string $user, string $invitee): array
     {
+        if (config('orbit_circle.targeted_invites_enabled') !== true) abort(404,'Invitation unavailable.');
         return DB::transaction(function () use ($id,$user,$invitee): array {
             $this->circle($id,$user,true,true);
             if ($user === $invitee || !$this->active($invitee)
@@ -182,6 +183,7 @@ final class CircleService
 
     public function invites(string $id, string $user, int $page): array
     {
+        if (config('orbit_circle.targeted_invites_enabled') !== true) abort(404,'Invitation unavailable.');
         $this->circle($id,$user,true);
         $items = DB::table('circle_invites')->where('circle_id',$id)
             ->orderByDesc('created_at')->paginate(20,['id','status','created_at'],'page',$page);
@@ -191,6 +193,7 @@ final class CircleService
 
     public function incoming(string $user, int $page): array
     {
+        if (config('orbit_circle.targeted_invites_enabled') !== true) return ['items'=>[],'page'=>1,'has_more'=>false];
         $items = DB::table('circle_invites')->where('invitee_id',$user)->where('status','pending')
             ->orderByDesc('created_at')->paginate(20,['*'],'page',$page);
         $result = [];
@@ -207,6 +210,7 @@ final class CircleService
 
     public function answer(string $id, string $user, bool $accept): array
     {
+        if (config('orbit_circle.targeted_invites_enabled') !== true) abort(404,'Invitation unavailable.');
         return DB::transaction(function () use ($id,$user,$accept): array {
             // Lock circle before invite, consistent with invitation sender.
             $hint = DB::table('circle_invites')->where('id',$id)->where('invitee_id',$user)->first();
@@ -248,6 +252,7 @@ final class CircleService
 
     public function revoke(string $id, string $user, string $inviteId): void
     {
+        if (config('orbit_circle.targeted_invites_enabled') !== true) abort(404,'Invitation unavailable.');
         DB::transaction(function () use ($id,$user,$inviteId): void {
             $this->circle($id,$user,true,true);
             $row = DB::table('circle_invites')->where('id',$inviteId)
@@ -288,6 +293,7 @@ final class CircleService
     /** Role escalation other than owner-managed member restrictions needs policy approval. */
     public function changeRole(string $id, string $user, string $target, string $role): void
     {
+        if (config('orbit_circle.role_changes_enabled') !== true) abort(404,'Role changes unavailable.');
         DB::transaction(function () use ($id,$user,$target,$role): void {
             $circle = $this->circle($id,$user,true,true);
             if ($circle->owner_id === $target) abort(409,'Owner role cannot be edited.');
