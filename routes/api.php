@@ -26,6 +26,8 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
         Route::middleware(EnsureCircleM5Enabled::class)->group(function (): void {
         // M5 private Circles: no public directory, no passive membership consent.
+        Route::get('/me/circles/primary', [CircleController::class, 'primary']);
+        Route::put('/me/circles/primary', [CircleController::class, 'choosePrimary'])->middleware('throttle:15,1');
         Route::get('/circles', [CircleController::class, 'listing']);
         Route::post('/circles', [CircleController::class, 'create'])->middleware('throttle:10,1');
         Route::get('/circles/archived', [CircleController::class, 'archived']);
