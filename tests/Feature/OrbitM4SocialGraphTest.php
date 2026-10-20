@@ -71,12 +71,12 @@ final class OrbitM4SocialGraphTest extends TestCase
         [$a,$ta] = $this->identity('discovera');
         [$b] = $this->identity('discoverb');
         $r = $this->auth($ta)->getJson('/api/v1/people/search?username='.$b->username);
-        $r->assertOk()->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.id', $b->id)
-            ->assertJsonMissingPath('data.0.bio')
-            ->assertJsonMissingPath('data.0.email')
-            ->assertJsonMissingPath('data.0.location');
-        $this->auth($ta)->getJson('/api/v1/people/search?username=discover')->assertJsonCount(0,'data');
+        $r->assertOk()->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id', $b->id)
+            ->assertJsonMissingPath('data.items.0.bio')
+            ->assertJsonMissingPath('data.items.0.email')
+            ->assertJsonMissingPath('data.items.0.location');
+        $this->auth($ta)->getJson('/api/v1/people/search?username=discover')->assertJsonCount(1,'data.items');
         $this->auth($ta)->getJson('/api/v1/people/'.$b->id.'/preview')->assertOk()
             ->assertJsonMissingPath('data.circle_memberships');
     }
@@ -146,7 +146,7 @@ final class OrbitM4SocialGraphTest extends TestCase
         $this->assertDatabaseCount('friendships',0);
         $this->auth($tb)->getJson('/api/v1/people/'.$a->id.'/preview')->assertNotFound();
         $this->auth($tb)->getJson('/api/v1/people/search?username='.$a->username)
-            ->assertOk()->assertJsonCount(0,'data');
+            ->assertOk()->assertJsonCount(0,'data.items');
         $this->auth($tb)->postJson('/api/v1/friends/requests',['recipient_id'=>$a->id])->assertNotFound();
         $this->auth($ta)->getJson('/api/v1/me/blocks')->assertOk()->assertJsonCount(1,'data.items');
         $this->auth($ta)->deleteJson('/api/v1/me/blocks/'.$b->id)
@@ -269,8 +269,108 @@ final class OrbitM4SocialGraphTest extends TestCase
         $b->update(['status'=>'suspended']);
         $this->auth($ta)->getJson('/api/v1/people/'.$b->id.'/preview')->assertNotFound();
         $this->auth($ta)->getJson('/api/v1/people/search?username='.$b->username)
-            ->assertOk()->assertJsonCount(0,'data');
+            ->assertOk()->assertJsonCount(0,'data.items');
         $this->auth($ta)->postJson('/api/v1/friends/requests',['recipient_id'=>$b->id])->assertNotFound();
+    }
+
+    public function test_search_by_display_name_or_username_hides_opted_out_people(): void
+    {
+        [$a,$ta] = $this->identity('a');
+        [$b] = $this->identity('b');
+        $b->update(['display_name'=>'Fatima Noor']);
+        $this->auth($ta)->getJson('/api/v1/people/search?q=Fatima')
+            ->assertOk()->assertJsonPath('data.items.0.id',$b->id);
+        $this->auth($ta)->getJson('/api/v1/people/search?q=Noor')
+            ->assertOk()->assertJsonPath('data.items.0.id',$b->id);
+        $this->auth($ta)->getJson('/api/v1/people/search?q='.$b->username)
+            ->assertOk()->assertJsonPath('data.items.0.id',$b->id);
+        $this->auth($ta)->getJson('/api/v1/people/search?q=f')
+            ->assertUnprocessable();
+        [$other,$tokenB] = [$b, app(\App\Modules\Identity\Services\TokenService::class)->issue(
+            $b, \App\Models\OrbitDevice::query()->where('user_id',$b->id)->firstOrFail(), null)['access_token']];
+        $this->auth($tokenB)->patchJson('/api/v1/me/social/discovery',
+            ['discoverable_by_name'=>false])->assertOk();
+        $this->auth($ta)->getJson('/api/v1/people/search?q=Fatima')
+            ->assertOk()->assertJsonCount(0,'data.items');
+        $this->auth($ta)->getJson('/api/v1/people/search?q='.$b->username)
+            ->assertOk()->assertJsonCount(1,'data.items');
+        $this->auth($tokenB)->patchJson('/api/v1/me/social/discovery',
+            ['discoverable'=>false])->assertOk();
+        $this->auth($ta)->getJson('/api/v1/people/search?q='.$b->username)
+            ->assertOk()->assertJsonCount(0,'data.items');
+        $this->auth($ta)->getJson('/api/v1/people/'.$b->id.'/preview')->assertNotFound();
+        $this->auth($tokenB)->patchJson('/api/v1/me/social/discovery',
+            ['allow_friend_requests'=>false])->assertOk();
+        $this->auth($ta)->postJson('/api/v1/friends/requests',
+            ['recipient_id'=>$b->id])->assertNotFound();
+    }
+
+    public function test_contact_matching_requires_both_consent_and_target_opt_in_without_storing_contacts(): void
+    {
+        [$a,$ta] = $this->identity('a');
+        [$b,$tb] = $this->identity('b');
+        $email = 'private.contact@orbit.example';
+        DB::table('user_identities')->insert([
+            'id'=>(string) Str::uuid(), 'user_id'=>$b->id,'provider'=>'email',
+            'provider_subject'=>$email, 'email_norm'=>$email,
+            'verified_at'=>now(), 'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $body = ['consent_confirmed'=>true,'contacts'=>[
+            ['type'=>'email','value'=>$email],
+        ]];
+        $this->auth($ta)->postJson('/api/v1/people/contacts/match',
+            [...$body,'consent_confirmed'=>false])->assertUnprocessable();
+        $this->auth($ta)->postJson('/api/v1/people/contacts/match',$body)
+            ->assertOk()->assertJsonCount(0,'data.items');
+        $this->auth($tb)->patchJson('/api/v1/me/social/discovery',
+            ['discoverable_by_contacts'=>true])->assertOk();
+        $this->auth($ta)->postJson('/api/v1/people/contacts/match',$body)
+            ->assertOk()->assertJsonCount(1,'data.items')
+            ->assertJsonMissing(['value'=>$email]);
+        $this->assertDatabaseCount('social_contact_lookup_quotas',1);
+        $this->assertEquals(2,
+            DB::table('social_contact_lookup_quotas')->where('user_id',$a->id)
+                ->value('contact_count'));
+    }
+
+    public function test_expiring_one_time_friend_invitation_and_revoke(): void
+    {
+        [$a,$ta] = $this->identity('a');
+        [$b,$tb] = $this->identity('b');
+        $created = $this->auth($ta)->postJson('/api/v1/friends/invites')->assertCreated()->json('data');
+        $this->assertStringContainsString('/invite/friend/', $created['invite_url']);
+        $code = $created['invite_code'];
+        $this->get('/invite/friend/'.$code)->assertOk()->assertSee('Orbit');
+        $this->auth($tb)->postJson('/api/v1/friends/invites/preview',
+            ['invite_code'=>$code])->assertOk()->assertJsonPath('data.username',$a->username);
+        $id = $this->auth($tb)->postJson('/api/v1/friends/invites/redeem',
+            ['invite_code'=>$code])->assertCreated()->json('data.id');
+        $this->auth($tb)->postJson('/api/v1/friends/invites/redeem',
+            ['invite_code'=>$code])->assertNotFound();
+        $this->auth($ta)->postJson('/api/v1/friends/requests/'.$id.'/accept')
+            ->assertOk()->assertJsonPath('data.status','accepted');
+        $revoked = $this->auth($ta)->postJson('/api/v1/friends/invites')->assertCreated()->json('data');
+        $this->auth($tb)->deleteJson('/api/v1/friends/invites/'.$revoked['id'])->assertNotFound();
+        $this->auth($ta)->deleteJson('/api/v1/friends/invites/'.$revoked['id'])
+            ->assertOk()->assertJsonPath('data.revoked',true);
+        $this->auth($tb)->postJson('/api/v1/friends/invites/preview',
+            ['invite_code'=>$revoked['invite_code']])->assertNotFound();
+    }
+
+    public function test_outgoing_cancellation_is_sender_only_and_rejection_has_cooldown(): void
+    {
+        [$a,$ta] = $this->identity('a');
+        [$b,$tb] = $this->identity('b');
+        $id = $this->auth($ta)->postJson('/api/v1/friends/requests',
+            ['recipient_id'=>$b->id])->assertCreated()->json('data.id');
+        $this->auth($tb)->postJson('/api/v1/friends/requests/'.$id.'/cancel')->assertNotFound();
+        $this->auth($ta)->postJson('/api/v1/friends/requests/'.$id.'/cancel')
+            ->assertOk()->assertJsonPath('data.status','cancelled');
+        $next = $this->auth($ta)->postJson('/api/v1/friends/requests',
+            ['recipient_id'=>$b->id])->assertCreated()->json('data.id');
+        $this->auth($tb)->postJson('/api/v1/friends/requests/'.$next.'/decline')->assertOk();
+        $this->auth($ta)->postJson('/api/v1/friends/requests',
+            ['recipient_id'=>$b->id])->assertStatus(429);
     }
 
     public function test_new_account_daily_cap_is_enforced_without_a_global_directory(): void
