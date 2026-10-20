@@ -19,6 +19,7 @@ final class OrbitM5OwnershipTest extends TestCase
         parent::setUp();
         config()->set('orbit_circle.enabled',true);
         config()->set('orbit_circle.targeted_invites_enabled',true);
+        config()->set('orbit_circle.targeted_invite_lifetime_hours',168);
     }
 
     private function makePerson(string $label): array
