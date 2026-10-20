@@ -50,6 +50,13 @@ final class SocialGraphController extends Controller
             (int) ($data['page'] ?? 1), $social));
     }
 
+    /** Authenticated revision, to reject stale mobile relationship snapshots. */
+    public function revision(Request $request, SocialGraphService $social): JsonResponse
+    {
+        [$viewer] = $this->identity($request);
+        return $this->send(['revision' => $social->currentRevision($viewer)]);
+    }
+
     public function discovery(Request $request,
         \App\Modules\Social\Services\SocialDiscoveryService $discovery): JsonResponse
     {
