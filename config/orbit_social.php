@@ -1,13 +1,18 @@
 <?php
 
 return [
-    // Provisional anti-abuse limits pending product signoff (M4 audit D07).
-    // Conservative enough for new-user onboarding; all operations still require a trusted session.
+    // Safe defaults used where the client's separate API/Realtime spec is absent.
+    // These are server-controlled limits, not entitlement gates.
     'daily_outbound_limit' => (int) env('ORBIT_SOCIAL_DAILY_OUTBOUND_LIMIT', 20),
     'new_account_daily_limit' => (int) env('ORBIT_SOCIAL_NEW_ACCOUNT_DAILY_LIMIT', 10),
     'pending_outbound_limit' => (int) env('ORBIT_SOCIAL_PENDING_OUTBOUND_LIMIT', 20),
-    'search_min_chars' => 3,
-    'search_limit' => 10,
-    // Only exact, user-entered usernames; no contact book, full-directory or phone/email enumeration.
-    'search_exact_username_only' => true,
+    'decline_cooldown_hours' => (int) env('ORBIT_SOCIAL_DECLINE_COOLDOWN_HOURS', 24),
+    'search_min_chars' => 2,
+    'search_page_size' => 10,
+    'search_page_max' => 20,
+    'search_per_account_per_minute' => 60,
+    'contact_batch_limit' => 25,
+    'contact_daily_lookup_limit' => 500,
+    'friend_invite_lifetime_days' => 7,
+    'active_friend_invite_limit' => 5,
 ];
