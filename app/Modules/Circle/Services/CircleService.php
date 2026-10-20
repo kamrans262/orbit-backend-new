@@ -36,6 +36,15 @@ final class CircleService
         return $circle;
     }
 
+    private function authorizeInvites(string $id, string $user, bool $lock = false): object
+    {
+        $circle=$this->circle($id,$user,false,$lock);
+        $role=DB::table('circle_members')->where('circle_id',$id)
+            ->where('user_id',$user)->whereNull('removed_at')->value('role');
+        if (!in_array($role,['owner','admin'],true)) abort(404,'Circle unavailable.');
+        return $circle;
+    }
+
     private function change(string $id, string $event): void
     {
         DB::table('circles')->where('id',$id)->increment('revision',1,['updated_at'=>now()]);
@@ -136,6 +145,15 @@ final class CircleService
         $role = DB::table('circle_members')->where('circle_id',$id)
             ->where('user_id',$user)->value('role');
         return [...$this->format($circle,$user),'role'=>$role,
+            'capabilities'=>[
+                'edit'=>$role==='owner',
+                'invite'=>in_array($role,['owner','admin'],true),
+                'remove_members'=>$role==='owner',
+                'change_roles'=>$role==='owner' && config('orbit_circle.role_changes_enabled')===true,
+                'transfer_owner'=>$role==='owner' && config('orbit_circle.ownership_transfer_enabled')===true,
+                'archive'=>$role==='owner' && config('orbit_circle.archive_enabled')===true,
+                'leave'=>$role!=='owner',
+            ],
             'sharing_enabled'=>false]; // Never assert consent through membership alone.
     }
 
@@ -178,7 +196,7 @@ final class CircleService
         $ttl = (int) config('orbit_circle.targeted_invite_lifetime_hours',0);
         if ($ttl < 1 || $ttl > 720) abort(404,'Invitation policy unavailable.');
         return DB::transaction(function () use ($id,$user,$invitee,$ttl): array {
-            $this->circle($id,$user,true,true);
+            $this->authorizeInvites($id,$user,true);
             if ($user === $invitee || !$this->active($invitee)
                 || $this->social->isBlockedEitherWay($user,$invitee)) abort(404,'Person unavailable.');
             // No automatic admission from friendship; friendship only permits inviting.
@@ -211,7 +229,7 @@ final class CircleService
     public function invites(string $id, string $user, int $page): array
     {
         if (config('orbit_circle.targeted_invites_enabled') !== true) abort(404,'Invitation unavailable.');
-        $this->circle($id,$user,true);
+        $this->authorizeInvites($id,$user);
         $items = DB::table('circle_invites')->where('circle_id',$id)
             ->orderByDesc('created_at')->paginate(20,['id','invitee_id','status','created_at','resolved_at'],'page',$page);
         $safe = [];
@@ -338,10 +356,11 @@ final class CircleService
     {
         if (config('orbit_circle.targeted_invites_enabled') !== true) abort(404,'Invitation unavailable.');
         DB::transaction(function () use ($id,$user,$inviteId): void {
-            $this->circle($id,$user,true,true);
+            $circle=$this->authorizeInvites($id,$user,true);
             $row = DB::table('circle_invites')->where('id',$inviteId)
                 ->where('circle_id',$id)->lockForUpdate()->first();
             if (!$row || $row->status !== 'pending') abort(404,'Invitation unavailable.');
+            if ($circle->owner_id !== $user && $row->inviter_id !== $user) abort(404,'Invitation unavailable.');
             DB::table('circle_invites')->where('id',$inviteId)->update([
                 'status'=>'revoked','pending_pair_key'=>null,'resolved_at'=>now(),'updated_at'=>now(),
             ]);
