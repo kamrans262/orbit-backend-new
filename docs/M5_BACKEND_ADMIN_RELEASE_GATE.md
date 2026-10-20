@@ -1,4 +1,4 @@
-# Orbit M5 — Circles Backend & Admin rollout gate
+> **Update — approved conservative M5 Stage 2 implementation:** This document contains an earlier gap snapshot. The seven-day recipient-bound invite code, explicit consent, four-role capabilities, owner succession, reversible archive/restore, and safe primary Circle selection are now implemented behind default-off feature switches. For the current API contract and remaining Stage 3/4 boundaries, use [M5_STAGE2_APPROVED_POLICY_AND_FLUTTER_API_HANDOFF.md](M5_STAGE2_APPROVED_POLICY_AND_FLUTTER_API_HANDOFF.md). No Hostinger or Flutter deployment has occurred.\n\n# Orbit M5 — Circles Backend & Admin rollout gate
 
 Base: deployed M4 backend `cbe8347` (Laravel 13 / MariaDB / Blade Admin).
 M5 feature branch: `feature/m5-circles-backend-admin`.
