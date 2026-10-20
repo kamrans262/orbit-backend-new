@@ -45,13 +45,30 @@ final class CircleService
         ]);
     }
 
-    private function format(object $row): array
+    private function format(object $row, string $viewer): array
     {
         return [
             'id'=>$row->id,'name'=>$row->name,'icon_key'=>$row->icon_key,
             'color_value'=>$row->color_value,'owner_id'=>$row->owner_id,
             'revision'=>(int) $row->revision,
+            'member_count'=>$this->visibleMemberCount($row->id,$viewer),
         ];
+    }
+
+    private function visibleMemberCount(string $circleId, string $viewer): int
+    {
+        return (int) DB::table('circle_members as m')
+            ->join('orbit_users as u','u.id','=','m.user_id')
+            ->where('m.circle_id',$circleId)->whereNull('m.removed_at')
+            ->where('u.status','active')->whereNull('u.deletion_requested_at')
+            ->whereNotExists(function ($q) use ($viewer): void {
+                $q->selectRaw('1')->from('blocks as b')->where(function ($b) use ($viewer): void {
+                    $b->where(fn ($x) => $x->where('b.blocker_id',$viewer)
+                        ->whereColumn('b.blocked_id','m.user_id'))
+                      ->orWhere(fn ($x) => $x->where('b.blocked_id',$viewer)
+                        ->whereColumn('b.blocker_id','m.user_id'));
+                });
+            })->count();
     }
 
     public function listing(string $user, int $page): array
@@ -65,7 +82,7 @@ final class CircleService
         foreach ($items->items() as $circle) {
             if (!$this->active($circle->owner_id)
                 || $this->social->isBlockedEitherWay($user,$circle->owner_id)) continue;
-            $result[] = [...$this->format($circle),'role'=>$circle->role];
+            $result[] = [...$this->format($circle,$user),'role'=>$circle->role];
         }
         return ['items'=>$result,'page'=>$items->currentPage(),'has_more'=>$items->hasMorePages()];
     }
@@ -118,7 +135,7 @@ final class CircleService
         $circle = $this->circle($id,$user);
         $role = DB::table('circle_members')->where('circle_id',$id)
             ->where('user_id',$user)->value('role');
-        return [...$this->format($circle),'role'=>$role,
+        return [...$this->format($circle,$user),'role'=>$role,
             'sharing_enabled'=>false]; // Never assert consent through membership alone.
     }
 
