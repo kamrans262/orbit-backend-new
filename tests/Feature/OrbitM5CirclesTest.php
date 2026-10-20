@@ -82,6 +82,39 @@ final class OrbitM5CirclesTest extends TestCase
         $this->assertDatabaseCount('circle_members',2);
     }
 
+    public function test_idempotency_key_replays_same_circle_not_another(): void
+    {
+        [$a,$ta] = $this->person('alpha');
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+        $id = $this->withToken($ta)->withHeader('Idempotency-Key','orbit-m5-onboarding-001')
+            ->postJson('/api/v1/circles',['name'=>'Trusted family'])->assertCreated()->json('data.id');
+        $replay = $this->withToken($ta)->withHeader('Idempotency-Key','orbit-m5-onboarding-001')
+            ->postJson('/api/v1/circles',['name'=>'Trusted family'])->assertCreated()->json('data.id');
+        $this->assertSame($id,$replay);
+        $this->withToken($ta)->withHeader('Idempotency-Key','orbit-m5-onboarding-001')
+            ->postJson('/api/v1/circles',['name'=>'Different'])->assertStatus(409);
+        $this->assertDatabaseCount('circles',1);
+    }
+
+    public function test_circle_access_policy_cannot_grant_protected_data_or_subscriptions(): void
+    {
+        [$a,$ta] = $this->person('alpha');
+        [$b,$tb] = $this->person('bravo');
+        $id = $this->createCircle($ta);
+        $acl = app(\App\Modules\Circle\Services\CircleAccessPolicy::class);
+        $this->assertTrue($acl->isMember($id,$a->id));
+        $this->assertFalse($acl->isMember($id,$b->id));
+        $this->assertFalse($acl->canAccessProtected($id,$a->id,$b->id,'location'));
+        $this->assertFalse($acl->canSubscribe($id,$a->id));
+        $this->beFriends($ta,$tb,$b->id);
+        $invite = $this->withToken($ta)->postJson('/api/v1/circles/'.$id.'/invites',
+            ['invitee_id'=>$b->id])->assertCreated()->json('data.id');
+        $this->withToken($tb)->postJson('/api/v1/circles/invites/'.$invite.'/accept')->assertOk();
+        $this->assertTrue($acl->isMember($id,$b->id));
+        $this->assertFalse($acl->canAccessProtected($id,$a->id,$b->id,'location'));
+        $this->assertFalse($acl->canAccessProtected($id,$a->id,$b->id,'message'));
+    }
+
     public function test_owner_can_rename_but_nonmember_cannot_read_or_edit(): void
     {
         [$a,$ta] = $this->person('alpha');
