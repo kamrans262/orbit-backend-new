@@ -40,6 +40,14 @@
     @endif
   </section>
 </div>
+@if(auth()->guard('admin')->user()->canPerform('social.read'))
+<section class="panel" style="margin-top:20px">
+  <div class="panel-head"><div><p class="eyebrow">SOCIAL GRAPH / MILESTONE 04</p><h2>Relationship operations</h2>
+    <p>Review restricted relationship counters and event types without exposing counterparts or private content.</p></div>
+    <a href="{{ route('orbit.admin.social.index',['user_id'=>$orbitUser->id]) }}">Review social metadata →</a>
+  </div>
+</section>
+@endif
 @if($deletionRecord)
 <section class="panel" style="margin-top:20px">
   <div class="panel-head"><div><p class="eyebrow">ACCOUNT LIFECYCLE / MILESTONE 03</p><h2>Deletion request status</h2>
