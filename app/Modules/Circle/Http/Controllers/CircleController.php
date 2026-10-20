@@ -82,6 +82,21 @@ final class CircleController extends Controller
         $page = (int) ($r->validate(['page'=>['sometimes','integer','between:1,100']])['page'] ?? 1);
         return $this->result($circles->incoming($this->viewer($r),$page));
     }
+    public function previewCode(Request $r, CircleService $circles): JsonResponse
+    {
+        $data=$r->validate(['code'=>['required','string','size:40','regex:/^[A-Za-z0-9]+$/D']]);
+        return $this->result($circles->previewCode($this->viewer($r),$data['code']));
+    }
+
+    public function redeemCode(Request $r, CircleService $circles): JsonResponse
+    {
+        $data=$r->validate([
+            'code'=>['required','string','size:40','regex:/^[A-Za-z0-9]+$/D'],
+            'confirmation'=>['required',Rule::in(['JOIN'])],
+        ]);
+        return $this->result($circles->redeemCode($this->viewer($r),$data['code']));
+    }
+
     public function accept(Request $r, CircleService $circles, string $invite): JsonResponse
     {
         return $this->result($circles->answer($invite,$this->viewer($r),true));
