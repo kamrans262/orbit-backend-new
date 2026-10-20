@@ -22,6 +22,7 @@ final class OrbitM5CirclesTest extends TestCase
         parent::setUp();
         config()->set('orbit_circle.enabled', true);
         config()->set('orbit_circle.targeted_invites_enabled', true);
+        config()->set('orbit_circle.targeted_invite_lifetime_hours',168);
         config()->set('orbit_circle.role_changes_enabled', true);
     }
 
