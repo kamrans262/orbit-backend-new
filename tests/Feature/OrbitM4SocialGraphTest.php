@@ -421,17 +421,41 @@ final class OrbitM4SocialGraphTest extends TestCase
         $this->assertDatabaseHas('orbit_users',['id'=>$b->id]);
     }
 
-    public function test_social_revision_is_authenticated_and_increases_after_relationship_change(): void
+    public function test_social_revision_is_authenticated_and_revokes_both_sides_after_block(): void
     {
         [$a,$ta] = $this->identity('a');
-        [$b] = $this->identity('b');
+        [$b,$tb] = $this->identity('b');
         $this->getJson('/api/v1/me/social/revision')->assertUnauthorized();
-        $before = $this->auth($ta)->getJson('/api/v1/me/social/revision')
+
+        $beforeA = $this->auth($ta)->getJson('/api/v1/me/social/revision')
             ->assertOk()->json('data.revision');
-        $this->auth($ta)->postJson('/api/v1/friends/requests',
-            ['recipient_id'=>$b->id])->assertCreated();
-        $this->assertGreaterThan($before, $this->auth($ta)
+        $beforeB = $this->auth($tb)->getJson('/api/v1/me/social/revision')
+            ->assertOk()->json('data.revision');
+        $request = $this->auth($ta)->postJson('/api/v1/friends/requests',
+            ['recipient_id'=>$b->id])->assertCreated()->json('data.id');
+        $this->auth($tb)->postJson('/api/v1/friends/requests/'.$request.'/accept')
+            ->assertOk();
+        $friendRevisionA = $this->auth($ta)->getJson('/api/v1/me/social/revision')
+            ->assertOk()->json('data.revision');
+        $friendRevisionB = $this->auth($tb)->getJson('/api/v1/me/social/revision')
+            ->assertOk()->json('data.revision');
+        $this->assertGreaterThan($beforeA,$friendRevisionA);
+        $this->assertGreaterThan($beforeB,$friendRevisionB);
+        $this->assertTrue(app(SocialGraphService::class)->isFriend($a->id,$b->id));
+
+        $this->auth($ta)->postJson('/api/v1/me/blocks',['user_id'=>$b->id])
+            ->assertCreated();
+        // Revisions notify BOTH participants and any online client must reload
+        // authenticated relationship state before rendering protected actions.
+        $this->assertGreaterThan($friendRevisionA,$this->auth($ta)
             ->getJson('/api/v1/me/social/revision')->assertOk()->json('data.revision'));
+        $this->assertGreaterThan($friendRevisionB,$this->auth($tb)
+            ->getJson('/api/v1/me/social/revision')->assertOk()->json('data.revision'));
+        $this->assertFalse(app(SocialGraphService::class)->isFriend($a->id,$b->id));
+        $this->auth($tb)->getJson('/api/v1/people/'.$a->id.'/preview')->assertNotFound();
+        $this->auth($ta)->getJson('/api/v1/people/'.$b->id.'/preview')->assertNotFound();
+        // Actual realtime subscriber disconnection still requires a transport
+        // dispatcher and delivery verification; revisions are not WebSockets.
     }
 
     public function test_native_app_association_files_default_to_unavailable_and_require_approved_ids(): void
