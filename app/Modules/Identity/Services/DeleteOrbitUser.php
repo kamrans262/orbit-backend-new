@@ -18,6 +18,9 @@ final class DeleteOrbitUser
     {
         return DB::transaction(function () use ($userId, $actor, $reason, $ip, $requestId): array {
             $user = OrbitUser::query()->whereKey($userId)->lockForUpdate()->firstOrFail();
+            if (DB::table('circles')->where('owner_id', $userId)->exists()) {
+                throw new \DomainException('Circle ownership must be resolved before account removal.');
+            }
             $identities = DB::table('user_identities')->where('user_id', $userId)
                 ->get(['provider', 'provider_subject']);
             $deviceIds = DB::table('devices')->where('user_id', $userId)->pluck('id')->all();
