@@ -5,6 +5,7 @@ use App\Modules\Config\Http\Controllers\ConfigBootstrapController;
 use App\Modules\Identity\Http\Controllers\IdentityController;
 use App\Modules\Profile\Http\Controllers\ProfileSettingsController;
 use App\Modules\Identity\Http\Middleware\AuthenticateOrbitToken;
+use App\Modules\Social\Http\Controllers\SocialGraphController;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -19,6 +20,19 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/auth/refresh', [IdentityController::class, 'refresh'])->middleware('throttle:30,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        // M4 social graph: trusted-device auth, per-IP throttles, per-account quotas,
+        // server-side block checks and no-store responses.
+        Route::get('/people/search', [SocialGraphController::class, 'search'])->middleware('throttle:30,1');
+        Route::get('/people/{user}/preview', [SocialGraphController::class, 'preview'])->whereUuid('user')->middleware('throttle:60,1');
+        Route::get('/friends', [SocialGraphController::class, 'friends']);
+        Route::get('/friends/requests', [SocialGraphController::class, 'requests']);
+        Route::post('/friends/requests', [SocialGraphController::class, 'sendRequest'])->middleware('throttle:20,1');
+        Route::post('/friends/requests/{id}/accept', [SocialGraphController::class, 'accept'])->whereUuid('id')->middleware('throttle:30,1');
+        Route::post('/friends/requests/{id}/decline', [SocialGraphController::class, 'decline'])->whereUuid('id')->middleware('throttle:30,1');
+        Route::delete('/friends/{user}', [SocialGraphController::class, 'removeFriend'])->whereUuid('user')->middleware('throttle:30,1');
+        Route::get('/me/blocks', [SocialGraphController::class, 'blocks']);
+        Route::post('/me/blocks', [SocialGraphController::class, 'block'])->middleware('throttle:30,1');
+        Route::delete('/me/blocks/{user}', [SocialGraphController::class, 'unblock'])->whereUuid('user')->middleware('throttle:30,1');
         Route::post('/auth/logout', [IdentityController::class, 'logout']);
         Route::post('/auth/logout-all', [IdentityController::class, 'logoutAll']);
         Route::post('/me/deletion-request', [IdentityController::class, 'requestDeletion']);
