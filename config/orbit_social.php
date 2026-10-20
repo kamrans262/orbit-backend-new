@@ -15,4 +15,8 @@ return [
     'contact_daily_lookup_limit' => 500,
     'friend_invite_lifetime_days' => 7,
     'active_friend_invite_limit' => 5,
+    // Must be configured from actual Apple Team/Bundle IDs and Android signing SHA256.
+    'ios_app_id' => env('ORBIT_IOS_APP_ID', ''),
+    'android_package' => env('ORBIT_ANDROID_PACKAGE', ''),
+    'android_sha256' => env('ORBIT_ANDROID_SHA256', ''),
 ];
