@@ -50,6 +50,16 @@ final class DeleteOrbitUser
             $removedSessions = DB::table('orbit_sessions')->where('user_id', $userId)->delete();
             $removedDevices = DB::table('devices')->where('user_id', $userId)->delete();
             $removedIdentities = DB::table('user_identities')->where('user_id', $userId)->delete();
+            // M4 fanout is explicitly removed before the user row. FK cascades
+            // remain defense-in-depth; retain only aggregate counts in audit.
+            $socialRequests = DB::table('friend_requests')
+                ->where('sender_id', $userId)->orWhere('recipient_id', $userId)->delete();
+            $socialFriends = DB::table('friendships')
+                ->where('user_low_id', $userId)->orWhere('user_high_id', $userId)->delete();
+            $socialBlocks = DB::table('blocks')
+                ->where('blocker_id', $userId)->orWhere('blocked_id', $userId)->delete();
+            $socialRevisions = DB::table('social_graph_revisions')
+                ->where('user_id', $userId)->delete();
             $user->delete();
 
             // Preserve the immutable audit chain without retaining the deleted
@@ -58,6 +68,8 @@ final class DeleteOrbitUser
                 'identities' => $removedIdentities, 'devices' => $removedDevices,
                 'sessions' => $removedSessions, 'refresh_history' => $removedHistory,
                 'otp_challenges' => $removedChallenges, 'identity_events' => $removedEvents,
+                'friend_requests' => $socialRequests, 'friendships' => $socialFriends,
+                'blocks' => $socialBlocks, 'social_revisions' => $socialRevisions,
             ];
             $last = DB::table('admin_audit_log')->orderByDesc('created_at')->lockForUpdate()->first();
             $prev = $last?->event_hash;
