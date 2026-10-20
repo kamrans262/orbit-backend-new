@@ -151,6 +151,12 @@ final class SocialGraphController extends Controller
         return $this->send($social->respond($viewer, $id, false, $device));
     }
 
+    public function cancel(Request $request, SocialGraphService $social, string $id): JsonResponse
+    {
+        [$viewer, $device] = $this->identity($request);
+        return $this->send($social->cancel($viewer, $id, $device));
+    }
+
     public function removeFriend(Request $request, SocialGraphService $social, string $user): JsonResponse
     {
         [$viewer, $device] = $this->identity($request);
