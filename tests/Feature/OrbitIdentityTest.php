@@ -559,4 +559,114 @@ final class OrbitIdentityTest extends TestCase
         $this->get('/admin/users')->assertRedirect(route('orbit.admin.login'));
         $this->get('/api/v1/me/devices')->assertUnauthorized();
     }
+
+    public function test_lost_only_device_can_recover_with_password_and_new_otp_without_data_loss(): void
+    {
+        Mail::fake();
+        $first = $this->signIn('recover@example.test');
+        $this->registerTrustedDevice($first);
+        $userId = $first['user']['id'];
+        OrbitUser::whereKey($userId)->update(['display_name' => 'Preserve My Profile',
+            'username' => 'recover_member',
+            'password_hash' => app(OrbitPasswordHasher::class)->make('RecoveryPassword123!')]);
+
+        $second = $this->signIn('recover@example.test', (string) Str::uuid7());
+        $this->withToken($second['access_token'])->postJson('/api/v1/devices/register', [
+            'public_key' => base64_encode(random_bytes(32)),
+        ])->assertOk()->assertJsonPath('data.trust_state', 'pending');
+        $this->withToken($second['access_token'])->getJson('/api/v1/me')->assertForbidden();
+
+        $this->withToken($second['access_token'])->postJson('/api/v1/devices/recovery/request', [
+            'recipient' => 'recover@example.test', 'password' => 'RecoveryPassword123!',
+        ])->assertStatus(202)->assertJsonMissingPath('data.code');
+        $challenge = DB::table('otp_challenges')->where('purpose', 'device_recovery')
+            ->orderByDesc('created_at')->first();
+        $this->assertNotNull($challenge);
+        $secret = hash('sha256', config('app.key').'|orbit-otp-v1', true);
+        DB::table('otp_challenges')->where('id', $challenge->id)->update([
+            'code_hash' => hash_hmac('sha256', $challenge->id.'|472819', $secret),
+        ]);
+
+        $payload = [
+            'recipient' => 'recover@example.test', 'password' => 'RecoveryPassword123!',
+            'code' => '472819', 'confirm_revoke_others' => true,
+        ];
+        $this->withToken($second['access_token'])
+            ->postJson('/api/v1/devices/recovery/complete', $payload)
+            ->assertOk()->assertJsonPath('data.trust_state', 'trusted');
+        $this->withToken($second['access_token'])->getJson('/api/v1/me')->assertOk()
+            ->assertJsonPath('data.id', $userId);
+        $this->withToken($first['access_token'])->getJson('/api/v1/me')->assertUnauthorized();
+        $this->assertDatabaseHas('orbit_users', [
+            'id' => $userId, 'display_name' => 'Preserve My Profile', 'username' => 'recover_member',
+        ]);
+        $this->assertDatabaseCount('orbit_users', 1);
+        $this->assertSame(1, OrbitDevice::where('trust_state', 'trusted')
+            ->whereNull('revoked_at')->count());
+        $this->assertSame(1, OrbitSession::whereNull('revoked_at')->count());
+        $this->withToken($second['access_token'])
+            ->postJson('/api/v1/devices/recovery/complete', $payload)->assertForbidden();
+    }
+
+    public function test_device_recovery_rejects_unregistered_devices_wrong_credentials_and_reset_codes(): void
+    {
+        Mail::fake();
+        $first = $this->signIn('locked@example.test');
+        $this->registerTrustedDevice($first);
+        OrbitUser::whereKey($first['user']['id'])->update([
+            'password_hash' => app(OrbitPasswordHasher::class)->make('RecoveryPassword123!'),
+        ]);
+        $second = $this->signIn('locked@example.test', (string) Str::uuid7());
+        $endpoint = '/api/v1/devices/recovery/request';
+        $data = ['recipient' => 'locked@example.test', 'password' => 'RecoveryPassword123!'];
+        $this->withToken($second['access_token'])->postJson($endpoint, $data)->assertForbidden();
+        $this->withToken($second['access_token'])
+            ->postJson('/api/v1/devices/register', [
+                'public_key' => base64_encode(random_bytes(32)),
+            ])->assertOk();
+        $this->withToken($first['access_token'])->postJson($endpoint, $data)->assertForbidden();
+        $this->withToken($second['access_token'])->postJson($endpoint, [
+            'recipient' => 'locked@example.test', 'password' => 'WrongPassword',
+        ])->assertUnprocessable();
+        $this->withToken($second['access_token'])->postJson($endpoint, [
+            'recipient' => 'other@example.test', 'password' => 'RecoveryPassword123!',
+        ])->assertUnprocessable();
+        $this->withToken($second['access_token'])->postJson($endpoint, $data)
+            ->assertStatus(202);
+        $this->createdCode('locked@example.test', '472819', 'reset');
+        $this->withToken($second['access_token'])
+            ->postJson('/api/v1/devices/recovery/complete', [
+                ...$data, 'code' => '472819', 'confirm_revoke_others' => true,
+            ])->assertUnprocessable();
+        $this->withToken($second['access_token'])->getJson('/api/v1/me')->assertForbidden();
+        $this->withToken($first['access_token'])->getJson('/api/v1/me')->assertOk();
+        $this->assertSame(1, OrbitDevice::where('trust_state', 'trusted')
+            ->whereNull('revoked_at')->count());
+    }
+
+    public function test_recovery_does_not_authorize_other_users_or_unconfirmed_revocation(): void
+    {
+        Mail::fake();
+        $first = $this->signIn('owner@example.test');
+        $this->registerTrustedDevice($first);
+        OrbitUser::whereKey($first['user']['id'])->update([
+            'password_hash' => app(OrbitPasswordHasher::class)->make('RecoveryPassword123!'),
+        ]);
+        $second = $this->signIn('owner@example.test', (string) Str::uuid7());
+        $this->withToken($second['access_token'])
+            ->postJson('/api/v1/devices/register', [
+                'public_key' => base64_encode(random_bytes(32)),
+            ])->assertOk();
+        $this->withToken($second['access_token'])->postJson('/api/v1/devices/recovery/request', [
+            'recipient' => 'owner@example.test', 'password' => 'RecoveryPassword123!',
+        ])->assertStatus(202);
+        $this->withToken($second['access_token'])
+            ->postJson('/api/v1/devices/recovery/complete', [
+                'recipient' => 'owner@example.test', 'password' => 'RecoveryPassword123!',
+                'code' => '000000', 'confirm_revoke_others' => false,
+            ])->assertUnprocessable();
+        $this->withToken($second['access_token'])->getJson('/api/v1/me')->assertForbidden();
+        $this->withToken($first['access_token'])->getJson('/api/v1/me')->assertOk();
+    }
+
 }
