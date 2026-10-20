@@ -39,7 +39,7 @@ final class SocialContactController extends Controller
                 ->where('user_id', $viewer)->where('quota_date', $today)
                 ->lockForUpdate()->first();
             $quantity = count($data['contacts']);
-            if ($quota->contact_count + $quantity > 500) {
+            if ($quota->contact_count + $quantity > (int) config('orbit_social.contact_daily_lookup_limit', 500)) {
                 abort(429, 'Contact lookup limit reached.');
             }
             DB::table('social_contact_lookup_quotas')->where('user_id',$viewer)
