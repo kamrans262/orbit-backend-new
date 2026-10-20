@@ -117,7 +117,7 @@ final class SocialGraphService
             // repeat invitations from this actor for 24 hours.
             if (DB::table('friend_requests')->where('sender_id', $sender)
                 ->where('recipient_id', $recipient)->where('status', 'declined')
-                ->where('responded_at', '>', now()->subDay())->exists()) {
+                ->where('responded_at', '>', now()->subHours((int) config('orbit_social.decline_cooldown_hours', 24)))->exists()) {
                 abort(429, 'Please wait before sending another request.');
             }
             $accountAge = OrbitUser::query()->findOrFail($sender)->created_at;
