@@ -50,6 +50,21 @@ final class DeleteOrbitUser
             $removedSessions = DB::table('orbit_sessions')->where('user_id', $userId)->delete();
             $removedDevices = DB::table('devices')->where('user_id', $userId)->delete();
             $removedIdentities = DB::table('user_identities')->where('user_id', $userId)->delete();
+            // Revoke surviving counterpart caches before removing graph rows;
+            // a deleted account must never leave stale friend permissions.
+            $counterparts = array_merge(
+                DB::table('friend_requests')->where('sender_id', $userId)->pluck('recipient_id')->all(),
+                DB::table('friend_requests')->where('recipient_id', $userId)->pluck('sender_id')->all(),
+                DB::table('friendships')->where('user_low_id', $userId)->pluck('user_high_id')->all(),
+                DB::table('friendships')->where('user_high_id', $userId)->pluck('user_low_id')->all(),
+                DB::table('blocks')->where('blocker_id', $userId)->pluck('blocked_id')->all(),
+                DB::table('blocks')->where('blocked_id', $userId)->pluck('blocker_id')->all()
+            );
+            $counterparts = array_values(array_diff(array_unique($counterparts), [$userId]));
+            if ($counterparts) DB::table('social_graph_revisions')
+                ->whereIn('user_id', $counterparts)
+                ->increment('revision', 1, ['updated_at' => now()]);
+
             // M4 fanout is explicitly removed before the user row. FK cascades
             // remain defense-in-depth; retain only aggregate counts in audit.
             $socialRequests = DB::table('friend_requests')
