@@ -83,6 +83,14 @@ final class SocialGraphService
                 ->increment('revision', 1, ['updated_at' => now()]);
         }
         app(TokenService::class)->event($a, $device, $event, 'social_graph');
+        // Persist a minimal event in the same transaction as the graph change.
+        // A later authorized delivery worker can revoke subscribers and
+        // invalidate device caches; M4 does not falsely claim WebSocket delivery.
+        DB::table('social_graph_outbox')->insert([
+            'id' => (string) Str::uuid7(),
+            'actor_id' => $a, 'subject_id' => $b,
+            'event_type' => $event, 'created_at' => now(),
+        ]);
     }
 
     public function currentRevision(string $user): int
@@ -158,7 +166,7 @@ final class SocialGraphService
                     'user_low_id' => $low, 'user_high_id' => $high, 'created_at' => now(),
                 ]);
             }
-            $this->revision($row->sender_id, $row->recipient_id, $device,
+            $this->revision($actor, $row->sender_id, $device,
                 $accept ? 'social.request_accepted' : 'social.request_declined');
             return ['id' => $row->id, 'status' => $status];
         }, 3);
