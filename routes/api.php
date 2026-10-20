@@ -35,6 +35,7 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('/circles/{circle}', [CircleController::class, 'update'])->whereUuid('circle')->middleware('throttle:20,1');
         Route::get('/circles/{circle}/members', [CircleController::class, 'members'])->whereUuid('circle');
         Route::post('/circles/{circle}/leave', [CircleController::class, 'leave'])->whereUuid('circle')->middleware('throttle:20,1');
+        Route::post('/circles/{circle}/ownership-transfer', [CircleController::class, 'transfer'])->whereUuid('circle')->middleware('throttle:5,1');
         Route::delete('/circles/{circle}/members/{user}', [CircleController::class, 'remove'])->whereUuid('circle')->whereUuid('user')->middleware('throttle:20,1');
         Route::patch('/circles/{circle}/members/{user}', [CircleController::class, 'role'])->whereUuid('circle')->whereUuid('user')->middleware('throttle:20,1');
         Route::get('/circles/{circle}/invites', [CircleController::class, 'outgoing'])->whereUuid('circle');
