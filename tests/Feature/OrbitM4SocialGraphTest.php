@@ -9,6 +9,7 @@ use App\Models\OrbitUser;
 use App\Modules\Config\Services\Totp;
 use App\Modules\Identity\Services\TokenService;
 use App\Modules\Social\Services\SocialGraphService;
+use App\Modules\Social\Services\SocialRelationPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -194,6 +195,7 @@ final class OrbitM4SocialGraphTest extends TestCase
         $this->auth($ta)->postJson('/api/v1/friends/requests',['recipient_id'=>$b->id])->assertCreated();
         $this->auth($tb)->postJson('/api/v1/me/blocks',['user_id'=>$a->id])->assertCreated();
         $admin = $this->admin(['users.read','users.delete']);
+        $priorRevision = app(SocialGraphService::class)->currentRevision($b->id);
         $this->be($admin, 'admin');
         $this->delete('/admin/users/'.$a->id, [
             'confirmation'=>'DELETE', 'reason'=>'Approved test graph cleanup',
@@ -203,6 +205,72 @@ final class OrbitM4SocialGraphTest extends TestCase
         $this->assertDatabaseCount('blocks',0);
         $this->assertDatabaseCount('friend_requests',0);
         $this->assertDatabaseCount('friendships',0);
+        $this->assertGreaterThan($priorRevision,
+            app(SocialGraphService::class)->currentRevision($b->id));
+    }
+
+    public function test_m3_privacy_defaults_block_friends_from_protected_data_until_opt_in(): void
+    {
+        [$a,$ta] = $this->identity('a');
+        [$b,$tb] = $this->identity('b');
+        $policy = app(SocialRelationPolicy::class);
+        $this->assertFalse($policy->canInteract($a->id,$b->id,'message'));
+        $this->assertFalse($policy->canInteract($a->id,$b->id,'location'));
+        $id = $this->auth($ta)->postJson('/api/v1/friends/requests',
+            ['recipient_id'=>$b->id])->assertCreated()->json('data.id');
+        $this->auth($tb)->postJson('/api/v1/friends/requests/'.$id.'/accept')->assertOk();
+        $this->assertFalse($policy->canInteract($a->id,$b->id,'message'),
+            'Friendship must never enable messaging by itself.');
+        DB::table('orbit_user_preferences')->insert([
+            'user_id'=>$b->id,
+            'privacy'=>json_encode([
+                'message_eligibility'=>'Friends', 'ping_eligibility'=>'Friends',
+                'ghost_mode_enabled'=>true, 'location_visibility'=>'Friends',
+                'location_sharing_enabled'=>true,
+            ]),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->assertTrue($policy->canInteract($a->id,$b->id,'message'));
+        $this->assertTrue($policy->canInteract($a->id,$b->id,'ping'));
+        $this->assertFalse($policy->canInteract($a->id,$b->id,'location'),
+            'Ghost Mode must outrank any accidental sharing preference.');
+        DB::table('orbit_user_preferences')->where('user_id',$b->id)->update([
+            'privacy'=>json_encode([
+                'message_eligibility'=>'Friends', 'ping_eligibility'=>'Friends',
+                'ghost_mode_enabled'=>false, 'location_visibility'=>'Friends',
+                'location_sharing_enabled'=>true,
+            ]),
+        ]);
+        $this->assertTrue($policy->canInteract($a->id,$b->id,'location'));
+        $this->auth($ta)->postJson('/api/v1/me/blocks',['user_id'=>$b->id])->assertCreated();
+        $this->assertFalse($policy->canInteract($a->id,$b->id,'message'));
+        $this->assertFalse($policy->canInteract($a->id,$b->id,'location'));
+        $this->assertFalse($policy->canInteract($b->id,$a->id,'ping'));
+        $this->assertFalse($policy->canInteract($a->id,$b->id,'unknown_domain'));
+    }
+
+    public function test_bidirectional_blocks_are_independent_and_other_party_cannot_unblock(): void
+    {
+        [$a,$ta] = $this->identity('a');
+        [$b,$tb] = $this->identity('b');
+        $this->auth($ta)->postJson('/api/v1/me/blocks',['user_id'=>$b->id])->assertCreated();
+        $this->auth($tb)->postJson('/api/v1/me/blocks',['user_id'=>$a->id])->assertCreated();
+        $this->assertDatabaseCount('blocks',2);
+        $this->auth($ta)->deleteJson('/api/v1/me/blocks/'.$b->id)->assertOk();
+        $this->assertDatabaseHas('blocks',['blocker_id'=>$b->id,'blocked_id'=>$a->id]);
+        $this->assertTrue(app(SocialGraphService::class)->isBlockedEitherWay($a->id,$b->id));
+        $this->auth($ta)->getJson('/api/v1/people/'.$b->id.'/preview')->assertNotFound();
+    }
+
+    public function test_suspended_or_missing_user_is_invisible_even_when_uuid_is_known(): void
+    {
+        [$a,$ta] = $this->identity('a');
+        [$b] = $this->identity('b');
+        $b->update(['status'=>'suspended']);
+        $this->auth($ta)->getJson('/api/v1/people/'.$b->id.'/preview')->assertNotFound();
+        $this->auth($ta)->getJson('/api/v1/people/search?username='.$b->username)
+            ->assertOk()->assertJsonCount(0,'data');
+        $this->auth($ta)->postJson('/api/v1/friends/requests',['recipient_id'=>$b->id])->assertNotFound();
     }
 
     public function test_new_account_daily_cap_is_enforced_without_a_global_directory(): void
