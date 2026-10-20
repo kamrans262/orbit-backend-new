@@ -25,6 +25,7 @@ Route::prefix('v1')->group(function (): void {
         // M4 social graph: trusted-device auth, per-IP throttles, per-account quotas,
         // server-side block checks and no-store responses.
         Route::get('/people/search', [SocialGraphController::class, 'search'])->middleware('throttle:30,1');
+        Route::get('/me/social/revision', [SocialGraphController::class, 'revision'])->middleware('throttle:30,1');
         Route::get('/me/social/discovery', [SocialGraphController::class, 'discovery']);
         Route::patch('/me/social/discovery', [SocialGraphController::class, 'updateDiscovery'])->middleware('throttle:15,1');
         Route::post('/people/contacts/match', [SocialContactController::class, 'match'])->middleware('throttle:4,1');
