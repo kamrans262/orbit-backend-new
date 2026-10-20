@@ -58,11 +58,16 @@ final class SocialGraphService
         return $user;
     }
 
-    private function lockPeople(string $a, string $b): void
+    private function lockPeople(string $a, string $b, bool $requireBothActive = true): void
     {
         $rows = OrbitUser::query()->whereIn('id', [$a, $b])
             ->orderBy('id')->lockForUpdate()->get();
-        if ($rows->count() !== 2 || $rows->contains(fn ($u) =>
+        if ($rows->count() !== 2) abort(404, 'Person unavailable.');
+        $actor = $rows->firstWhere('id', $a);
+        if (!$actor || $actor->status !== 'active' || $actor->deletion_requested_at) {
+            abort(404, 'Person unavailable.');
+        }
+        if ($requireBothActive && $rows->contains(fn ($u) =>
             $u->status !== 'active' || $u->deletion_requested_at !== null)) {
             abort(404, 'Person unavailable.');
         }
@@ -91,11 +96,21 @@ final class SocialGraphService
         if ($sender === $recipient) abort(422, 'Cannot send a request to yourself.');
         return DB::transaction(function () use ($sender, $recipient, $device): array {
             $this->lockPeople($sender, $recipient);
-            if ($this->isBlockedEitherWay($sender, $recipient)) abort(404, 'Person unavailable.');
+            if ($this->isBlockedEitherWay($sender, $recipient)
+                || !app(SocialDiscoveryService::class)->canRequest($recipient)) {
+                abort(404, 'Person unavailable.');
+            }
             if ($this->isFriend($sender, $recipient)) abort(409, 'Already friends.');
             [$low, $high] = $this->canonical($sender, $recipient);
             if (DB::table('friend_requests')->where('active_pair_key', $low.':'.$high)->exists()) {
                 abort(409, 'A request is already pending for this relationship.');
+            }
+            // Recipient decline is not a public status or reason: simply rate-limit
+            // repeat invitations from this actor for 24 hours.
+            if (DB::table('friend_requests')->where('sender_id', $sender)
+                ->where('recipient_id', $recipient)->where('status', 'declined')
+                ->where('responded_at', '>', now()->subDay())->exists()) {
+                abort(429, 'Please wait before sending another request.');
             }
             $accountAge = OrbitUser::query()->findOrFail($sender)->created_at;
             $dailyLimit = $accountAge->gt(now()->subDay())
@@ -149,11 +164,31 @@ final class SocialGraphService
         }, 3);
     }
 
+    public function cancel(string $actor, string $requestId, ?string $device): array
+    {
+        $initial = DB::table('friend_requests')->where('id', $requestId)->first();
+        if (!$initial || $initial->sender_id !== $actor) abort(404, 'Request unavailable.');
+        return DB::transaction(function () use ($actor, $requestId, $device, $initial): array {
+            $this->lockPeople($initial->sender_id, $initial->recipient_id, false);
+            $row = DB::table('friend_requests')->where('id', $requestId)
+                ->lockForUpdate()->first();
+            if (!$row || $row->sender_id !== $actor) abort(404, 'Request unavailable.');
+            if ($row->status !== 'pending') abort(409, 'Request is no longer pending.');
+            DB::table('friend_requests')->where('id', $requestId)->update([
+                'status' => 'cancelled', 'active_pair_key' => null,
+                'responded_at' => now(), 'updated_at' => now(),
+            ]);
+            $this->revision($row->sender_id, $row->recipient_id, $device,
+                'social.request_cancelled');
+            return ['id' => $requestId, 'status' => 'cancelled'];
+        }, 3);
+    }
+
     public function unfriend(string $actor, string $other, ?string $device): void
     {
         if ($actor === $other) abort(422, 'Invalid person.');
         DB::transaction(function () use ($actor, $other, $device): void {
-            $this->lockPeople($actor, $other);
+            $this->lockPeople($actor, $other, false);
             [$low, $high] = $this->canonical($actor, $other);
             $deleted = DB::table('friendships')->where('user_low_id', $low)
                 ->where('user_high_id', $high)->delete();
@@ -165,7 +200,7 @@ final class SocialGraphService
     {
         if ($actor === $other) abort(422, 'Cannot block yourself.');
         DB::transaction(function () use ($actor, $other, $device, $reason): void {
-            $this->lockPeople($actor, $other);
+            $this->lockPeople($actor, $other, false);
             $inserted = DB::table('blocks')->insertOrIgnore([
                 'blocker_id' => $actor, 'blocked_id' => $other,
                 'reason_code' => $reason, 'created_at' => now(),
@@ -185,7 +220,7 @@ final class SocialGraphService
     public function unblock(string $actor, string $other, ?string $device): void
     {
         DB::transaction(function () use ($actor, $other, $device): void {
-            $this->lockPeople($actor, $other);
+            $this->lockPeople($actor, $other, false);
             $deleted = DB::table('blocks')->where('blocker_id', $actor)
                 ->where('blocked_id', $other)->delete();
             if ($deleted) $this->revision($actor, $other, $device, 'social.unblocked');
