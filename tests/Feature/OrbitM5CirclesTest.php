@@ -96,6 +96,7 @@ final class OrbitM5CirclesTest extends TestCase
 
     public function test_invite_requires_friend_and_acceptance_is_explicit(): void
     {
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
         [$a,$ta] = $this->person('alpha');
         [$b,$tb] = $this->person('bravo');
         $id = $this->createCircle($ta);
