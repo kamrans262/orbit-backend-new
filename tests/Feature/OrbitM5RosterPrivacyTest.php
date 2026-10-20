@@ -19,7 +19,7 @@ final class OrbitM5RosterPrivacyTest extends TestCase
         $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
         config()->set('orbit_circle.enabled',true);
         config()->set('orbit_circle.targeted_invites_enabled',true);
-        config()->set('orbit_circle.targeted_invite_lifetime_hours',48);
+        config()->set('orbit_circle.targeted_invite_lifetime_hours',168);
     }
 
     private function person(string $name): array
