@@ -36,6 +36,14 @@ final class CircleService
         return $circle;
     }
 
+    private function revokeInviterInvitations(string $circleId, string $inviter): void
+    {
+        DB::table('circle_invites')->where('circle_id',$circleId)
+            ->where('inviter_id',$inviter)->where('status','pending')
+            ->update(['status'=>'revoked','pending_pair_key'=>null,'code_hash'=>null,
+                'resolved_at'=>now(),'updated_at'=>now()]);
+    }
+
     private function authorizeInvites(string $id, string $user, bool $lock = false): object
     {
         $circle=$this->circle($id,$user,false,$lock);
@@ -331,6 +339,9 @@ final class CircleService
             if (!$this->active($user) || !$this->active($circle->owner_id)
                 || $this->social->isBlockedEitherWay($user,$circle->owner_id)
                 || $this->social->isBlockedEitherWay($user,$invite->inviter_id)) abort(404,'Invitation unavailable.');
+            $inviterRole=DB::table('circle_members')->where('circle_id',$circle->id)
+                ->where('user_id',$invite->inviter_id)->whereNull('removed_at')->value('role');
+            if (!in_array($inviterRole,['owner','admin'],true)) abort(404,'Invitation unavailable.');
             if ($accept && !$this->social->isFriend($invite->inviter_id,$user)) {
                 abort(404,'Invitation unavailable.');
             }
@@ -382,6 +393,7 @@ final class CircleService
             if ($circle->owner_id === $user) abort(409,'Owner transfer policy required before leaving.');
             DB::table('circle_members')->where('circle_id',$id)->where('user_id',$user)
                 ->whereNull('removed_at')->update(['removed_at'=>now(),'updated_at'=>now()]);
+            $this->revokeInviterInvitations($id,$user);
             $this->change($id,'circle.left');
         }, 3);
     }
@@ -395,6 +407,7 @@ final class CircleService
                 ->where('user_id',$target)->whereNull('removed_at')
                 ->update(['removed_at'=>now(),'updated_at'=>now()]);
             if (!$count) abort(404,'Member unavailable.');
+            $this->revokeInviterInvitations($id,$target);
             $this->change($id,'circle.member_removed');
         }, 3);
     }
@@ -410,6 +423,7 @@ final class CircleService
                 ->where('user_id',$target)->whereNull('removed_at')
                 ->update(['role'=>$role,'updated_at'=>now()]);
             if (!$count) abort(404,'Member unavailable.');
+            if ($role==='restricted' || $role==='member') $this->revokeInviterInvitations($id,$target);
             $this->change($id,'circle.role_changed');
         }, 3);
     }
