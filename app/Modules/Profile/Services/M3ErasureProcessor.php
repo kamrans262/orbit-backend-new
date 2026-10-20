@@ -22,6 +22,7 @@ final class M3ErasureProcessor
         'friend_requests', 'friendships', 'blocks', 'social_graph_revisions',
         'social_discovery_settings', 'social_friend_invites', 'social_contact_lookup_quotas',
         'social_graph_outbox',
+        'circles', 'circle_members', 'circle_invites', 'circle_permissions',
     ];
 
     public function preview(string $requestId): array
