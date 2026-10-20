@@ -421,6 +421,33 @@ final class OrbitM4SocialGraphTest extends TestCase
         $this->assertDatabaseHas('orbit_users',['id'=>$b->id]);
     }
 
+    public function test_social_revision_is_authenticated_and_increases_after_relationship_change(): void
+    {
+        [$a,$ta] = $this->identity('a');
+        [$b] = $this->identity('b');
+        $this->getJson('/api/v1/me/social/revision')->assertUnauthorized();
+        $before = $this->auth($ta)->getJson('/api/v1/me/social/revision')
+            ->assertOk()->json('data.revision');
+        $this->auth($ta)->postJson('/api/v1/friends/requests',
+            ['recipient_id'=>$b->id])->assertCreated();
+        $this->assertGreaterThan($before, $this->auth($ta)
+            ->getJson('/api/v1/me/social/revision')->assertOk()->json('data.revision'));
+    }
+
+    public function test_native_app_association_files_default_to_unavailable_and_require_approved_ids(): void
+    {
+        $this->get('/.well-known/apple-app-site-association')->assertNotFound();
+        $this->get('/.well-known/assetlinks.json')->assertNotFound();
+        config()->set('orbit_social.ios_app_id', 'ABCDEFGHIJ.com.orbit.example');
+        config()->set('orbit_social.android_package', 'com.orbit.example');
+        config()->set('orbit_social.android_sha256', implode(':',array_fill(0,32,'AA')));
+        $this->get('/.well-known/apple-app-site-association')
+            ->assertOk()->assertJsonPath('applinks.details.0.appIDs.0',
+                'ABCDEFGHIJ.com.orbit.example');
+        $this->get('/.well-known/assetlinks.json')
+            ->assertOk()->assertJsonPath('0.target.package_name','com.orbit.example');
+    }
+
     public function test_new_account_daily_cap_is_enforced_without_a_global_directory(): void
     {
         config()->set('orbit_social.new_account_daily_limit',1);
