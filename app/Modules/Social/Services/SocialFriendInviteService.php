@@ -35,10 +35,10 @@ final class SocialFriendInviteService
             $active = DB::table('social_friend_invites')->where('creator_id', $creator)
                 ->whereNull('revoked_at')->whereNull('redeemed_at')
                 ->where('expires_at', '>', now())->count();
-            if ($active >= 5) abort(429, 'Maximum active invitation links reached.');
+            if ($active >= (int) config('orbit_social.active_friend_invite_limit', 5)) abort(429, 'Maximum active invitation links reached.');
             $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
             $id = (string) Str::uuid7();
-            $expires = now()->addDays(7);
+            $expires = now()->addDays((int) config('orbit_social.friend_invite_lifetime_days', 7));
             DB::table('social_friend_invites')->insert([
                 'id' => $id, 'creator_id' => $creator,
                 'token_hash' => $this->hash($token), 'expires_at' => $expires,
