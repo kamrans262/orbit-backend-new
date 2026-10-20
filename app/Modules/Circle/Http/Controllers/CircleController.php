@@ -111,6 +111,18 @@ final class CircleController extends Controller
         $circles->changeRole($circle,$this->viewer($r),$user,$data['role']);
         return $this->result(['role'=>$data['role']]);
     }
+    public function transfer(Request $r,
+        \App\Modules\Circle\Services\CircleOwnershipService $ownership,
+        string $circle): JsonResponse
+    {
+        $data = $r->validate([
+            'recipient_id'=>['required','uuid'],
+            'confirmation'=>['required', Rule::in(['TRANSFER'])],
+        ]);
+        return $this->result($ownership->transfer(
+            $circle,$this->viewer($r),$data['recipient_id']));
+    }
+
     public function permissions(Request $r, CircleService $circles, string $circle): JsonResponse
     {
         return $this->result($circles->permissions($circle,$this->viewer($r)));
