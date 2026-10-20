@@ -275,6 +275,7 @@ final class OrbitM4SocialGraphTest extends TestCase
 
     public function test_search_by_display_name_or_username_hides_opted_out_people(): void
     {
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
         [$a,$ta] = $this->identity('a');
         [$b] = $this->identity('b');
         $b->update(['display_name'=>'Fatima Noor']);
@@ -307,6 +308,7 @@ final class OrbitM4SocialGraphTest extends TestCase
 
     public function test_contact_matching_requires_both_consent_and_target_opt_in_without_storing_contacts(): void
     {
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
         [$a,$ta] = $this->identity('a');
         [$b,$tb] = $this->identity('b');
         $email = 'private.contact@orbit.example';
@@ -335,6 +337,7 @@ final class OrbitM4SocialGraphTest extends TestCase
 
     public function test_expiring_one_time_friend_invitation_and_revoke(): void
     {
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
         [$a,$ta] = $this->identity('a');
         [$b,$tb] = $this->identity('b');
         $created = $this->auth($ta)->postJson('/api/v1/friends/invites')->assertCreated()->json('data');
