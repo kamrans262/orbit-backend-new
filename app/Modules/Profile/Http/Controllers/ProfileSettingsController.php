@@ -178,6 +178,21 @@ final class ProfileSettingsController extends Controller
                 ]);
             }
             if ($changes !== []) {
+                // A privacy change must invalidate previously authorized
+                // social views before any future realtime/cache consumer
+                // continues using stale relationship permissions.
+                if ($column === 'privacy') {
+                    DB::table('social_graph_revisions')->insertOrIgnore([
+                        'user_id' => $id, 'revision' => 0, 'updated_at' => now(),
+                    ]);
+                    DB::table('social_graph_revisions')->where('user_id', $id)
+                        ->increment('revision', 1, ['updated_at' => now()]);
+                    DB::table('social_graph_outbox')->insert([
+                        'id' => (string) \Illuminate\Support\Str::uuid7(),
+                        'actor_id' => $id, 'subject_id' => null,
+                        'event_type' => 'social.privacy_changed', 'created_at' => now(),
+                    ]);
+                }
                 $session = $request->attributes->get('orbit_session');
                 foreach (array_keys($changes) as $changedKey) {
                     // Single-key reason codes stay within the 80-character column.

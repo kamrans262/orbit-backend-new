@@ -19,6 +19,9 @@ final class M3ErasureProcessor
     private const KNOWN_USER_FK_TABLES = [
         'user_identities', 'devices', 'orbit_sessions', 'orbit_user_preferences',
         'orbit_account_deletion_requests', 'orbit_data_retention_holds',
+        'friend_requests', 'friendships', 'blocks', 'social_graph_revisions',
+        'social_discovery_settings', 'social_friend_invites', 'social_contact_lookup_quotas',
+        'social_graph_outbox',
     ];
 
     public function preview(string $requestId): array
@@ -117,12 +120,12 @@ final class M3ErasureProcessor
             DB::table('orbit_erasure_receipts')->insert([
                 'request_id' => $requestId,
                 'user_reference_hash' => $userReferenceHash,
-                'scope' => 'identity_profile_m3',
+                'scope' => 'identity_profile_social_m4',
                 'removed_counts' => json_encode($summary, JSON_THROW_ON_ERROR),
                 'operator_id' => $operator->id,
                 'completed_at' => now(),
             ]);
-            return ['status' => 'completed', 'scope' => 'identity_profile_m3'];
+            return ['status' => 'completed', 'scope' => 'identity_profile_social_m4'];
         }, 3);
     }
 }

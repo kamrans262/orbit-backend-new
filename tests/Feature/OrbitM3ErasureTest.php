@@ -112,7 +112,7 @@ final class OrbitM3ErasureTest extends TestCase
         [$other,$otherId]=$this->request();
         $operator=$this->operator();
         $result=app(M3ErasureProcessor::class)->execute($id,$operator,'CHANGE-123456');
-        $this->assertSame(['status'=>'completed','scope'=>'identity_profile_m3'],$result);
+        $this->assertSame(['status'=>'completed','scope'=>'identity_profile_social_m4'],$result);
         $this->assertDatabaseMissing('orbit_users',['id'=>$user->id]);
         $this->assertDatabaseMissing('user_identities',['user_id'=>$user->id]);
         $this->assertDatabaseMissing('orbit_user_preferences',['user_id'=>$user->id]);
@@ -121,11 +121,11 @@ final class OrbitM3ErasureTest extends TestCase
         $this->assertDatabaseHas('orbit_account_deletion_requests',['request_id'=>$otherId]);
         $receipt=DB::table('orbit_erasure_receipts')->where('request_id',$id)->first();
         $this->assertNotNull($receipt);
-        $this->assertSame('identity_profile_m3',$receipt->scope);
+        $this->assertSame('identity_profile_social_m4',$receipt->scope);
         $this->assertNotSame($user->id,$receipt->user_reference_hash);
         $this->assertStringNotContainsString($user->id,json_encode($receipt));
         $this->assertStringNotContainsString('PRIVATE_LOCATION',json_encode($receipt));
-        $this->assertSame(['status'=>'completed','scope'=>'identity_profile_m3'],
+        $this->assertSame(['status'=>'completed','scope'=>'identity_profile_social_m4'],
             app(M3ErasureProcessor::class)->execute($id,$operator,'CHANGE-123456'));
         $this->assertDatabaseCount('orbit_erasure_receipts',1);
     }
