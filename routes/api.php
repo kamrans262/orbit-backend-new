@@ -9,6 +9,7 @@ use App\Modules\Social\Http\Controllers\SocialGraphController;
 use App\Modules\Social\Http\Controllers\SocialContactController;
 use App\Modules\Social\Http\Controllers\SocialInviteController;
 use App\Modules\Circle\Http\Controllers\CircleController;
+use App\Modules\Circle\Http\Middleware\EnsureCircleM5Enabled;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -23,6 +24,7 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/auth/refresh', [IdentityController::class, 'refresh'])->middleware('throttle:30,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        Route::middleware(EnsureCircleM5Enabled::class)->group(function (): void {
         // M5 private Circles: no public directory, no passive membership consent.
         Route::get('/circles', [CircleController::class, 'listing']);
         Route::post('/circles', [CircleController::class, 'create'])->middleware('throttle:10,1');
@@ -40,6 +42,7 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('/circles/{circle}/invites/{invite}', [CircleController::class, 'revoke'])->whereUuid('circle')->whereUuid('invite')->middleware('throttle:20,1');
         Route::get('/circles/{circle}/permissions', [CircleController::class, 'permissions'])->whereUuid('circle');
         Route::patch('/circles/{circle}/permissions', [CircleController::class, 'revokePermission'])->whereUuid('circle')->middleware('throttle:20,1');
+        }); // M5 feature gate
         // M4 social graph: trusted-device auth, per-IP throttles, per-account quotas,
         // server-side block checks and no-store responses.
         Route::get('/people/search', [SocialGraphController::class, 'search'])->middleware('throttle:30,1');
