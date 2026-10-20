@@ -250,10 +250,45 @@ final class CircleService
         return ['items'=>$result,'page'=>$items->currentPage(),'has_more'=>$items->hasMorePages()];
     }
 
-    public function answer(string $id, string $user, bool $accept): array
+    private function inviteByCode(string $code, string $viewer): object
+    {
+        if (config('orbit_circle.targeted_invites_enabled') !== true
+            || config('orbit_circle.join_codes_enabled') !== true) abort(404,'Invitation unavailable.');
+        $hash = hash_hmac('sha256','orbit-circle-invite-v1|'.$code,(string) config('app.key'));
+        $invite = DB::table('circle_invites')->where('code_hash',$hash)
+            ->where('invitee_id',$viewer)->where('status','pending')
+            ->whereNull('redeemed_at')->where('expires_at','>',now())->first();
+        if (!$invite || !$this->active($viewer)
+            || !$this->active($invite->inviter_id)
+            || $this->social->isBlockedEitherWay($viewer,$invite->inviter_id)
+            || !$this->social->isFriend($viewer,$invite->inviter_id)) abort(404,'Invitation unavailable.');
+        $circle = DB::table('circles')->where('id',$invite->circle_id)
+            ->whereNull('archived_at')->first();
+        if (!$circle || !$this->active($circle->owner_id)
+            || $this->social->isBlockedEitherWay($viewer,$circle->owner_id)) {
+            abort(404,'Invitation unavailable.');
+        }
+        return (object) ['invite'=>$invite,'circle'=>$circle];
+    }
+
+    public function previewCode(string $viewer, string $code): array
+    {
+        $record = $this->inviteByCode($code,$viewer);
+        return ['circle_name'=>$record->circle->name,
+            'invite_id'=>$record->invite->id,
+            'status'=>'pending','expires_at'=>$record->invite->expires_at];
+    }
+
+    public function redeemCode(string $viewer, string $code): array
+    {
+        $record = $this->inviteByCode($code,$viewer);
+        return $this->answer($record->invite->id,$viewer,true,$code);
+    }
+
+    public function answer(string $id, string $user, bool $accept, ?string $code = null): array
     {
         if (config('orbit_circle.targeted_invites_enabled') !== true) abort(404,'Invitation unavailable.');
-        return DB::transaction(function () use ($id,$user,$accept): array {
+        return DB::transaction(function () use ($id,$user,$accept,$code): array {
             // Lock circle before invite, consistent with invitation sender.
             $hint = DB::table('circle_invites')->where('id',$id)->where('invitee_id',$user)->first();
             if (!$hint) abort(404,'Invitation unavailable.');
@@ -263,6 +298,11 @@ final class CircleService
             $invite = DB::table('circle_invites')->where('id',$id)
                 ->where('invitee_id',$user)->lockForUpdate()->first();
             if (!$invite || $invite->status !== 'pending') abort(409,'Invitation already resolved.');
+            if ($code !== null) {
+                $hash = hash_hmac('sha256','orbit-circle-invite-v1|'.$code,(string) config('app.key'));
+                if (!$invite->code_hash || !hash_equals($invite->code_hash,$hash)
+                    || $invite->redeemed_at !== null) abort(404,'Invitation unavailable.');
+            }
             if (!$invite->expires_at || now()->gte($invite->expires_at)) abort(409,'Invitation expired.');
             if (!$this->active($user) || !$this->active($circle->owner_id)
                 || $this->social->isBlockedEitherWay($user,$circle->owner_id)
@@ -286,7 +326,8 @@ final class CircleService
             }
             DB::table('circle_invites')->where('id',$id)->update([
                 'status'=>$accept?'accepted':'declined','pending_pair_key'=>null,
-                'resolved_at'=>now(),'updated_at'=>now(),
+                'resolved_at'=>now(),'redeemed_at'=>$code !== null ? now() : null,
+                'code_hash'=>null,'updated_at'=>now(),
             ]);
             $this->change($circle->id,$accept?'circle.joined':'circle.invite_declined');
             return ['status'=>$accept?'accepted':'declined','circle_id'=>$circle->id];
