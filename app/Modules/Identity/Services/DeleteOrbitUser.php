@@ -75,6 +75,12 @@ final class DeleteOrbitUser
                 ->where('blocker_id', $userId)->orWhere('blocked_id', $userId)->delete();
             $socialRevisions = DB::table('social_graph_revisions')
                 ->where('user_id', $userId)->delete();
+            $socialInvites = DB::table('social_friend_invites')
+                ->where('creator_id', $userId)->delete();
+            $socialDiscovery = DB::table('social_discovery_settings')
+                ->where('user_id', $userId)->delete();
+            $socialContactQuotas = DB::table('social_contact_lookup_quotas')
+                ->where('user_id', $userId)->delete();
             $user->delete();
 
             // Preserve the immutable audit chain without retaining the deleted
@@ -85,6 +91,9 @@ final class DeleteOrbitUser
                 'otp_challenges' => $removedChallenges, 'identity_events' => $removedEvents,
                 'friend_requests' => $socialRequests, 'friendships' => $socialFriends,
                 'blocks' => $socialBlocks, 'social_revisions' => $socialRevisions,
+                'social_invites' => $socialInvites,
+                'social_discovery' => $socialDiscovery,
+                'contact_quotas' => $socialContactQuotas,
             ];
             $last = DB::table('admin_audit_log')->orderByDesc('created_at')->lockForUpdate()->first();
             $prev = $last?->event_hash;
