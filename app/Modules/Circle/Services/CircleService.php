@@ -188,16 +188,23 @@ final class CircleService
             if (DB::table('circle_invites')->where('pending_pair_key',$id.':'.$invitee)->exists()) {
                 abort(409,'Invitation already pending.');
             }
+            $code = config('orbit_circle.join_codes_enabled') === true
+                ? Str::random(40) : null;
+            $codeHash = $code === null ? null : hash_hmac('sha256',
+                'orbit-circle-invite-v1|'.$code,(string) config('app.key'));
             $inviteId = (string) Str::uuid7();
             DB::table('circle_invites')->insert([
                 'id'=>$inviteId,'circle_id'=>$id,'inviter_id'=>$user,
                 'invitee_id'=>$invitee,'status'=>'pending',
                 'pending_pair_key'=>$id.':'.$invitee,
+                'code_hash'=>$codeHash,
                 'expires_at'=>now()->addHours($ttl),
                 'created_at'=>now(),'updated_at'=>now(),
             ]);
             $this->change($id,'circle.invited');
-            return ['id'=>$inviteId,'status'=>'pending'];
+            return ['id'=>$inviteId,'status'=>'pending',
+                'expires_at'=>now()->addHours($ttl)->toIso8601String(),
+                'code'=>$code];
         }, 3);
     }
 
