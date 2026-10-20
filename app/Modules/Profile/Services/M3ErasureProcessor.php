@@ -123,7 +123,7 @@ final class M3ErasureProcessor
                 'operator_id' => $operator->id,
                 'completed_at' => now(),
             ]);
-            return ['status' => 'completed', 'scope' => 'identity_profile_m3'];
+            return ['status' => 'completed', 'scope' => 'identity_profile_social_m4'];
         }, 3);
     }
 }
