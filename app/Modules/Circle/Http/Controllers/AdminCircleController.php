@@ -16,6 +16,7 @@ final class AdminCircleController extends Controller
 {
     public function index(Request $request): Response
     {
+        abort_unless(config('orbit_circle.enabled') === true, 404);
         $filters = $request->validate(['circle_id'=>['nullable','uuid']]);
         $id = $filters['circle_id'] ?? null;
         $metrics = [
