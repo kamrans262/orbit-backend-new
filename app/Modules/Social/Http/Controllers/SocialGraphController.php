@@ -41,7 +41,7 @@ final class SocialGraphController extends Controller
         // Per-account limiter complements the outer per-IP middleware and
         // cannot be bypassed by changing a device or network address.
         $rateKey = 'orbit:social:search:'.$viewer;
-        if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($rateKey, 60)) {
+        if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($rateKey, (int) config('orbit_social.search_per_account_per_minute', 60))) {
             return response()->json(['message'=>'Search limit reached. Please retry later.'], 429)
                 ->header('Cache-Control','no-store');
         }
