@@ -20,6 +20,7 @@ final class M3ErasureProcessor
         'user_identities', 'devices', 'orbit_sessions', 'orbit_user_preferences',
         'orbit_account_deletion_requests', 'orbit_data_retention_holds',
         'friend_requests', 'friendships', 'blocks', 'social_graph_revisions',
+        'social_discovery_settings', 'social_friend_invites', 'social_contact_lookup_quotas',
     ];
 
     public function preview(string $requestId): array
