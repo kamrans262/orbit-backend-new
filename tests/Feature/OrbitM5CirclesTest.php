@@ -7,6 +7,7 @@ use App\Models\AdminUser;
 use App\Models\OrbitDevice;
 use App\Models\OrbitUser;
 use App\Modules\Identity\Services\TokenService;
+use App\Modules\Config\Services\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -201,7 +202,9 @@ final class OrbitM5CirclesTest extends TestCase
         $role = AdminRole::create(['name'=>'M5 role '.Str::uuid(),'permissions'=>$permissions]);
         $admin = AdminUser::create([
             'name'=>'M5 Operator','email'=>Str::uuid().'@example.test',
-            'password'=>'Secure-Password!123','status'=>'active',
+            'password'=>'Secure-Password!123',
+            'totp_secret'=>(new Totp())->generateSecret(),
+            'status'=>'active',
         ]);
         $admin->roles()->attach($role->id);
         return $admin;
