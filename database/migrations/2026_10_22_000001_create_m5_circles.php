@@ -42,6 +42,9 @@ return new class extends Migration {
             $table->string('status', 16)->default('pending');
             // Null when settled; unique concurrent pending recipient per Circle.
             $table->string('pending_pair_key', 73)->nullable()->unique();
+            // Hashed, single-use, recipient-bound QR/code credentials.
+            $table->char('code_hash', 64)->nullable()->unique();
+            $table->timestamp('redeemed_at')->nullable();
             $table->timestamp('resolved_at')->nullable();
             $table->timestamp('expires_at')->nullable();
             $table->timestamps();
