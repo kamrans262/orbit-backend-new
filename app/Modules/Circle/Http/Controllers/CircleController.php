@@ -138,6 +138,29 @@ final class CircleController extends Controller
             $circle,$this->viewer($r),$data['recipient_id']));
     }
 
+    public function archived(Request $r,
+        \App\Modules\Circle\Services\CircleArchiveService $service): JsonResponse
+    {
+        $p=(int) ($r->validate(['page'=>['sometimes','integer','between:1,100']])['page'] ?? 1);
+        return $this->result($service->archived($this->viewer($r),$p));
+    }
+
+    public function archive(Request $r,
+        \App\Modules\Circle\Services\CircleArchiveService $service,
+        string $circle): JsonResponse
+    {
+        $r->validate(['confirmation'=>['required',Rule::in(['ARCHIVE'])]]);
+        return $this->result($service->archive($circle,$this->viewer($r)));
+    }
+
+    public function restore(Request $r,
+        \App\Modules\Circle\Services\CircleArchiveService $service,
+        string $circle): JsonResponse
+    {
+        $r->validate(['confirmation'=>['required',Rule::in(['RESTORE'])]]);
+        return $this->result($service->restore($circle,$this->viewer($r)));
+    }
+
     public function permissions(Request $r, CircleService $circles, string $circle): JsonResponse
     {
         return $this->result($circles->permissions($circle,$this->viewer($r)));
