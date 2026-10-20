@@ -43,6 +43,7 @@ return new class extends Migration {
             // Null when settled; unique concurrent pending recipient per Circle.
             $table->string('pending_pair_key', 73)->nullable()->unique();
             $table->timestamp('resolved_at')->nullable();
+            $table->timestamp('expires_at')->nullable();
             $table->timestamps();
             $table->index(['invitee_id','status','created_at']);
             $table->index(['circle_id','status','created_at']);
@@ -56,6 +57,7 @@ return new class extends Migration {
             $table->uuid('subject_user_id')->nullable();
             $table->string('permission_key', 32);
             $table->boolean('enabled')->default(false);
+            $table->json('value_json')->nullable();
             $table->timestamp('expires_at')->nullable();
             $table->timestamps();
             $table->primary(['circle_id','scope_key','permission_key']);
