@@ -240,6 +240,28 @@ final class OrbitM5CirclesTest extends TestCase
             ->assertJsonPath('data.sharing_active',false);
     }
 
+    public function test_member_account_removal_invalidates_surviving_circle_revision(): void
+    {
+        [$a,$ta] = $this->person('alpha');
+        [$b,$tb] = $this->person('bravo');
+        $this->beFriends($ta,$tb,$b->id);
+        $id = $this->createCircle($ta);
+        $invite = $this->withToken($ta)->postJson('/api/v1/circles/'.$id.'/invites',
+            ['invitee_id'=>$b->id])->assertCreated()->json('data.id');
+        $this->withToken($tb)->postJson('/api/v1/circles/invites/'.$invite.'/accept')->assertOk();
+        $old = DB::table('circles')->where('id',$id)->value('revision');
+        $admin = $this->admin(['users.delete','users.read']);
+        app(\App\Modules\Identity\Services\DeleteOrbitUser::class)->execute(
+            $b->id,$admin,'Approved deletion of a non-owning Circle member',null,null,
+        );
+        $this->assertDatabaseHas('orbit_users',['id'=>$a->id]);
+        $this->assertDatabaseMissing('circle_members',['circle_id'=>$id,'user_id'=>$b->id]);
+        $this->assertGreaterThan($old,DB::table('circles')->where('id',$id)->value('revision'));
+        $this->assertDatabaseHas('circle_event_outbox',[
+            'circle_id'=>$id,'event_type'=>'circle.member_account_removed',
+        ]);
+    }
+
     public function test_account_deletion_does_not_cascade_away_shared_circle(): void
     {
         [$a,$ta] = $this->person('alpha');
