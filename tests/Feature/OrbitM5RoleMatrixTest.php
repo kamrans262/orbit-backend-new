@@ -65,6 +65,13 @@ final class OrbitM5RoleMatrixTest extends TestCase
             ->assertNotFound();
         $invite=$this->withToken($tb)->postJson('/api/v1/circles/'.$id.'/invites',
             ['invitee_id'=>$c->id])->assertCreated()->json('data');
+        $asAdmin=$this->withToken($tb)->getJson('/api/v1/circles/'.$id.'/invites')
+            ->assertOk()->json('data.items');
+        $this->assertTrue(collect($asAdmin)->firstWhere('id',$invite['id'])['can_revoke']);
+        $this->assertFalse(collect($asAdmin)->firstWhere('id',$inv)['can_revoke']);
+        $asOwner=$this->withToken($ta)->getJson('/api/v1/circles/'.$id.'/invites')
+            ->assertOk()->json('data.items');
+        $this->assertTrue(collect($asOwner)->firstWhere('id',$invite['id'])['can_revoke']);
         $this->withToken($tb)->deleteJson('/api/v1/circles/'.$id.'/invites/'.$invite['id'])
             ->assertOk();
         $this->withToken($tc)->postJson('/api/v1/circles/invites/code/redeem',
