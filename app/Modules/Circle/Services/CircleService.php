@@ -243,9 +243,9 @@ final class CircleService
     public function invites(string $id, string $user, int $page): array
     {
         if (config('orbit_circle.targeted_invites_enabled') !== true) abort(404,'Invitation unavailable.');
-        $this->authorizeInvites($id,$user);
+        $circle=$this->authorizeInvites($id,$user);
         $items = DB::table('circle_invites')->where('circle_id',$id)
-            ->orderByDesc('created_at')->paginate(20,['id','invitee_id','status','created_at','resolved_at'],'page',$page);
+            ->orderByDesc('created_at')->paginate(20,['id','invitee_id','inviter_id','status','created_at','resolved_at'],'page',$page);
         $safe = [];
         foreach ($items->items() as $invite) {
             if ($this->social->isBlockedEitherWay($user,$invite->invitee_id)) continue;
@@ -256,6 +256,8 @@ final class CircleService
             $safe[] = [
                 'id'=>$invite->id,'status'=>$invite->status,
                 'created_at'=>$invite->created_at,'resolved_at'=>$invite->resolved_at,
+                'can_revoke'=>$invite->status==='pending' &&
+                    ($circle->owner_id === $user || $invite->inviter_id === $user),
                 'person'=>['id'=>$person->id,'username'=>$person->username,
                     'display_name'=>$person->display_name],
             ];
