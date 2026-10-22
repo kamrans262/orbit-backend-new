@@ -50,7 +50,8 @@ final class CircleArchiveService
     }
     public function restore(string $id, string $owner): array
     {
-        abort_unless(config('orbit_circle.archive_enabled') === true,404);
+        abort_unless(config('orbit_circle.archive_enabled') === true
+            || config('orbit_circle.temporary_circles_enabled') === true,404);
         return DB::transaction(function () use ($id,$owner): array {
             $this->actor($id,$owner,true);
             DB::table('circles')->where('id',$id)->update([
@@ -62,7 +63,8 @@ final class CircleArchiveService
     }
     public function archived(string $owner, int $page): array
     {
-        abort_unless(config('orbit_circle.archive_enabled') === true,404);
+        abort_unless(config('orbit_circle.archive_enabled') === true
+            || config('orbit_circle.temporary_circles_enabled') === true,404);
         $rows=DB::table('circles')->where('owner_id',$owner)->whereNotNull('archived_at')
             ->orderByDesc('archived_at')->paginate(20,['id','name','archived_at'],'page',$page);
         return ['items'=>$rows->items(),'page'=>$rows->currentPage(),
