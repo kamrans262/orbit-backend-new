@@ -125,6 +125,12 @@ final class OrbitM5CodesAndArchiveTest extends TestCase
             'expires_at'=>$expires->toIso8601String(),
         ])->assertCreated()->assertJsonPath('data.lifecycle_state','active')->json('data.id');
         $this->assertDatabaseHas('circles',['id'=>$id,'owner_id'=>$owner->id]);
+        $temporal=app(\App\Modules\Circle\Services\CircleTemporaryLifecycle::class);
+        $this->assertSame(1,$temporal->queueExpiryNotices());
+        $this->assertSame(0,$temporal->queueExpiryNotices());
+        $this->assertDatabaseHas('circle_event_outbox',[
+            'circle_id'=>$id,'event_type'=>'circle.temporary_expiring',
+        ]);
         $this->travel(6)->minutes();
         $this->withToken($token)->getJson('/api/v1/circles/'.$id)
             ->assertOk()->assertJsonPath('data.lifecycle_state','read_only')
