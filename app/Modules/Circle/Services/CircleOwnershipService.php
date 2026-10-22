@@ -23,6 +23,7 @@ final class CircleOwnershipService
             $circle = DB::table('circles')->where('id',$circleId)
                 ->whereNull('archived_at')->lockForUpdate()->first();
             if (!$circle || $circle->owner_id !== $actor || $actor === $recipient) abort(404);
+            app(CircleTemporaryLifecycle::class)->assertWritable($circle);
             $owners = DB::table('circle_members')->where('circle_id',$circleId)
                 ->where('role','owner')->whereNull('removed_at')->get();
             if ($owners->count() !== 1 || $owners[0]->user_id !== $actor) abort(409);
