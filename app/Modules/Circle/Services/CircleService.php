@@ -126,7 +126,8 @@ final class CircleService
                 'name'=>trim($data['name']),
                 'icon_key'=>$data['icon_key'] ?? null,
                 'color_value'=>$data['color_value'] ?? null,
-                'expires_at'=>$data['expires_at'] ?? null,
+                'expires_at'=>isset($data['expires_at'])
+                    ? \Illuminate\Support\Carbon::parse($data['expires_at'])->utc()->toDateTimeString() : null,
             ], JSON_THROW_ON_ERROR));
             if ($idempotencyHash) {
                 $existing = DB::table('circles')->where('creation_key_hash',$idempotencyHash)->first();
@@ -143,7 +144,8 @@ final class CircleService
                 'id'=>$id,'owner_id'=>$user,'name'=>trim($data['name']),
                 'icon_key'=>$data['icon_key'] ?? null,
                 'color_value'=>$data['color_value'] ?? null,
-                'expires_at'=>$data['expires_at'] ?? null,
+                'expires_at'=>isset($data['expires_at'])
+                    ? \Illuminate\Support\Carbon::parse($data['expires_at'])->utc()->toDateTimeString() : null,
                 'revision'=>1,'creation_key_hash'=>$idempotencyHash,
                 'creation_payload_hash'=>$idempotencyHash ? $payloadHash : null,
                 'created_at'=>$now,'updated_at'=>$now,
@@ -187,6 +189,10 @@ final class CircleService
             if (isset($data['expires_at']) &&
                 config('orbit_circle.temporary_circles_enabled') !== true) {
                 abort(404, 'Temporary Circles unavailable.');
+            }
+            if (isset($data['expires_at'])) {
+                $data['expires_at']=\Illuminate\Support\Carbon::parse(
+                    $data['expires_at'])->utc()->toDateTimeString();
             }
             DB::table('circles')->where('id',$id)->update([
                 ...$data,'updated_at'=>now(),
