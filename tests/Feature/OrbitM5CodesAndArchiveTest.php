@@ -118,6 +118,7 @@ final class OrbitM5CodesAndArchiveTest extends TestCase
     public function test_temporary_circle_stays_read_only_for_72_hours_then_archives_without_deletion(): void
     {
         config()->set('orbit_circle.temporary_circles_enabled',true);
+        config()->set('orbit_circle.archive_enabled',false);
         [$owner,$token]=$this->identity('alpha');
         $expires=now()->addMinutes(5);
         $id=$this->withToken($token)->postJson('/api/v1/circles',[
