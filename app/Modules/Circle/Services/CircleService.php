@@ -155,7 +155,8 @@ final class CircleService
         return [...$this->format($circle,$user),'role'=>$role,
             'capabilities'=>[
                 'edit'=>$role==='owner',
-                'invite'=>in_array($role,['owner','admin'],true),
+                'invite'=>in_array($role,['owner','admin'],true) &&
+                    config('orbit_circle.targeted_invites_enabled') === true,
                 'remove_members'=>$role==='owner',
                 'change_roles'=>$role==='owner' && config('orbit_circle.role_changes_enabled')===true,
                 'transfer_owner'=>$role==='owner' && config('orbit_circle.ownership_transfer_enabled')===true,
