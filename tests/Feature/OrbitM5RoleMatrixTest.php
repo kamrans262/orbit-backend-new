@@ -96,6 +96,12 @@ final class OrbitM5RoleMatrixTest extends TestCase
             ['invitee_id'=>$b->id])->assertCreated()->json('data');
         DB::table('circle_invites')->where('id',$first['id'])
             ->update(['expires_at'=>now()->subMinute()]);
+        // Pending rows beyond TTL must display Expired immediately even
+        // before housekeeping or a second invitation changes database status.
+        $history=$this->withToken($ta)->getJson('/api/v1/circles/'.$id.'/invites')
+            ->assertOk()->json('data.items');
+        $this->assertSame('expired',collect($history)->firstWhere('id',$first['id'])['status']);
+        $this->assertFalse(collect($history)->firstWhere('id',$first['id'])['can_revoke']);
         $second=$this->withToken($ta)->postJson('/api/v1/circles/'.$id.'/invites',
             ['invitee_id'=>$b->id])->assertCreated()->json('data');
         $this->assertNotEquals($first['code'],$second['code']);
