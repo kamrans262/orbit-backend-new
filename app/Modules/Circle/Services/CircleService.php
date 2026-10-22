@@ -14,7 +14,10 @@ use Illuminate\Support\Str;
  */
 final class CircleService
 {
-    public function __construct(private readonly SocialGraphService $social) {}
+    public function __construct(
+        private readonly SocialGraphService $social,
+        private readonly CircleTemporaryLifecycle $temporary,
+    ) {}
 
     private function active(string $userId): bool
     {
@@ -27,7 +30,7 @@ final class CircleService
         $query = DB::table('circles')->where('id',$id)->whereNull('archived_at');
         if ($lock) $query->lockForUpdate();
         $circle = $query->first();
-        if (!$circle || !$this->active($user)
+        if (!$circle || $this->temporary->state($circle) === 'archive_due' || !$this->active($user)
             || $this->social->isBlockedEitherWay($user,$circle->owner_id)) abort(404,'Circle unavailable.');
         if ($owner && $circle->owner_id !== $user) abort(404,'Circle unavailable.');
         $member = DB::table('circle_members')->where('circle_id',$id)
@@ -68,6 +71,8 @@ final class CircleService
             'id'=>$row->id,'name'=>$row->name,'icon_key'=>$row->icon_key,
             'color_value'=>$row->color_value,'owner_id'=>$row->owner_id,
             'revision'=>(int) $row->revision,
+            'expires_at'=>$row->expires_at,
+            'lifecycle_state'=>$this->temporary->state($row),
             'member_count'=>$this->visibleMemberCount($row->id,$viewer),
         ];
     }
@@ -93,6 +98,8 @@ final class CircleService
         $items = DB::table('circles as c')
             ->join('circle_members as cm', fn ($j) => $j->on('cm.circle_id','=','c.id')->whereNull('cm.removed_at'))
             ->where('cm.user_id',$user)->whereNull('c.archived_at')
+            ->where(fn ($q) => $q->whereNull('c.expires_at')
+                ->orWhere('c.expires_at','>',now()->subHours(72)))
             ->orderByDesc('c.created_at')->orderByDesc('c.id')
             ->select('c.*','cm.role')->paginate(20,['*'],'page',$page);
         $result = [];
@@ -111,10 +118,15 @@ final class CircleService
             if (!$person || $person->status !== 'active' || $person->deletion_requested_at) abort(403);
             $idempotencyHash = $idempotencyKey === null ? null :
                 hash_hmac('sha256', $user.'|'.$idempotencyKey, (string) config('app.key'));
+            if (isset($data['expires_at'])
+                && config('orbit_circle.temporary_circles_enabled') !== true) {
+                abort(404, 'Temporary Circles unavailable.');
+            }
             $payloadHash = hash('sha256', json_encode([
                 'name'=>trim($data['name']),
                 'icon_key'=>$data['icon_key'] ?? null,
                 'color_value'=>$data['color_value'] ?? null,
+                'expires_at'=>$data['expires_at'] ?? null,
             ], JSON_THROW_ON_ERROR));
             if ($idempotencyHash) {
                 $existing = DB::table('circles')->where('creation_key_hash',$idempotencyHash)->first();
@@ -131,6 +143,7 @@ final class CircleService
                 'id'=>$id,'owner_id'=>$user,'name'=>trim($data['name']),
                 'icon_key'=>$data['icon_key'] ?? null,
                 'color_value'=>$data['color_value'] ?? null,
+                'expires_at'=>$data['expires_at'] ?? null,
                 'revision'=>1,'creation_key_hash'=>$idempotencyHash,
                 'creation_payload_hash'=>$idempotencyHash ? $payloadHash : null,
                 'created_at'=>$now,'updated_at'=>$now,
@@ -152,14 +165,15 @@ final class CircleService
         $circle = $this->circle($id,$user);
         $role = DB::table('circle_members')->where('circle_id',$id)
             ->where('user_id',$user)->value('role');
+        $writable=$this->temporary->state($circle) === 'active';
         return [...$this->format($circle,$user),'role'=>$role,
             'capabilities'=>[
-                'edit'=>$role==='owner',
-                'invite'=>in_array($role,['owner','admin'],true) &&
+                'edit'=>$writable && $role==='owner',
+                'invite'=>$writable && in_array($role,['owner','admin'],true) &&
                     config('orbit_circle.targeted_invites_enabled') === true,
-                'remove_members'=>$role==='owner',
-                'change_roles'=>$role==='owner' && config('orbit_circle.role_changes_enabled')===true,
-                'transfer_owner'=>$role==='owner' && config('orbit_circle.ownership_transfer_enabled')===true,
+                'remove_members'=>$writable && $role==='owner',
+                'change_roles'=>$writable && $role==='owner' && config('orbit_circle.role_changes_enabled')===true,
+                'transfer_owner'=>$writable && $role==='owner' && config('orbit_circle.ownership_transfer_enabled')===true,
                 'archive'=>$role==='owner' && config('orbit_circle.archive_enabled')===true,
                 'leave'=>$role!=='owner',
             ],
@@ -169,7 +183,7 @@ final class CircleService
     public function rename(string $id, string $user, array $data): array
     {
         return DB::transaction(function () use ($id,$user,$data): array {
-            $this->circle($id,$user,true,true);
+            $this->temporary->assertWritable($this->circle($id,$user,true,true));
             DB::table('circles')->where('id',$id)->update([
                 ...$data,'updated_at'=>now(),
             ]);
@@ -205,7 +219,7 @@ final class CircleService
         $ttl = (int) config('orbit_circle.targeted_invite_lifetime_hours',0);
         if ($ttl !== 168) abort(404,'Invitation policy unavailable.');
         return DB::transaction(function () use ($id,$user,$invitee,$ttl): array {
-            $this->authorizeInvites($id,$user,true);
+            $this->temporary->assertWritable($this->authorizeInvites($id,$user,true));
             if ($user === $invitee || !$this->active($invitee)
                 || $this->social->isBlockedEitherWay($user,$invitee)) abort(404,'Person unavailable.');
             // No automatic admission from friendship; friendship only permits inviting.
@@ -411,6 +425,7 @@ final class CircleService
     {
         DB::transaction(function () use ($id,$user,$target): void {
             $circle = $this->circle($id,$user,true,true);
+            $this->temporary->assertWritable($circle);
             if ($circle->owner_id === $target) abort(409,'Cannot remove owner.');
             $count = DB::table('circle_members')->where('circle_id',$id)
                 ->where('user_id',$target)->whereNull('removed_at')
@@ -427,6 +442,7 @@ final class CircleService
         if (config('orbit_circle.role_changes_enabled') !== true) abort(404,'Role changes unavailable.');
         DB::transaction(function () use ($id,$user,$target,$role): void {
             $circle = $this->circle($id,$user,true,true);
+            $this->temporary->assertWritable($circle);
             if ($circle->owner_id === $target) abort(409,'Owner role cannot be edited.');
             $count = DB::table('circle_members')->where('circle_id',$id)
                 ->where('user_id',$target)->whereNull('removed_at')
