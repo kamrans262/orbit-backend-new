@@ -20,7 +20,9 @@ final class AdminCircleController extends Controller
         $filters = $request->validate(['circle_id'=>['nullable','uuid']]);
         $id = $filters['circle_id'] ?? null;
         $metrics = [
-            'active' => DB::table('circles')->whereNull('archived_at')->count(),
+            'active' => DB::table('circles')->whereNull('archived_at')
+                ->where(fn ($q)=>$q->whereNull('expires_at')
+                    ->orWhere('expires_at','>',now()))->count(),
             'archived' => DB::table('circles')->whereNotNull('archived_at')->count(),
             'memberships' => DB::table('circle_members')->whereNull('removed_at')->count(),
             'pending_invites' => DB::table('circle_invites')->where('status','pending')
@@ -29,10 +31,11 @@ final class AdminCircleController extends Controller
         ];
         $summary = null;
         if ($id) {
-            $circle = DB::table('circles')->where('id',$id)->first(['id','archived_at','created_at','revision']);
+            $circle = DB::table('circles')->where('id',$id)->first(['id','archived_at','expires_at','created_at','revision']);
             if ($circle) {
                 $summary = [
-                    'id'=>$circle->id,'status'=>$circle->archived_at?'archived':'active',
+                    'id'=>$circle->id,
+                    'status'=>app(\App\Modules\Circle\Services\CircleTemporaryLifecycle::class)->state($circle),
                     'created_at'=>$circle->created_at,'revision'=>$circle->revision,
                     'members'=>DB::table('circle_members')->where('circle_id',$id)->whereNull('removed_at')->count(),
                     'pending'=>DB::table('circle_invites')->where('circle_id',$id)
