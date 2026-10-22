@@ -23,7 +23,8 @@ final class AdminCircleController extends Controller
             'active' => DB::table('circles')->whereNull('archived_at')->count(),
             'archived' => DB::table('circles')->whereNotNull('archived_at')->count(),
             'memberships' => DB::table('circle_members')->whereNull('removed_at')->count(),
-            'pending_invites' => DB::table('circle_invites')->where('status','pending')->count(),
+            'pending_invites' => DB::table('circle_invites')->where('status','pending')
+                ->where('expires_at','>',now())->count(),
             'created_24h' => DB::table('circles')->where('created_at','>=',now()->subDay())->count(),
         ];
         $summary = null;
@@ -34,7 +35,8 @@ final class AdminCircleController extends Controller
                     'id'=>$circle->id,'status'=>$circle->archived_at?'archived':'active',
                     'created_at'=>$circle->created_at,'revision'=>$circle->revision,
                     'members'=>DB::table('circle_members')->where('circle_id',$id)->whereNull('removed_at')->count(),
-                    'pending'=>DB::table('circle_invites')->where('circle_id',$id)->where('status','pending')->count(),
+                    'pending'=>DB::table('circle_invites')->where('circle_id',$id)
+                        ->where('status','pending')->where('expires_at','>',now())->count(),
                 ];
             }
         }
