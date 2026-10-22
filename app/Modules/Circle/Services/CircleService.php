@@ -190,9 +190,12 @@ final class CircleService
                 config('orbit_circle.temporary_circles_enabled') !== true) {
                 abort(404, 'Temporary Circles unavailable.');
             }
-            if (isset($data['expires_at'])) {
-                $data['expires_at']=\Illuminate\Support\Carbon::parse(
-                    $data['expires_at'])->utc()->toDateTimeString();
+            if (array_key_exists('expires_at',$data)) {
+                if ($data['expires_at'] !== null) {
+                    $data['expires_at']=\Illuminate\Support\Carbon::parse(
+                        $data['expires_at'])->utc()->toDateTimeString();
+                }
+                $data['expiry_notified_at']=null;
             }
             DB::table('circles')->where('id',$id)->update([
                 ...$data,'updated_at'=>now(),
