@@ -127,6 +127,11 @@ final class OrbitM5CodesAndArchiveTest extends TestCase
             ['invitee_id'=>$b->id])->assertCreated()->assertJsonPath('data.code',null);
         $this->withToken($tb)->postJson('/api/v1/circles/invites/code/preview',
             ['code'=>str_repeat('A',40)])->assertNotFound();
+        config()->set('orbit_circle.targeted_invites_enabled',false);
+        $this->withToken($ta)->getJson('/api/v1/circles/'.$id)
+            ->assertOk()->assertJsonPath('data.capabilities.invite',false);
+        $this->withToken($ta)->postJson('/api/v1/circles/'.$id.'/invites',
+            ['invitee_id'=>$b->id])->assertNotFound();
         config()->set('orbit_circle.archive_enabled',false);
         $this->withToken($ta)->postJson('/api/v1/circles/'.$id.'/archive',
             ['confirmation'=>'ARCHIVE'])->assertNotFound();
