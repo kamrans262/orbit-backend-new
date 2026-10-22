@@ -18,8 +18,9 @@ final class CircleAccessPolicy
     public function isMember(string $circleId, string $userId): bool
     {
         $circle = DB::table('circles')->where('id',$circleId)
-            ->whereNull('archived_at')->first(['owner_id']);
-        if (!$circle || $this->social->isBlockedEitherWay($userId,$circle->owner_id)) return false;
+            ->whereNull('archived_at')->first(['owner_id','expires_at','archived_at']);
+        if (!$circle || app(CircleTemporaryLifecycle::class)->state($circle) === 'archive_due'
+            || $this->social->isBlockedEitherWay($userId,$circle->owner_id)) return false;
         if (!OrbitUser::query()->whereKey($userId)->where('status','active')
             ->whereNull('deletion_requested_at')->exists()) return false;
         return DB::table('circle_members')->where('circle_id',$circleId)
