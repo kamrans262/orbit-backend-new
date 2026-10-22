@@ -23,6 +23,18 @@ final class CircleController extends Controller
         return (int) $r->validate(['page'=>['sometimes','integer','between:1,100']])['page'] ?? 1;
     }
 
+    public function features(Request $r): JsonResponse
+    {
+        return $this->result([
+            'temporary_circles'=>config('orbit_circle.temporary_circles_enabled') === true,
+            'targeted_invites'=>config('orbit_circle.targeted_invites_enabled') === true,
+            'join_codes'=>config('orbit_circle.join_codes_enabled') === true,
+            'archive'=>config('orbit_circle.archive_enabled') === true,
+            'role_changes'=>config('orbit_circle.role_changes_enabled') === true,
+            'ownership_transfer'=>config('orbit_circle.ownership_transfer_enabled') === true,
+        ]);
+    }
+
     public function primary(Request $r,
         \App\Modules\Circle\Services\CirclePrimaryService $service): JsonResponse
     {
