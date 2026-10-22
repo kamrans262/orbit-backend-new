@@ -54,7 +54,7 @@ final class CircleArchiveService
         return DB::transaction(function () use ($id,$owner): array {
             $this->actor($id,$owner,true);
             DB::table('circles')->where('id',$id)->update([
-                'archived_at'=>null,'updated_at'=>now(),
+                'archived_at'=>null,'expires_at'=>null,'expiry_notified_at'=>null,'updated_at'=>now(),
             ]);
             $this->changed($id,'circle.restored');
             return ['id'=>$id,'archived'=>false,'sharing_enabled'=>false];
