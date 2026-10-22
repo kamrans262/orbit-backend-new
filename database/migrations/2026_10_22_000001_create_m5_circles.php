@@ -14,6 +14,9 @@ return new class extends Migration {
             $table->string('icon_key', 40)->nullable();
             $table->string('color_value', 7)->nullable();
             $table->timestamp('archived_at')->nullable();
+            $table->timestamp('expires_at')->nullable();
+            $table->timestamp('expiry_notified_at')->nullable();
+            $table->index(['expires_at','archived_at']);
             $table->unsignedBigInteger('revision')->default(1);
             $table->char('creation_key_hash',64)->nullable()->unique();
             $table->char('creation_payload_hash',64)->nullable();
