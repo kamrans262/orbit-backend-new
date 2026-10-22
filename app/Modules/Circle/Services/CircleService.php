@@ -184,6 +184,10 @@ final class CircleService
     {
         return DB::transaction(function () use ($id,$user,$data): array {
             $this->temporary->assertWritable($this->circle($id,$user,true,true));
+            if (isset($data['expires_at']) &&
+                config('orbit_circle.temporary_circles_enabled') !== true) {
+                abort(404, 'Temporary Circles unavailable.');
+            }
             DB::table('circles')->where('id',$id)->update([
                 ...$data,'updated_at'=>now(),
             ]);
