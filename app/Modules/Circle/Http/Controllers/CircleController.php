@@ -47,6 +47,7 @@ final class CircleController extends Controller
             'name'=>['required','string','min:1','max:80'],
             'icon_key'=>['sometimes','nullable','string','max:40','regex:/^[a-zA-Z0-9._-]+$/D'],
             'color_value'=>['sometimes','nullable','regex:/^#[0-9a-fA-F]{6}$/D'],
+            'expires_at'=>['sometimes','nullable','date','after:now'],
         ]);
         if (trim($data['name']) === '') {
             throw \Illuminate\Validation\ValidationException::withMessages(['name'=>'Circle name is required.']);
