@@ -115,6 +115,59 @@ final class OrbitM5CodesAndArchiveTest extends TestCase
         $this->assertDatabaseCount('circles',1);
     }
 
+    public function test_temporary_circle_stays_read_only_for_72_hours_then_archives_without_deletion(): void
+    {
+        config()->set('orbit_circle.temporary_circles_enabled',true);
+        [$owner,$token]=$this->identity('alpha');
+        $expires=now()->addMinutes(5);
+        $id=$this->withToken($token)->postJson('/api/v1/circles',[
+            'name'=>'Temporary Circle',
+            'expires_at'=>$expires->toIso8601String(),
+        ])->assertCreated()->assertJsonPath('data.lifecycle_state','active')->json('data.id');
+        $this->assertDatabaseHas('circles',['id'=>$id,'owner_id'=>$owner->id]);
+        $this->travel(6)->minutes();
+        $this->withToken($token)->getJson('/api/v1/circles/'.$id)
+            ->assertOk()->assertJsonPath('data.lifecycle_state','read_only')
+            ->assertJsonPath('data.capabilities.edit',false)
+            ->assertJsonPath('data.capabilities.invite',false);
+        $this->withToken($token)->patchJson('/api/v1/circles/'.$id,[
+            'name'=>'Unsafe Rename',
+        ])->assertStatus(409);
+        $this->withToken($token)->getJson('/api/v1/circles')
+            ->assertOk()->assertJsonPath('data.items.0.id',$id);
+
+        $this->travel(73)->hours();
+        $this->withToken($token)->getJson('/api/v1/circles/'.$id)->assertNotFound();
+        $this->withToken($token)->getJson('/api/v1/circles')
+            ->assertOk()->assertJsonCount(0,'data.items');
+        $archived=app(\App\Modules\Circle\Services\CircleTemporaryLifecycle::class)
+            ->archiveDue();
+        $this->assertSame(1,$archived);
+        $this->assertSame(0,app(\App\Modules\Circle\Services\CircleTemporaryLifecycle::class)->archiveDue());
+        $this->assertDatabaseCount('circles',1);
+        $this->assertDatabaseHas('circles',['id'=>$id]);
+        $this->withToken($token)->getJson('/api/v1/circles/archived')
+            ->assertOk()->assertJsonPath('data.items.0.id',$id);
+        $this->withToken($token)->postJson('/api/v1/circles/'.$id.'/restore',[
+            'confirmation'=>'RESTORE',
+        ])->assertOk();
+        $this->withToken($token)->getJson('/api/v1/circles/'.$id)
+            ->assertOk()->assertJsonPath('data.lifecycle_state','active');
+        $this->assertNull(\Illuminate\Support\Facades\DB::table('circles')
+            ->where('id',$id)->value('expires_at'));
+    }
+
+    public function test_temporary_expiry_requires_separate_feature_gate(): void
+    {
+        config()->set('orbit_circle.temporary_circles_enabled',false);
+        [$owner,$token]=$this->identity('alpha');
+        $this->withToken($token)->postJson('/api/v1/circles',[
+            'name'=>'Unavailable Temporary',
+            'expires_at'=>now()->addDay()->toIso8601String(),
+        ])->assertNotFound();
+        $this->assertDatabaseCount('circles',0);
+    }
+
     public function test_unapproved_code_or_archive_features_remain_inaccessible(): void
     {
         [$a,$ta]=$this->identity('alpha');
