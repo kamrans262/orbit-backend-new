@@ -245,7 +245,7 @@ final class CircleService
         if (config('orbit_circle.targeted_invites_enabled') !== true) abort(404,'Invitation unavailable.');
         $circle=$this->authorizeInvites($id,$user);
         $items = DB::table('circle_invites')->where('circle_id',$id)
-            ->orderByDesc('created_at')->paginate(20,['id','invitee_id','inviter_id','status','created_at','resolved_at'],'page',$page);
+            ->orderByDesc('created_at')->paginate(20,['id','invitee_id','inviter_id','status','expires_at','created_at','resolved_at'],'page',$page);
         $safe = [];
         foreach ($items->items() as $invite) {
             if ($this->social->isBlockedEitherWay($user,$invite->invitee_id)) continue;
@@ -253,10 +253,16 @@ final class CircleService
                 ->where('status','active')->whereNull('deletion_requested_at')
                 ->first(['id','username','display_name']);
             if (!$person) continue;
+            // Expiry is authoritative even if a housekeeping job has not yet
+            // persisted the terminal status. Never offer a revoked/expired
+            // action on the Flutter client.
+            $expired=$invite->status==='pending' &&
+                $invite->expires_at !== null &&
+                now()->gte($invite->expires_at);
             $safe[] = [
-                'id'=>$invite->id,'status'=>$invite->status,
+                'id'=>$invite->id,'status'=>$expired?'expired':$invite->status,
                 'created_at'=>$invite->created_at,'resolved_at'=>$invite->resolved_at,
-                'can_revoke'=>$invite->status==='pending' &&
+                'can_revoke'=>$invite->status==='pending' && !$expired &&
                     ($circle->owner_id === $user || $invite->inviter_id === $user),
                 'person'=>['id'=>$person->id,'username'=>$person->username,
                     'display_name'=>$person->display_name],
