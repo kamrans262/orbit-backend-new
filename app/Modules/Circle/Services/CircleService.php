@@ -296,7 +296,8 @@ final class CircleService
         $result = [];
         foreach ($items->items() as $invite) {
             $circle = DB::table('circles')->where('id',$invite->circle_id)->whereNull('archived_at')->first();
-            if (!$circle || !$this->active($circle->owner_id)
+            if (!$circle || $this->temporary->state($circle) !== 'active'
+                || !$this->active($circle->owner_id)
                 || $this->social->isBlockedEitherWay($user,$circle->owner_id)
                 || $this->social->isBlockedEitherWay($user,$invite->inviter_id)) continue;
             $result[] = ['id'=>$invite->id,'circle_id'=>$circle->id,
@@ -319,7 +320,8 @@ final class CircleService
             || !$this->social->isFriend($viewer,$invite->inviter_id)) abort(404,'Invitation unavailable.');
         $circle = DB::table('circles')->where('id',$invite->circle_id)
             ->whereNull('archived_at')->first();
-        if (!$circle || !$this->active($circle->owner_id)
+        if (!$circle || $this->temporary->state($circle) !== 'active'
+            || !$this->active($circle->owner_id)
             || $this->social->isBlockedEitherWay($viewer,$circle->owner_id)) {
             abort(404,'Invitation unavailable.');
         }
@@ -350,6 +352,7 @@ final class CircleService
             $circle = DB::table('circles')->where('id',$hint->circle_id)
                 ->whereNull('archived_at')->lockForUpdate()->first();
             if (!$circle) abort(404,'Invitation unavailable.');
+            if ($accept) $this->temporary->assertWritable($circle);
             $invite = DB::table('circle_invites')->where('id',$id)
                 ->where('invitee_id',$user)->lockForUpdate()->first();
             if (!$invite || $invite->status !== 'pending') abort(409,'Invitation already resolved.');
