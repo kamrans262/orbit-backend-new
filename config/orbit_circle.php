@@ -11,6 +11,9 @@ return [
     'join_codes_enabled' => (bool) env('ORBIT_M5_JOIN_CODES_ENABLED', false),
     'role_changes_enabled' => (bool) env('ORBIT_M5_ROLE_CHANGES_ENABLED', false),
     'archive_enabled' => (bool) env('ORBIT_M5_ARCHIVE_ENABLED', false),
+    // Temporary Circles: user-selected expiry, 72h read-only, then cold archive.
+    // No automatic purge; scheduling requires explicit cron and QA approval.
+    'temporary_circles_enabled' => (bool) env('ORBIT_M5_TEMPORARY_CIRCLES_ENABLED', false),
     'ownership_transfer_enabled' => (bool) env('ORBIT_M5_OWNERSHIP_TRANSFER_ENABLED', false),
     // Location, presence, chat, Moments and SOS are never activated by M5 config.
 ];
