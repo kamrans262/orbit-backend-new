@@ -70,6 +70,39 @@ final class CircleTemporaryLifecycle
         return $count;
     }
 
+    /**
+     * Enqueue a privacy-minimal 24h reminder event once per temporary Circle.
+     * Delivery is intentionally delegated to an approved notification transport;
+     * Circle names, members and coordinates are never added to the outbox.
+     */
+    public function queueExpiryNotices(int $limit = 100): int
+    {
+        if (config('orbit_circle.temporary_circles_enabled') !== true
+            || config('orbit_circle.enabled') !== true) return 0;
+        $ids=DB::table('circles')->whereNull('archived_at')
+            ->whereNull('expiry_notified_at')->whereNotNull('expires_at')
+            ->where('expires_at','>',now())
+            ->where('expires_at','<=',now()->addHours(24))
+            ->orderBy('expires_at')->limit(min(max($limit,1),1000))->pluck('id');
+        $count=0;
+        foreach($ids as $id) {
+            DB::transaction(function () use ($id,&$count): void {
+                $row=DB::table('circles')->where('id',$id)->lockForUpdate()->first();
+                if (!$row || $row->expiry_notified_at !== null ||
+                    $this->state($row) !== 'active' ||
+                    Carbon::parse($row->expires_at)->gt(now()->addHours(24))) return;
+                DB::table('circles')->where('id',$id)
+                    ->update(['expiry_notified_at'=>now(),'updated_at'=>now()]);
+                DB::table('circle_event_outbox')->insert([
+                    'id'=>(string) Str::uuid7(),'circle_id'=>$id,
+                    'event_type'=>'circle.temporary_expiring','created_at'=>now(),
+                ]);
+                $count++;
+            },3);
+        }
+        return $count;
+    }
+
     /** Scope only: no cold-archive deletion until separately approved. */
     public function eligibleForRetentionReviewCount(): int
     {
