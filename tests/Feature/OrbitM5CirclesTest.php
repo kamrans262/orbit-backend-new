@@ -287,6 +287,25 @@ final class OrbitM5CirclesTest extends TestCase
         return $admin;
     }
 
+    public function test_admin_pending_invites_excludes_expired_credentials(): void
+    {
+        [$a,$ta] = $this->person('alpha');
+        [$b,$tb] = $this->person('bravo');
+        $this->beFriends($ta,$tb,$b->id);
+        $circle=$this->createCircle($ta);
+        $inv=$this->withToken($ta)->postJson('/api/v1/circles/'.$circle.'/invites',
+            ['invitee_id'=>$b->id])->assertCreated()->json('data.id');
+        DB::table('circle_invites')->where('id',$inv)->update([
+            'expires_at'=>now()->subSecond(),
+        ]);
+        $admin=$this->admin(['circles.read']);
+        $this->be($admin,'admin');
+        $this->get('/admin/circles?circle_id='.$circle)->assertOk()
+            ->assertViewHas('metrics',fn ($v) => $v['pending_invites'] === 0)
+            ->assertViewHas('summary',fn ($v) => $v['pending'] === 0);
+        $this->assertDatabaseHas('circle_invites',['id'=>$inv,'status'=>'pending']);
+    }
+
     public function test_admin_circle_counters_are_read_only_and_permission_gated(): void
     {
         [$a,$ta] = $this->person('alpha');
