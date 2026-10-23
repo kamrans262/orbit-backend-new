@@ -102,7 +102,8 @@ final class CircleFirebaseBridge
             'iat' => $now, 'exp' => $now + 900,
             'uid' => $session->id,
             'claims' => ['orbit_m5' => true, 'orbit_device' => $session->device_id,
-                'orbit_session' => $session->id],
+                'orbit_session' => $session->id,
+                'orbit_session_expires_ms' => $session->expires_at->getTimestamp() * 1000],
         ], $creds);
         return ['enabled' => true, 'custom_token' => $token, 'firebase' => $client,
             'uid' => $session->id, 'expires_in' => 900];
