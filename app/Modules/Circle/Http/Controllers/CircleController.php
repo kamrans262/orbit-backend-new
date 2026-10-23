@@ -35,6 +35,18 @@ final class CircleController extends Controller
         ]);
     }
 
+    /**
+     * Trusted-session Firebase Auth bootstrap; responds 404 while disabled.
+     * Never leaks service-account credentials or consumer private data.
+     */
+    public function realtimeBootstrap(Request $r,
+        \App\Modules\Circle\Services\CircleFirebaseBridge $firebase): JsonResponse
+    {
+        abort_unless($firebase->enabled(), 404);
+        return $this->result($firebase->bootstrap($r->attributes->get('orbit_session')))
+            ->header('Cache-Control', 'no-store');
+    }
+
     public function primary(Request $r,
         \App\Modules\Circle\Services\CirclePrimaryService $service): JsonResponse
     {
