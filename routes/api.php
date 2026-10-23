@@ -56,6 +56,7 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('/circles/{circle}/permissions', [CircleController::class, 'revokePermission'])->whereUuid('circle')->middleware('throttle:20,1');
         }); // M5 feature gate
         // M6: media is private, authenticated and device-bound. No public asset routes.
+        Route::post('/media/recipient-keys', [MediaController::class,'recipientKeys'])->middleware('throttle:30,1');
         Route::post('/media/uploads', [MediaController::class,'initiate'])->middleware('throttle:10,1');
         Route::get('/media/uploads/{upload}', [MediaController::class,'uploadStatus'])->whereUuid('upload');
         Route::post('/media/uploads/{upload}/parts', [MediaController::class,'part'])->whereUuid('upload')->middleware('throttle:120,1');

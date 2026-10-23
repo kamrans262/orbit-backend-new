@@ -156,6 +156,54 @@ final class MediaController extends Controller
         ]);
     }
 
+
+    /**
+     * Device public keys only, never secrets. Contact discovery and Circle
+     * roster access remain server-authoritative and revocation-aware.
+     */
+    public function recipientKeys(Request $r,MediaPolicy $policy,
+        CircleAccessPolicy $circles): JsonResponse
+    {
+        [$actor]=$this->actor($r);
+        $d=$r->validate([
+            'audience_kind'=>['required','in:only_me,selected_friends,selected_circles'],
+            'recipient_ids'=>['required','array','max:100'],
+            'recipient_ids.*'=>['required','uuid','distinct'],
+            'circle_id'=>['nullable','uuid'],
+        ]);
+        $audience=$d['audience_kind'];
+        $circle=$audience==='selected_circles'
+            ? ($d['circle_id']??null) : null;
+        abort_if($audience==='selected_circles' && !$circle,422,'Circle required.');
+        if($circle)abort_unless($circles->isMember($circle,$actor),404);
+        $ids=$d['recipient_ids'];
+        abort_unless(count($ids)>0,422,'No recipient specified.');
+        $records=[];
+        foreach($ids as $recipient) {
+            if($audience==='only_me') {
+                abort_unless($recipient===$actor,404,'Recipient unavailable.');
+            } else {
+                abort_unless($policy->recipientEligible(
+                    $actor,$recipient,$audience,$circle),404,'Recipient unavailable.');
+                if($circle)abort_unless($circles->canAccessProtected(
+                    $circle,$actor,$recipient,'moments'),404,'Recipient unavailable.');
+            }
+            $devices=DB::table('devices')->where('user_id',$recipient)
+                ->where('trust_state','trusted')->whereNotNull('approved_at')
+                ->whereNull('revoked_at')->whereNotNull('public_key')
+                ->get(['id','public_key']);
+            $valid=[];
+            foreach($devices as $device) {
+                $decoded=base64_decode((string)$device->public_key,true);
+                if($decoded===false || strlen($decoded)!==32)continue;
+                $valid[]=['device_id'=>$device->id,
+                    'public_key'=>$device->public_key];
+            }
+            $records[]=['recipient_id'=>$recipient,'devices'=>$valid];
+        }
+        return $this->response(['recipients'=>$records]);
+    }
+
     public function initiate(Request $r,MediaObjectStore $store): JsonResponse
     {
         [$actor,$device]=$this->actor($r);
