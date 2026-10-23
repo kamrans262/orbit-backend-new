@@ -67,6 +67,21 @@ final class OrbitM5FirebasePreparedTest extends TestCase
         return $file;
     }
 
+    public function test_firebase_rules_are_deny_by_default_and_session_scoped(): void
+    {
+        $rules = json_decode(file_get_contents(base_path('firebase/database.rules.json')),
+            true, 32, JSON_THROW_ON_ERROR)['rules'];
+        $this->assertFalse($rules['.read']);
+        $this->assertFalse($rules['.write']);
+        $this->assertFalse($rules['orbit_m5']['acl']['.read']);
+        $this->assertFalse($rules['orbit_m5']['acl']['.write']);
+        $revision = $rules['orbit_m5']['revisions']['$circleId'];
+        $this->assertFalse($revision['.write']);
+        $this->assertStringContainsString('auth.uid', $revision['.read']);
+        $this->assertStringContainsString('orbit_session', $revision['.read']);
+        $this->assertStringContainsString('orbit_device', $revision['.read']);
+    }
+
     public function test_firebase_is_fully_inert_until_both_server_gates_are_enabled(): void
     {
         Http::fake();
