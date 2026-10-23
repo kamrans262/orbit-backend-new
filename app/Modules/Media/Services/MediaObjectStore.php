@@ -10,6 +10,12 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  */
 class MediaObjectStore
 {
+    public function mode(): string { return 'multipart'; }
+    public function partBytes(): int { return (int) config('orbit_media.part_size_bytes'); }
+    public function writePart(string $key,string $uploadId,int $part,string $body,string $checksum): string {
+        abort(404,'Local media upload disabled.');
+    }
+    public function localPath(string $key): string { abort(404,'Local media disabled.'); }
     protected function client(): object
     {
         if (config('orbit_media.enabled') !== true) throw new HttpException(404,'Media unavailable.');

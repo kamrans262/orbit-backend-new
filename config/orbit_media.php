@@ -2,6 +2,10 @@
 return [
     'enabled' => (bool) env('ORBIT_MEDIA_ENABLED', false),
     // Fail closed: no automatic downgrade to publicly served Laravel storage.
+    // hostinger_private stores ciphertext under Laravel storage/app/private;
+    // it never writes into public_html, public storage or the database.
+    'driver' => env('ORBIT_MEDIA_DRIVER', 's3'),
+    'hostinger_part_bytes' => 1048576,
     'bucket' => env('ORBIT_MEDIA_BUCKET'),
     'region' => env('ORBIT_MEDIA_REGION', 'auto'),
     'endpoint' => env('ORBIT_MEDIA_ENDPOINT'),

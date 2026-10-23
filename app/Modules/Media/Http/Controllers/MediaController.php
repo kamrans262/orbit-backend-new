@@ -100,8 +100,8 @@ final class MediaController extends Controller
             abort_unless($old->device_id===$device && hash_equals($old->payload_hash,$digest),409,'Idempotency conflict.');
             return $this->response(['upload_id'=>$old->id,'media_id'=>$media,
                 'variant'=>$d['variant'],'state'=>$old->state,
-                'expires_at'=>$old->expires_at,'part_size_bytes'=>config('orbit_media.part_size_bytes'),
-                'storage_mode'=>'multipart'],201);
+                'expires_at'=>$old->expires_at,'part_size_bytes'=>$store->partBytes(),
+                'storage_mode'=>$store->mode()],201);
         }
         abort_if(DB::table('media_variants')->where('media_id',$media)
             ->where('variant',$d['variant'])->exists(),409,'Variant already exists.');
@@ -245,15 +245,42 @@ final class MediaController extends Controller
             'checksum_sha256'=>['required','regex:/^[a-f0-9]{64}$/D'],
             'content_length'=>['required','integer','min:1'],
         ]);
-        $max=(int)config('orbit_media.part_size_bytes');
+        $max=$store->partBytes();
         abort_if($d['content_length']>$max,413,'Part too large.');
         abort_if(($d['part_number']-1)*$max >= $u->declared_bytes,422,'Part out of range.');
+        abort_unless($store->mode()==='multipart',409,'Use local authenticated media chunks.');
         $res=$store->signPart($this->uploadObjectKey($u),
             $this->providerId($u),(int)$d['part_number'],$d['checksum_sha256'],
             (int)$d['content_length']);
         DB::table('media_upload_sessions')->where('id',$u->id)->where('state','initiated')
             ->update(['state'=>'uploading','updated_at'=>now()]);
         return $this->response($res);
+    }
+
+
+    /** Binary ciphertext only; never parse, decode or inspect plaintext. */
+    public function localChunk(Request $r,string $upload,int $part,MediaObjectStore $store): JsonResponse
+    {
+        abort_unless($store->mode()==='local_chunked',404);
+        $u=$this->upload($r,$upload);
+        $this->activeUpload($u);
+        $chunkMax=$store->partBytes();
+        abort_unless($part>=1 && $part<=10000
+            && ($part-1)*$chunkMax < (int)$u->declared_bytes,422,'Part out of range.');
+        abort_unless($r->header('Content-Type')==='application/octet-stream',415,
+            'Encrypted binary content required.');
+        $body=$r->getContent();
+        abort_unless(is_string($body) && strlen($body)>0
+            && strlen($body)<=$chunkMax,413,'Invalid chunk size.');
+        $expected=min($chunkMax,(int)$u->declared_bytes-($part-1)*$chunkMax);
+        abort_unless(strlen($body)===$expected,422,'Ciphertext chunk length mismatch.');
+        $checksum=strtolower((string)$r->header('X-Orbit-Cipher-SHA256',''));
+        abort_unless(preg_match('/^[0-9a-f]{64}$/D',$checksum)===1,422);
+        $etag=$store->writePart($this->uploadObjectKey($u),
+            $this->providerId($u),$part,$body,$checksum);
+        DB::table('media_upload_sessions')->where('id',$u->id)
+            ->where('state','initiated')->update(['state'=>'uploading','updated_at'=>now()]);
+        return $this->response(['part_number'=>$part,'etag'=>$etag],201);
     }
 
     public function complete(Request $r,string $upload,MediaObjectStore $store): JsonResponse
@@ -286,7 +313,7 @@ final class MediaController extends Controller
         $key=$this->uploadObjectKey($u);
         $onServer=$store->uploadedParts($key,$this->providerId($u));
         abort_unless(count($onServer)===count($parts),409,'Uploaded part count mismatch.');
-        $total=0;$max=(int)config('orbit_media.part_size_bytes');
+        $total=0;$max=$store->partBytes();
         foreach($onServer as $i=>$p) {
             abort_unless($p['part_number']===$parts[$i]['part_number'] &&
                 trim($p['etag'],'"')===trim($parts[$i]['etag'],'"'),409,'Part integrity mismatch.');
@@ -371,10 +398,48 @@ final class MediaController extends Controller
             ->where(fn($q)=>$q->whereNull('g.expires_at')->orWhere('g.expires_at','>',now()))
             ->first(['e.id']);
         abort_unless($env,404,'Media unavailable.');
+        if($store->mode()==='local_chunked') {
+            return $this->response([
+                'download_mode'=>'authenticated',
+                'download_path'=>'/media/'.rawurlencode($media).'/ciphertext?variant='.rawurlencode($variant),
+                'sha256_ciphertext'=>$row->cipher_sha256,
+                'envelope_ref'=>$env->id,
+            ]);
+        }
         return $this->response(['ciphertext_url'=>$store->download($row->object_key),
             'expires_at'=>now()->addSeconds((int)config('orbit_media.url_ttl_seconds'))->toIso8601String(),
             'sha256_ciphertext'=>$row->cipher_sha256,'envelope_ref'=>$env->id]);
     }
+
+    public function localCiphertext(Request $r,string $media,MediaPolicy $policy,
+        MediaObjectStore $store): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        abort_unless($store->mode()==='local_chunked',404);
+        [$actor,$device]=$this->actor($r);
+        $d=$r->validate(['variant'=>['required','in:original,thumbnail,poster,waveform,transcoded']]);
+        $m=$this->media($media);
+        $policy->requireRead($m,$actor);
+        $exists=DB::table('media_device_key_envelopes as e')
+            ->join('media_audience_grants as g','g.id','=','e.grant_id')
+            ->where('e.media_id',$media)->where('e.recipient_device_id',$device)
+            ->where('e.variant',$d['variant'])->whereNull('e.revoked_at')
+            ->whereNull('g.revoked_at')
+            ->where(fn($q)=>$q->whereNull('g.expires_at')->orWhere('g.expires_at','>',now()))
+            ->exists();
+        abort_unless($exists,404,'Media unavailable.');
+        $row=$d['variant']==='original'?$m:DB::table('media_variants')
+            ->where('media_id',$media)->where('variant',$d['variant'])
+            ->where('state','ready')->first();
+        abort_unless($row,404,'Media unavailable.');
+        return response()->download($store->localPath($row->object_key),
+            'orbit-ciphertext.bin',[
+                'Content-Type'=>'application/octet-stream',
+                'Cache-Control'=>'private, no-store, no-cache, must-revalidate',
+                'Pragma'=>'no-cache',
+                'X-Content-Type-Options'=>'nosniff',
+            ]);
+    }
+
     public function keyEnvelope(Request $r,string $media,MediaPolicy $policy): JsonResponse
     {
         [$actor,$device]=$this->actor($r);
