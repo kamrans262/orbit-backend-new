@@ -30,3 +30,15 @@ Artisan::command('orbit:circles:retention-review {--purge} {--confirmation=}', f
     $purged=$lifecycle->purgeReviewed(25,(string)$this->option('confirmation'));
     $this->info('Audited, authorized temporary Circle purges: '.$purged);
 })->purpose('Preview Circle retention eligibility; explicit audited purge is separately gated');
+
+/**
+ * Configured transport only; zero network activity while Firebase is OFF.
+ * Replaying outbox data is idempotent and never sends Circle private content.
+ */
+Artisan::command('orbit:circles:firebase-publish', function () {
+    $count = app(\App\Modules\Circle\Services\CircleFirebaseBridge::class)
+        ->publishPending(20);
+    $this->info('Circle revision events published: '.$count);
+})->purpose('Publish scoped revision invalidations to approved Firebase RTDB');
+
+Schedule::command('orbit:circles:firebase-publish')->everyMinute()->withoutOverlapping();
