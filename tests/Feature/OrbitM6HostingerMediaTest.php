@@ -28,6 +28,15 @@ final class OrbitM6HostingerMediaTest extends TestCase
         app()->instance(MediaObjectStore::class,new HostingerPrivateMediaStore());
     }
 
+    private function uploadChunk(string $token,string $url,string $body,string $hash): \Illuminate\Testing\TestResponse
+    {
+        return $this->call('PUT',$url,[],[],[],[
+            'HTTP_AUTHORIZATION'=>'Bearer '.$token,
+            'CONTENT_TYPE'=>'application/octet-stream',
+            'HTTP_X_ORBIT_CIPHER_SHA256'=>$hash,
+        ],$body);
+    }
+
     public function test_hostinger_private_chunk_replay_integrity_lifecycle_and_download(): void
     {
         $user=OrbitUser::create([
@@ -55,24 +64,12 @@ final class OrbitM6HostingerMediaTest extends TestCase
         $first=substr($bytes,0,1048576);
         $second=substr($bytes,1048576);
         $url='/api/v1/media/uploads/'.$upload.'/chunks/';
-        $this->withToken($token)
-            ->withHeader('Content-Type','application/octet-stream')
-            ->withHeader('X-Orbit-Cipher-SHA256',str_repeat('0',64))
-            ->call('PUT',$url.'1',[],[],[],[], $first)->assertUnprocessable();
-        $etag1=$this->withToken($token)
-            ->withHeader('Content-Type','application/octet-stream')
-            ->withHeader('X-Orbit-Cipher-SHA256',hash('sha256',$first))
-            ->call('PUT',$url.'1',[],[],[],[], $first)
+        $this->uploadChunk($token,$url.'1',$first,str_repeat('0',64))->assertUnprocessable();
+        $etag1=$this->uploadChunk($token,$url.'1',$first,hash('sha256',$first))
             ->assertCreated()->json('data.etag');
-        $this->withToken($token)
-            ->withHeader('Content-Type','application/octet-stream')
-            ->withHeader('X-Orbit-Cipher-SHA256',hash('sha256',$first))
-            ->call('PUT',$url.'1',[],[],[],[], $first)
+        $this->uploadChunk($token,$url.'1',$first,hash('sha256',$first))
             ->assertCreated()->assertJsonPath('data.etag',$etag1);
-        $etag2=$this->withToken($token)
-            ->withHeader('Content-Type','application/octet-stream')
-            ->withHeader('X-Orbit-Cipher-SHA256',hash('sha256',$second))
-            ->call('PUT',$url.'2',[],[],[],[], $second)
+        $etag2=$this->uploadChunk($token,$url.'2',$second,hash('sha256',$second))
             ->assertCreated()->json('data.etag');
         $this->withToken($token)->getJson('/api/v1/media/uploads/'.$upload)
             ->assertOk()->assertJsonCount(2,'data.uploaded_parts');
