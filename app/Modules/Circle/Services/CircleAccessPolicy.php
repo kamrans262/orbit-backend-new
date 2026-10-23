@@ -17,6 +17,9 @@ final class CircleAccessPolicy
 
     public function isMember(string $circleId, string $userId): bool
     {
+        // A disabled M5 rollout is a global veto, including for future
+        // protected-content consumers that call this policy directly.
+        if (config('orbit_circle.enabled') !== true) return false;
         $circle = DB::table('circles')->where('id',$circleId)
             ->whereNull('archived_at')->first(['owner_id','expires_at','archived_at']);
         if (!$circle || app(CircleTemporaryLifecycle::class)->state($circle) === 'archive_due'
