@@ -134,8 +134,8 @@ final class MediaController extends Controller
         }
         return $this->response(['upload_id'=>$upload,'media_id'=>$media,
             'variant'=>$d['variant'],'expires_at'=>now()->addHours((int)config('orbit_media.upload_session_hours'))->toIso8601String(),
-            'part_size_bytes'=>config('orbit_media.part_size_bytes'),
-            'max_bytes'=>$d['declared_bytes'],'storage_mode'=>'multipart'],201);
+            'part_size_bytes'=>$store->partBytes(),
+            'max_bytes'=>$d['declared_bytes'],'storage_mode'=>$store->mode()],201);
     }
 
     private function activeUpload(object $u): void
@@ -186,8 +186,8 @@ final class MediaController extends Controller
             abort_unless($old->device_id===$device,409,'Upload session belongs to another device.');
             return $this->response(['upload_id'=>$old->id,'media_id'=>$old->media_id,
                 'state'=>$old->state,'expires_at'=>$old->expires_at,
-                'part_size_bytes'=>config('orbit_media.part_size_bytes'),
-                'storage_mode'=>'multipart'],201);
+                'part_size_bytes'=>$store->partBytes(),
+                'storage_mode'=>$store->mode()],201);
         }
         $media=(string)Str::uuid7(); $upload=(string)Str::uuid7();
         $objectKey=config('orbit_media.path_prefix').'/'.Str::random(28).'/'.$media;
@@ -222,8 +222,8 @@ final class MediaController extends Controller
         }
         return $this->response(['upload_id'=>$upload,'media_id'=>$media,
             'expires_at'=>now()->addHours((int)config('orbit_media.upload_session_hours'))->toIso8601String(),
-            'part_size_bytes'=>config('orbit_media.part_size_bytes'),
-            'max_bytes'=>$data['declared_bytes'],'storage_mode'=>'multipart'],201);
+            'part_size_bytes'=>$store->partBytes(),
+            'max_bytes'=>$data['declared_bytes'],'storage_mode'=>$store->mode()],201);
     }
 
     public function uploadStatus(Request $r,string $upload,MediaObjectStore $store): JsonResponse
@@ -234,7 +234,7 @@ final class MediaController extends Controller
             ? $store->uploadedParts($this->uploadObjectKey($u),$this->providerId($u))
             : [];
         return $this->response(['upload_id'=>$u->id,'state'=>$u->state,
-            'expires_at'=>$u->expires_at,'part_size_bytes'=>config('orbit_media.part_size_bytes'),
+            'expires_at'=>$u->expires_at,'part_size_bytes'=>$store->partBytes(),
             'uploaded_parts'=>$parts]);
     }
     public function part(Request $r,string $upload,MediaObjectStore $store): JsonResponse
