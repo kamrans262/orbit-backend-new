@@ -31,6 +31,7 @@ final class CircleArchiveService
             'id'=>(string) Str::uuid7(),'circle_id'=>$id,
             'event_type'=>$action,'created_at'=>now(),
         ]);
+        app(CircleFirebaseBridge::class)->afterCommit($id);
     }
     public function archive(string $id, string $owner): array
     {
