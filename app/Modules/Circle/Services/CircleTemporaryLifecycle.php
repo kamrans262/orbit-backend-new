@@ -103,11 +103,61 @@ final class CircleTemporaryLifecycle
         return $count;
     }
 
+    private function purgeCandidates(): \Illuminate\Database\Query\Builder
+    {
+        return DB::table('circles')
+            ->whereNotNull('expires_at')
+            ->whereNotNull('archived_at')
+            ->whereNull('retention_hold_at')
+            ->where('archived_at','<=',now()->subDays(self::COLD_DAYS));
+    }
+
+    /**
+     * An explicitly invoked, audited purge. Not scheduled. A legal hold or
+     * changed eligibility must reject the operation under the row lock.
+     * Only temporary Circles beyond their cold-archive retention are touched.
+     * No production execution is performed by normal CI or deployment.
+     */
+    public function purgeReviewed(int $limit, string $confirmation): int
+    {
+        if ($confirmation !== 'PURGE_REVIEWED_TEMPORARY_CIRCLES'
+            || config('orbit_circle.enabled') !== true
+            || config('orbit_circle.temporary_circles_enabled') !== true
+            || config('orbit_circle.retention_policy_approved') !== true
+            || config('orbit_circle.retention_purge_enabled') !== true) {
+            throw new \DomainException('Temporary Circle retention purge is not authorized.');
+        }
+        $ids=$this->purgeCandidates()->orderBy('archived_at')
+            ->limit(min(max($limit,1),100))->pluck('id');
+        $purged=0;
+        foreach($ids as $id) {
+            DB::transaction(function () use ($id,&$purged): void {
+                $row=DB::table('circles')->where('id',$id)->lockForUpdate()->first();
+                if (!$row || $row->expires_at===null
+                    || $row->archived_at===null || $row->retention_hold_at!==null
+                    || Carbon::parse($row->archived_at)->gt(now()->subDays(self::COLD_DAYS))) {
+                    return;
+                }
+                $hash=hash_hmac('sha256','circle-retention|'.$row->id,
+                    (string)config('app.key'));
+                // Write the non-identifying audit in the same transaction as
+                // FK-enforced deletion. Duplicate retries become harmless.
+                DB::table('circle_retention_audits')->insert([
+                    'id'=>(string)Str::uuid7(),
+                    'circle_hash'=>$hash,
+                    'action'=>'temporary_circle_purged',
+                    'executed_at'=>now(),
+                ]);
+                DB::table('circles')->where('id',$id)->delete();
+                $purged++;
+            },3);
+        }
+        return $purged;
+    }
+
     /** Scope only: no cold-archive deletion until separately approved. */
     public function eligibleForRetentionReviewCount(): int
     {
-        return DB::table('circles')->whereNotNull('expires_at')
-            ->whereNotNull('archived_at')
-            ->where('archived_at','<=',now()->subDays(self::COLD_DAYS))->count();
+        return $this->purgeCandidates()->count();
     }
 }
