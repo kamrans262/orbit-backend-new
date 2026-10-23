@@ -9,7 +9,7 @@
       },
       "revisions": {
         "$circleId": {
-          ".read": "auth !== null && auth.token.orbit_m5 === true && auth.token.orbit_session === auth.uid && root.child('orbit_m5').child('acl').child($circleId).child(auth.uid).val() === auth.token.orbit_device",
+          ".read": "auth !== null && auth.token.orbit_m5 === true && auth.token.orbit_session === auth.uid && now < auth.token.orbit_session_expires_ms && root.child('orbit_m5').child('acl').child($circleId).child(auth.uid).val() === auth.token.orbit_device",
           ".write": false
         }
       }
