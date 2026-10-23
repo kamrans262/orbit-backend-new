@@ -31,7 +31,8 @@ final class CircleConsentPolicy
         foreach ($rows as $row) {
             $settings = $row->value_json
                 ? json_decode($row->value_json,true) : null;
-            $saved[$row->permission_key]=[
+            $saved[]=[
+                'permission_key'=>$row->permission_key,
                 // Never present a stored unreviewed preference as live sharing.
                 'enabled'=>false,
                 'requested'=>$row->enabled===true || (int)$row->enabled===1,
