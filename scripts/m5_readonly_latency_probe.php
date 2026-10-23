@@ -23,7 +23,7 @@ $host = strtolower((string) ($parsed['host'] ?? ''));
 $loopback = in_array($host, ['localhost', '127.0.0.1', '::1'], true);
 
 if (!in_array($scheme, ['http', 'https'], true) || $host === ''
-    || isset($parsed['user'], $parsed['pass'])
+    || isset($parsed['user']) || isset($parsed['pass'])
     || (!$loopback && ($scheme !== 'https'
         || getenv('ORBIT_M5_REMOTE_PROBE_APPROVED') !== 'YES'))) {
     fwrite(STDERR, "Only local development is allowed by default. Remote probes need explicit approval and HTTPS.\n");
