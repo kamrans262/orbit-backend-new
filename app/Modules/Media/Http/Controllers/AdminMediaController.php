@@ -51,4 +51,42 @@ final class AdminMediaController extends Controller
             ->header('Cache-Control','private, no-store')
             ->header('X-Content-Type-Options','nosniff');
     }
+
+    /**
+     * Requeues only previously failed deletion work with separate RBAC and
+     * an accountable ticket. The worker still applies legal-hold checks.
+     */
+    public function retry(Request $r): \Illuminate\Http\RedirectResponse
+    {
+        abort_unless(config('orbit_media.enabled') === true, 404);
+        $data=$r->validate([
+            'job_id'=>['required','uuid'],
+            'ticket'=>['required','string','min:10','max:80',
+                'regex:/^[A-Za-z0-9._-]+$/D'],
+            'confirm'=>['required','in:RETRY'],
+        ]);
+        $admin=auth()->guard('admin')->user();
+        abort_unless($admin?->canPerform('media.jobs.retry'),403);
+        $job=DB::table('media_delete_jobs')
+            ->where('id',$data['job_id'])->first();
+        abort_unless($job && $job->status === 'pending'
+            && (int)$job->attempts > 0, 404, 'Retry not available.');
+        DB::transaction(function () use ($job,$admin,$data): void {
+            DB::table('media_delete_jobs')
+                ->where('id',$job->id)->where('status','pending')
+                ->update(['next_attempt_at'=>now(),'updated_at'=>now()]);
+            DB::table('media_admin_audits')->insert([
+                'id'=>(string)Str::uuid7(),
+                'admin_user_id'=>$admin->id,
+                'action'=>'media.delete.retry_scheduled',
+                'subject_hmac'=>hash_hmac('sha256',$job->media_id,
+                    (string)config('app.key')),
+                'ticket'=>$data['ticket'],
+                'created_at'=>now(),
+            ]);
+        });
+        return redirect()->route('orbit.admin.media.index')
+            ->with('status','Deletion retry scheduled for guarded worker review.');
+    }
+
 }
