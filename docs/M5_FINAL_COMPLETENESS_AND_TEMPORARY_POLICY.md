@@ -1,3 +1,5 @@
+> **Update — 2026-10-23:** The historical gaps below were recorded before the later M5 Firebase-ready work. Current implementation and professional policy resolutions are tracked in [M5_FIREBASE_READY_DISABLED.md](M5_FIREBASE_READY_DISABLED.md), [M5_AUTHORIZED_POLICY_RESOLUTIONS.md](M5_AUTHORIZED_POLICY_RESOLUTIONS.md) and [M5_CT40_RELEASE_EVIDENCE.md](M5_CT40_RELEASE_EVIDENCE.md). The Firebase server bridge, RTDB rules, Flutter listener contract, scoped session revocation, and 30-day triple-gated automated purge are committed **but all new runtime flags remain OFF**. Neither production activation nor signed-device/realtime CT-01–40 acceptance is claimed. 
+>
 # Orbit M5 final code-compliance and no-deployment gate — 2026-10-22
 
 Authority: `Orbit_M5_Complete_Requirements_Audit_2026-10-21.md` (134 items, CT-01–CT-40), organized PRD/flows and approved conservative privacy choices. This document records code, not user acceptance.
