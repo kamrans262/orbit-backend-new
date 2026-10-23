@@ -10,10 +10,10 @@ Authority: `Orbit_M5_Complete_Requirements_Audit_2026-10-21.md` (134 items, CT-0
 - Source-derived offline names-only snapshot TTL is **5 minutes**, account-bound, visibly stale/read-only, not an authorization token. Foreground Circle list/detail rechecks access every ~25 seconds as non-realtime fallback.
 
 ## Important outstanding obligations: no false 100% signoff
-- **M5-051–064:** Per-Circle sharing consent/precision/duration/ghost, and protected downstream location, Moments, presence, chat, SOS consumers remain intentionally fail-closed. No automatic sharing from Circle membership. Requires original client policy plus those separate modules' integration and security tests.
-- **M5-076:** The documented 30-day cold archive is represented as a retention-review count. **There is no automatic purge, because irreversible account data retention/deletion is not yet approved.**
+- **M5-051–064:** The reusable CircleConsentPolicy and CircleAccessPolicy now evaluate role, block status, global Ghost/audience, scoped explicit duration and location precision. All actual protected-content consumer switches remain OFF and no location, Moments, presence, chat or SOS delivery endpoints are enabled by M5. Their real downstream module and user-consent integration is still outstanding. No automatic sharing from Circle membership.
+- **M5-076:** The 30-day cold archive is implemented as a review counter plus a **manual, separately authorized purge** requiring BOTH `ORBIT_M5_RETENTION_POLICY_APPROVED=true` and `ORBIT_M5_RETENTION_PURGE_ENABLED=true` and the exact CLI confirmation. A legal hold blocks purge. Only eligible temporary archived Circles are candidates; each operation writes an HMAC-based nonidentifying audit. **No scheduled automatic purge and no live execution.**
 - **M5-077 / 113–116:** Event outbox and on-screen expiry reminders are not a configured user notification; Firebase/WS, short-lived channel auth, active subscription revocation, and push delivery remain unimplemented pending infrastructure and security signoff. Polling is not realtime.
-- **M5-038, 130:** Domain association assetlinks.json/AASA and Android/iOS signing IDs and real-device deep-link + approved visual checks require deployment credentials/device acceptance.
+- **M5-038, 130:** Circle browser fallback and Apple AASA/Android assetlinks association code plus tests are prepared. Final Android/iOS package/bundle/signing IDs and real-device deep-link + approved visual checks require deployment credentials/device acceptance. See `docs/M5_NATIVE_LINKS_DEVICE_RELEASE_GATE.md`.
 - **M5-109, 125, 128–134:** DB query-plan/performance p95 under expected load, actual two-account device tests, Admin browser parity, final 40 manual CT cases and rollback/Hostinger backup/migration pretend remain release blockers.
 - **M5-119/120:** Admin's currently approved read-only operations never override privacy. Privileged interventions with reason/audit/retention need a separately approved product policy before enabling.
 - Full paid-tier limits are not invented; safety/privacy and core Circles remain free-capable.
@@ -27,8 +27,13 @@ ORBIT_M5_ROLE_CHANGES_ENABLED=false
 ORBIT_M5_OWNERSHIP_TRANSFER_ENABLED=false
 ORBIT_M5_ARCHIVE_ENABLED=false
 ORBIT_M5_TEMPORARY_CIRCLES_ENABLED=false
+ORBIT_M5_RETENTION_POLICY_APPROVED=false
+ORBIT_M5_RETENTION_PURGE_ENABLED=false
 ORBIT_M3_ERASURE_EXECUTION_ENABLED=false
 ```
 
 ## Deploy only after final combined completion
 Do not merge or deploy automatically. Once accepted: independently back up production DB and source; inspect `php artisan migrate --pretend` and SQL; verify no destructive statements or unrelated migrations; enable only documented flags and explicitly configure an hourly Laravel scheduler in Hostinger; deploy backend/Admin and Flutter together; test final Android/iOS links, real two-account sign-in, privacy revocation and manual CT cases. Never run migrate:fresh or wipe production data.
+
+## Firebase-free revision hook prepared
+`OrbitCircleChangeSource` supplies a metadata-only invalidation interface. Live Circle pages validate every event against authenticated backend state; a disabled source and 25-second foreground verification remain the current fallback. Firebase is neither imported nor connected, and subscriber authorization is not falsely claimed. No production data is changed by this implementation.
