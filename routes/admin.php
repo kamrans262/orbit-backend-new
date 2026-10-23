@@ -46,6 +46,8 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
             abort(403);
         })->name('landing');
 
+        Route::post('/media/jobs/{job}/retry', [AdminMediaController::class,'retry'])
+            ->whereUuid('job')->middleware([RequireAdminPermission::class.':media.jobs.retry','throttle:4,1'])->name('media.jobs.retry');
         Route::get('/media', [AdminMediaController::class,'index'])
             ->middleware(RequireAdminPermission::class.':media.read')->name('media.index');
         Route::get('/circles', [AdminCircleController::class, 'index'])

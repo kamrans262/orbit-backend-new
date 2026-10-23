@@ -15,6 +15,9 @@
   <article class="stat-card"><span class="stat-label">Deleting</span><strong>{{ $metrics['deleting'] }}</strong></article>
   <article class="stat-card"><span class="stat-label">Stored ciphertext MiB</span><strong>{{ number_format($metrics['encrypted_bytes']/1048576,1) }}</strong></article>
   <article class="stat-card"><span class="stat-label">Deletion queue</span><strong>{{ $metrics['queued_purges'] }}</strong></article>
+  <article class="stat-card"><span class="stat-label">Expired upload sessions</span><strong>{{ $metrics['expired_sessions'] }}</strong></article>
+  <article class="stat-card"><span class="stat-label">Reserved uploads</span><strong>{{ $metrics['active_reservations'] }}</strong></article>
+  <article class="stat-card"><span class="stat-label">Retrying deletions</span><strong>{{ $metrics['retried_deletions'] }}</strong></article>
   <article class="stat-card"><span class="stat-label">Temporary legal holds</span><strong>{{ $metrics['held'] }}</strong></article>
 </div>
 <section class="panel">
@@ -45,4 +48,34 @@
   <strong>Safety boundary:</strong> Admin is read-only. No download, deletion, re-share, keys, quarantine overrides or approval of legal holds through this screen.
   Production bucket credentials and schedule monitoring require an independently reviewed release configuration.
 </div>
+@if(auth()->guard('admin')->user()?->canPerform('media.quotas.read'))
+<section class="panel" style="margin-top:18px">
+  <div class="panel-head"><div><p class="eyebrow">ELEVATED PRIVILEGE</p><h2>Account storage quota</h2>
+    <p>Exact account UUID; byte totals only. Requires media.quotas.read. No content or identity is exposed.</p></div></div>
+  <form class="admin-filters" method="get" action="{{ route('orbit.admin.media.index') }}">
+    <label>Account UUID <input name="owner_id" type="text" maxlength="36" value="{{ request('owner_id') }}" placeholder="Exact account UUID"></label>
+    <button class="btn primary" type="submit">Review quota</button>
+  </form>
+  @if($quota)
+  <div class="admin-kv" role="status">
+    <div class="kv"><small>Verified ciphertext bytes</small><strong>{{ number_format($quota['used_bytes']) }}</strong></div>
+    <div class="kv"><small>Reserved upload bytes</small><strong>{{ number_format($quota['reserved_bytes']) }}</strong></div>
+    <div class="kv"><small>Allowed ciphertext bytes</small><strong>{{ number_format($quota['limit_bytes']) }}</strong></div>
+  </div>
+  @endif
+</section>
+@endif
+@if(auth()->guard('admin')->user()?->canPerform('media.jobs.retry'))
+<section class="panel" style="margin-top:18px">
+  <div class="panel-head"><div><p class="eyebrow">ELEVATED PRIVILEGE / AUDITED ACTION</p><h2>Retry failed storage cleanup</h2>
+    <p>Only an existing pending deletion job with prior failed attempts can be rescheduled. Never bypasses holds or deletes immediately.</p></div></div>
+  <form class="admin-filters" method="post" id="retry-media-job" action="" onsubmit="this.action='{{ route('orbit.admin.media.index') }}/jobs/'+this.elements['job'].value+'/retry'">
+    @csrf
+    <label>Deletion job UUID <input name="job" type="text" maxlength="36" required placeholder="Exact UUID"></label>
+    <label>Audit ticket <input name="ticket" type="text" minlength="10" maxlength="80" required placeholder="Ticket reference"></label>
+    <label>Confirm <input name="confirm" type="text" pattern="RETRY" required placeholder="RETRY"></label>
+    <button class="btn primary" type="submit">Schedule guarded retry</button>
+  </form>
+</section>
+@endif
 @endsection

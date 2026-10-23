@@ -121,6 +121,15 @@ return new class extends Migration {
             $t->timestamps();
             $t->foreign('media_id')->references('id')->on('media_objects')->cascadeOnDelete();
         });
+        Schema::create('media_admin_audits',function(Blueprint $t):void {
+            $t->uuid('id')->primary();
+            $t->uuid('admin_user_id');
+            $t->string('action',60);
+            $t->char('subject_hmac',64);
+            $t->string('ticket',80);
+            $t->timestamp('created_at')->useCurrent();
+            $t->foreign('admin_user_id')->references('id')->on('admin_users')->restrictOnDelete();
+        });
         Schema::create('media_event_outbox', function (Blueprint $t): void {
             $t->uuid('id')->primary();
             $t->uuid('media_id')->index();
@@ -134,7 +143,7 @@ return new class extends Migration {
     public function down(): void
     {
         // Rollback should only run against disposable test databases, never production data.
-        foreach (['media_event_outbox','media_delete_jobs','media_device_key_envelopes',
+        foreach (['media_event_outbox','media_admin_audits','media_delete_jobs','media_device_key_envelopes',
             'media_audience_grants','media_variants','media_upload_sessions',
             'media_references','media_objects'] as $name) {
             Schema::dropIfExists($name);

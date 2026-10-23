@@ -5,6 +5,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 /** No plaintext, keys, URLs, owners, Circle rosters or recipient identities in Admin. */
@@ -14,7 +15,7 @@ final class AdminMediaController extends Controller
     {
         abort_unless(config('orbit_media.enabled')===true,404);
         abort_unless(Schema::hasTable('media_objects'),503,'Media migration not installed.');
-        $filters=$r->validate(['media_id'=>['nullable','uuid']]);
+        $filters=$r->validate(['media_id'=>['nullable','uuid'],'owner_id'=>['nullable','uuid']]);
         $metrics=[
             'objects'=>DB::table('media_objects')->count(),
             'ready'=>DB::table('media_objects')->where('state','ready')->count(),
@@ -22,6 +23,10 @@ final class AdminMediaController extends Controller
             'deleting'=>DB::table('media_objects')->where('state','deleting')->count(),
             'encrypted_bytes'=>DB::table('media_objects')->where('state','ready')->sum('cipher_bytes'),
             'queued_purges'=>DB::table('media_delete_jobs')->where('status','pending')->count(),
+            'failed'=>DB::table('media_objects')->where('state','failed')->count(),
+            'expired_sessions'=>DB::table('media_upload_sessions')->where('state','expired')->count(),
+            'active_reservations'=>DB::table('media_upload_sessions')->whereIn('state',['initiated','uploading'])->where('expires_at','>',now())->count(),
+            'retried_deletions'=>DB::table('media_delete_jobs')->where('attempts','>',0)->where('status','pending')->count(),
             'held'=>DB::table('media_objects')->whereNotNull('legal_hold_until')
                 ->where('legal_hold_until','>',now())->count(),
         ];
@@ -30,7 +35,19 @@ final class AdminMediaController extends Controller
                 ->first(['id','purpose','kind','state','cipher_bytes','created_at',
                     'ready_at','retention_deadline','deleted_at','policy_version'])
             : null;
-        return response()->view('orbit-admin.media',compact('metrics','row'))
+        $quota=null;
+        if(isset($filters['owner_id'])) {
+            abort_unless(auth()->guard('admin')->user()?->canPerform('media.quotas.read'),
+                403,'Media quota permission required.');
+            $used=(int)DB::table('media_objects')->where('owner_user_id',$filters['owner_id'])
+                ->whereIn('state',['ready','verifying','deleting'])->sum('cipher_bytes');
+            $pending=(int)DB::table('media_upload_sessions')->where('owner_user_id',$filters['owner_id'])
+                ->whereIn('state',['initiated','uploading'])->where('expires_at','>',now())
+                ->sum('declared_bytes');
+            $quota=['used_bytes'=>$used,'reserved_bytes'=>$pending,
+                'limit_bytes'=>(int)config('orbit_media.per_owner_cipher_quota_bytes')];
+        }
+        return response()->view('orbit-admin.media',compact('metrics','row','quota'))
             ->header('Cache-Control','private, no-store')
             ->header('X-Content-Type-Options','nosniff');
     }
