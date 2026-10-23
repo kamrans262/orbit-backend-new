@@ -64,6 +64,7 @@ final class CircleTemporaryLifecycle
                     'id'=>(string) Str::uuid7(),'circle_id'=>$id,
                     'event_type'=>'circle.temporary_archived','created_at'=>now(),
                 ]);
+                app(CircleFirebaseBridge::class)->afterCommit($id);
                 $count++;
             },3);
         }
