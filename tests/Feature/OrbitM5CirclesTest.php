@@ -241,6 +241,40 @@ final class OrbitM5CirclesTest extends TestCase
             ->assertJsonPath('data.sharing_active',false);
     }
 
+    public function test_future_consent_resolver_is_scope_bound_and_cannot_enable_unfinished_consumers(): void
+    {
+        [$a,$ta] = $this->person('alpha');
+        $one=$this->createCircle($ta);
+        $two=$this->createCircle($ta);
+        $record=[
+            'circle_id'=>$one,'scope_key'=>'user:'.$a->id,
+            'subject_user_id'=>$a->id,'permission_key'=>'location',
+            'enabled'=>true,
+            'value_json'=>json_encode(['reviewed'=>true,'precision'=>'approximate']),
+            'expires_at'=>now()->addHour(),'created_at'=>now(),'updated_at'=>now(),
+        ];
+        DB::table('circle_permissions')->insert($record);
+        $consent=app(\App\Modules\Circle\Services\CircleConsentPolicy::class);
+        $savedOne=$consent->preview($one,$a->id);
+        $savedTwo=$consent->preview($two,$a->id);
+        $this->assertFalse($savedOne['sharing_active']);
+        $this->assertFalse($savedOne['grants_enabled']);
+        $this->assertCount(1,$savedOne['saved']);
+        $this->assertCount(0,$savedTwo['saved']);
+        $this->assertFalse($savedOne['saved'][0]['enabled']);
+        $this->assertTrue($savedOne['saved'][0]['requested']);
+        $acl=app(\App\Modules\Circle\Services\CircleAccessPolicy::class);
+        $this->assertFalse($acl->canSubscribe($one,$a->id));
+        $this->assertFalse($acl->canAccessProtected($one,$a->id,$a->id,'location'));
+        $this->withToken($ta)->patchJson('/api/v1/circles/'.$one.'/permissions',[
+            'permission_key'=>'location','enabled'=>false,
+        ])->assertOk()->assertJsonPath('data.enabled',false);
+        $this->assertFalse((bool)DB::table('circle_permissions')
+            ->where('circle_id',$one)->where('subject_user_id',$a->id)->value('enabled'));
+        $this->assertNull(DB::table('circle_permissions')
+            ->where('circle_id',$one)->where('subject_user_id',$a->id)->value('value_json'));
+    }
+
     public function test_member_account_removal_invalidates_surviving_circle_revision(): void
     {
         [$a,$ta] = $this->person('alpha');
