@@ -42,6 +42,31 @@ final class CircleLifecycleIntegrity
         }
     }
 
+    /**
+     * Session/device revocation, logout-all, recovery and password reset must
+     * update Firebase's per-session ACL, even if Circle membership is unchanged.
+     * Gated OFF before the M5 rollout; never queries missing M5 tables on M4.
+     */
+    public function identityAccessChanged(string $userId): void
+    {
+        if (config('orbit_circle.enabled') !== true) return;
+        DB::transaction(function () use ($userId): void {
+            $ids = DB::table('circle_members')
+                ->where('user_id', $userId)->whereNull('removed_at')
+                ->pluck('circle_id')->unique()->all();
+            foreach ($ids as $id) {
+                DB::table('circles')->where('id', $id)
+                    ->increment('revision', 1, ['updated_at' => now()]);
+                DB::table('circle_event_outbox')->insert([
+                    'id' => (string) Str::uuid7(), 'circle_id' => $id,
+                    'event_type' => 'circle.session_access_changed',
+                    'created_at' => now(),
+                ]);
+                app(CircleFirebaseBridge::class)->afterCommit($id);
+            }
+        }, 3);
+    }
+
     public function beforeUserRemoval(string $userId): void
     {
         // A Circle owner requires separately authorized succession first.
