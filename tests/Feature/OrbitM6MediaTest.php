@@ -342,4 +342,37 @@ final class OrbitM6MediaTest extends TestCase
         $this->assertDatabaseHas('media_objects',['id'=>$media['media_id'],'state'=>'deleting']);
     }
 
+
+    public function test_public_keys_only_from_trusted_owner_device_and_selected_friend():void
+    {
+        [$owner,$token,$ownerDevice]=$this->person('owner');
+        [$friend,$friendToken,$friendDevice]=$this->person('friend');
+        $path='/api/v1/media/recipient-keys';
+        $this->withToken($token)->postJson($path,[
+            'audience_kind'=>'selected_friends',
+            'recipient_ids'=>[$friend->id],
+        ])->assertNotFound();
+        [$low,$high]=app(\App\Modules\Social\Services\SocialGraphService::class)
+            ->canonical($owner->id,$friend->id);
+        DB::table('friendships')->insert([
+            'user_low_id'=>$low,'user_high_id'=>$high,'created_at'=>now(),
+        ]);
+        $this->withToken($token)->postJson($path,[
+            'audience_kind'=>'selected_friends',
+            'recipient_ids'=>[$friend->id],
+        ])->assertOk()
+          ->assertJsonPath('data.recipients.0.recipient_id',$friend->id)
+          ->assertJsonPath('data.recipients.0.devices.0.device_id',$friendDevice->id);
+        $friendDevice->update(['revoked_at'=>now()]);
+        $this->withToken($token)->postJson($path,[
+            'audience_kind'=>'selected_friends',
+            'recipient_ids'=>[$friend->id],
+        ])->assertOk()->assertJsonCount(0,'data.recipients.0.devices');
+        $this->withToken($token)->postJson($path,[
+            'audience_kind'=>'only_me',
+            'recipient_ids'=>[$owner->id],
+        ])->assertOk()->assertJsonPath(
+            'data.recipients.0.devices.0.device_id',$ownerDevice->id);
+    }
+
 }
