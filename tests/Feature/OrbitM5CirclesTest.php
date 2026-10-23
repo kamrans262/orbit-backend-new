@@ -136,6 +136,68 @@ final class OrbitM5CirclesTest extends TestCase
         $this->assertFalse($acl->canAccessProtected($id,$a->id,$b->id,'message'));
     }
 
+    public function test_future_circle_location_consumer_never_bypasses_ghost_or_unreviewed_consent(): void
+    {
+        [$owner,$ta]=$this->person('owner');
+        [$friend,$tb]=$this->person('friend');
+        $this->beFriends($ta,$tb,$friend->id);
+        $id=$this->createCircle($ta);
+        $invite=$this->withToken($ta)->postJson('/api/v1/circles/'.$id.'/invites',[
+            'invitee_id'=>$friend->id,
+        ])->assertCreated()->json('data.id');
+        $this->withToken($tb)->postJson('/api/v1/circles/invites/'.$invite.'/accept')
+            ->assertOk();
+        $policy=app(\App\Modules\Circle\Services\CircleAccessPolicy::class);
+        $this->assertFalse($policy->canAccessProtected($id,$owner->id,$friend->id,'location'));
+        config()->set('orbit_circle.consumer_enabled.location',true);
+        $this->assertFalse($policy->canAccessProtected($id,$owner->id,$friend->id,'location'));
+        DB::table('circle_permissions')->insert([
+            'circle_id'=>$id,'scope_key'=>'user:'.$friend->id,
+            'subject_user_id'=>$friend->id,'permission_key'=>'location',
+            'enabled'=>true,'expires_at'=>now()->addHour(),
+            'value_json'=>json_encode([
+                'reviewed'=>true,'audience'=>'circle',
+                'duration'=>'until_expiry','precision'=>'approximate',
+            ]),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        // Account-wide Ghost is always a stronger veto than Circle opt-in.
+        DB::table('orbit_user_preferences')->insertOrIgnore([
+            'user_id'=>$friend->id,'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('orbit_user_preferences')->where('user_id',$friend->id)->update([
+            'privacy'=>json_encode([
+                'location_visibility'=>'My Circle',
+                'location_activity'=>'Active',
+                'location_sharing_enabled'=>true,
+                'ghost_mode_enabled'=>true,
+            ]),
+            'updated_at'=>now(),
+        ]);
+        $this->assertFalse($policy->canAccessProtected($id,$owner->id,$friend->id,'location'));
+        DB::table('orbit_user_preferences')->where('user_id',$friend->id)->update([
+            'privacy'=>json_encode([
+                'location_visibility'=>'My Circle',
+                'location_activity'=>'Active',
+                'location_sharing_enabled'=>true,
+                'ghost_mode_enabled'=>false,
+            ]),
+        ]);
+        // This tests a future *consumer* authorization decision; no location
+        // API or Firebase transport exists or is switched on by M5 itself.
+        $this->assertTrue($policy->canAccessProtected($id,$owner->id,$friend->id,'location'));
+        $this->assertFalse($policy->canSubscribe($id,$owner->id));
+        DB::table('circle_permissions')->where('circle_id',$id)
+            ->where('subject_user_id',$friend->id)
+            ->update(['expires_at'=>now()->subSecond()]);
+        $this->assertFalse($policy->canAccessProtected($id,$owner->id,$friend->id,'location'));
+        // A revoke should immediately remove even stored consent.
+        $this->withToken($tb)->patchJson('/api/v1/circles/'.$id.'/permissions',[
+            'permission_key'=>'location','enabled'=>false,
+        ])->assertOk();
+        $this->assertFalse($policy->canAccessProtected($id,$owner->id,$friend->id,'location'));
+    }
+
     public function test_owner_can_rename_but_nonmember_cannot_read_or_edit(): void
     {
         [$a,$ta] = $this->person('alpha');
