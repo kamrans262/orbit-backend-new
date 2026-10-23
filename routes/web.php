@@ -17,6 +17,17 @@ Route::get('/invite/friend/{token}', function (string $token) {
         ->header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'");
 })->where('token', '[A-Za-z0-9_-]{43}')->name('orbit.social.invite');
 
+// Circle invitations are recipient-bound and require verified mobile sign-in;
+// the website only offers manual opening, never membership or secret lookup.
+Route::get('/invite/circle/{token}', function (string $token) {
+    abort_unless(preg_match('/^[A-Za-z0-9]{40}$/D', $token),404);
+    return response()->view('orbit-social.circle-invite',['token'=>$token])
+        ->header('Cache-Control','private, no-store')
+        ->header('Referrer-Policy','no-referrer')
+        ->header('X-Robots-Tag','noindex, nofollow')
+        ->header('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'");
+})->where('token','[A-Za-z0-9]{40}')->name('orbit.circle.invite');
+
 // Public app association files contain ONLY signed-app identifiers, not user data.
 // Fail closed until release engineering configures the verified native app IDs.
 Route::get('/.well-known/apple-app-site-association', function () {
@@ -26,7 +37,10 @@ Route::get('/.well-known/apple-app-site-association', function () {
         'applinks' => [
             'details' => [[
                 'appIDs' => [$appId],
-                'components' => [['/' => '/invite/friend/*', 'comment' => 'Orbit friend invitations']],
+                'components' => [
+                    ['/' => '/invite/friend/*', 'comment' => 'Orbit friend invitations'],
+                    ['/' => '/invite/circle/*', 'comment' => 'Orbit Circle invitations'],
+                ],
             ]],
         ],
     ])->header('Content-Type', 'application/json')
