@@ -1,0 +1,18 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "orbit_m5": {
+      "acl": {
+        ".read": false,
+        ".write": false
+      },
+      "revisions": {
+        "$circleId": {
+          ".read": "auth !== null && auth.token.orbit_m5 === true && auth.token.orbit_session === auth.uid && root.child('orbit_m5').child('acl').child($circleId).child(auth.uid).val() === auth.token.orbit_device",
+          ".write": false
+        }
+      }
+    }
+  }
+}
