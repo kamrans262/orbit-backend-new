@@ -19,5 +19,13 @@ return [
     'retention_policy_approved' => (bool) env('ORBIT_M5_RETENTION_POLICY_APPROVED', false),
     'retention_purge_enabled' => (bool) env('ORBIT_M5_RETENTION_PURGE_ENABLED', false),
     'ownership_transfer_enabled' => (bool) env('ORBIT_M5_OWNERSHIP_TRANSFER_ENABLED', false),
+    // Future M6+ protected-content consumer gates. Defaults DENY for every
+    // capability until that module's actual read API, consent UI and privacy
+    // tests are independently accepted. No Firebase connection is implied.
+    'consumer_enabled' => [
+        'location'=>false,'presence'=>false,'moments'=>false,
+        'check_in'=>false,'plans'=>false,'status'=>false,
+        'ping'=>false,'message'=>false,
+    ],
     // Location, presence, chat, Moments and SOS are never activated by M5 config.
 ];
