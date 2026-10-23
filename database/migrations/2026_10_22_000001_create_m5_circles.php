@@ -16,6 +16,7 @@ return new class extends Migration {
             $table->timestamp('archived_at')->nullable();
             $table->timestamp('expires_at')->nullable();
             $table->timestamp('expiry_notified_at')->nullable();
+            $table->timestamp('retention_hold_at')->nullable();
             $table->index(['expires_at','archived_at']);
             $table->unsignedBigInteger('revision')->default(1);
             $table->char('creation_key_hash',64)->nullable()->unique();
@@ -79,6 +80,14 @@ return new class extends Migration {
             $table->foreign('user_id')->references('id')->on('orbit_users')->cascadeOnDelete();
             $table->foreign('circle_id')->references('id')->on('circles')->cascadeOnDelete();
         });
+        // Independent audit survives purging individual temporary Circle
+        // records. Only keyed hashes, counts and action type; no names/roster.
+        Schema::create('circle_retention_audits', function (Blueprint $table): void {
+            $table->uuid('id')->primary();
+            $table->char('circle_hash',64)->unique();
+            $table->string('action',32);
+            $table->timestamp('executed_at');
+        });
         Schema::create('circle_event_outbox', function (Blueprint $table): void {
             $table->uuid('id')->primary();
             $table->uuid('circle_id');
@@ -95,6 +104,7 @@ return new class extends Migration {
     public function down(): void
     {
         Schema::dropIfExists('circle_event_outbox');
+        Schema::dropIfExists('circle_retention_audits');
         Schema::dropIfExists('circle_primary_selections');
         Schema::dropIfExists('circle_permissions');
         Schema::dropIfExists('circle_invites');
