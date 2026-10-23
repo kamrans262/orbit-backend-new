@@ -69,9 +69,9 @@
 <section class="panel" style="margin-top:18px">
   <div class="panel-head"><div><p class="eyebrow">ELEVATED PRIVILEGE / AUDITED ACTION</p><h2>Retry failed storage cleanup</h2>
     <p>Only an existing pending deletion job with prior failed attempts can be rescheduled. Never bypasses holds or deletes immediately.</p></div></div>
-  <form class="admin-filters" method="post" id="retry-media-job" action="" onsubmit="this.action='{{ route('orbit.admin.media.index') }}/jobs/'+this.elements['job'].value+'/retry'">
+  <form class="admin-filters" method="post" action="{{ route('orbit.admin.media.jobs.retry') }}">
     @csrf
-    <label>Deletion job UUID <input name="job" type="text" maxlength="36" required placeholder="Exact UUID"></label>
+    <label>Deletion job UUID <input name="job_id" type="text" maxlength="36" required placeholder="Exact UUID"></label>
     <label>Audit ticket <input name="ticket" type="text" minlength="10" maxlength="80" required placeholder="Ticket reference"></label>
     <label>Confirm <input name="confirm" type="text" pattern="RETRY" required placeholder="RETRY"></label>
     <button class="btn primary" type="submit">Schedule guarded retry</button>
