@@ -10,7 +10,7 @@ final class OrbitM5NativeLinksTest extends TestCase
     {
         $code=str_repeat('A',40);
         $this->get('/invite/circle/'.$code)->assertOk()
-            ->assertHeader('Cache-Control','private, no-store')
+            ->assertHeader('Cache-Control','no-store, private')
             ->assertHeader('Referrer-Policy','no-referrer')
             ->assertHeader('X-Robots-Tag','noindex, nofollow')
             ->assertSee($code)
