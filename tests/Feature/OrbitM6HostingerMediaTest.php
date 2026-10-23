@@ -23,6 +23,10 @@ final class OrbitM6HostingerMediaTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // The suite shares a single loopback IP and rate-limiter cache. This
+        // filesystem/integrity test verifies authentication and ACL directly;
+        // rate limit behavior has separate middleware coverage.
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
         config()->set('orbit_media.enabled',true);
         config()->set('orbit_media.driver','hostinger_private');
         app()->instance(MediaObjectStore::class,new HostingerPrivateMediaStore());
