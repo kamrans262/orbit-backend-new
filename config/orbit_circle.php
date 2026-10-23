@@ -14,6 +14,10 @@ return [
     // Temporary Circles: user-selected expiry, 72h read-only, then cold archive.
     // No automatic purge; scheduling requires explicit cron and QA approval.
     'temporary_circles_enabled' => (bool) env('ORBIT_M5_TEMPORARY_CIRCLES_ENABLED', false),
+    // Irreversible retention runs must be separately authorized. No automatic
+    // purge scheduling. Both switches default off even if temporary mode is on.
+    'retention_policy_approved' => (bool) env('ORBIT_M5_RETENTION_POLICY_APPROVED', false),
+    'retention_purge_enabled' => (bool) env('ORBIT_M5_RETENTION_PURGE_ENABLED', false),
     'ownership_transfer_enabled' => (bool) env('ORBIT_M5_OWNERSHIP_TRANSFER_ENABLED', false),
     // Location, presence, chat, Moments and SOS are never activated by M5 config.
 ];
