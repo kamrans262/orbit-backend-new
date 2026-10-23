@@ -70,8 +70,16 @@ final class CircleConsentPolicy
         // Otherwise the stored grant expires at its server-side timestamp.
         if($record->expires_at===null) {
             if(($settings['duration']??'')!=='persistent') return false;
-        } elseif(Carbon::parse($record->expires_at)->lte(now())) {
-            return false;
+        } else {
+            // Time-bounded permission requires the user's explicit expiring
+            // choice; a stray timestamp must not convert another duration
+            // into consent. Expired or malformed timestamps always deny.
+            if (($settings['duration'] ?? '') !== 'until_expiry') return false;
+            try {
+                if (Carbon::parse($record->expires_at)->lte(now())) return false;
+            } catch (\Throwable) {
+                return false;
+            }
         }
         if($capability==='location') {
             $precision=$settings['precision']??'hidden';
