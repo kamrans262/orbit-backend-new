@@ -21,3 +21,12 @@ Artisan::command('orbit:circles:expiry-notices', function () {
 })->purpose('Queue minimal Circle expiring soon events');
 
 Schedule::command('orbit:circles:expiry-notices')->hourly();
+
+Artisan::command('orbit:circles:retention-review {--purge} {--confirmation=}', function () {
+    $lifecycle=app(\App\Modules\Circle\Services\CircleTemporaryLifecycle::class);
+    $count=$lifecycle->eligibleForRetentionReviewCount();
+    $this->info('Temporary Circles eligible for 30-day retention review: '.$count);
+    if(!$this->option('purge')) return;
+    $purged=$lifecycle->purgeReviewed(25,(string)$this->option('confirmation'));
+    $this->info('Audited, authorized temporary Circle purges: '.$purged);
+})->purpose('Preview Circle retention eligibility; explicit audited purge is separately gated');
