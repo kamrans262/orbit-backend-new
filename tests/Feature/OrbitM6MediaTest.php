@@ -262,4 +262,33 @@ final class OrbitM6MediaTest extends TestCase
         $this->assertDatabaseCount('media_objects',0);
     }
 
+
+    public function test_owner_quota_accounts_for_active_uploads_without_charging_public_disk():void
+    {
+        [$a,$ta]=$this->person('alpha');
+        config()->set('orbit_media.per_owner_cipher_quota_bytes',1100);
+        $first=$this->init($ta);
+        $this->withToken($ta)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/media/uploads',[
+                'purpose'=>'moment','kind'=>'image','declared_mime'=>'image/jpeg',
+                'declared_bytes'=>128,'cipher_suite'=>'xchacha20poly1305-v1',
+            ])->assertStatus(413);
+        $this->assertDatabaseCount('media_objects',1);
+        $this->assertSame(1024,(int)DB::table('media_upload_sessions')->where('id',$first['upload_id'])->value('declared_bytes'));
+    }
+    public function test_internal_media_reference_release_keeps_other_references_untouched():void
+    {
+        [$a,$ta]=$this->person('alpha');
+        $u=$this->ready($ta);
+        $service=app(\App\Modules\Media\Services\MediaReferenceService::class);
+        $ref1=$service->attach($u['media_id'],$a->id,'moment',(string)Str::uuid());
+        $ref2=$service->attach($u['media_id'],$a->id,'moment',(string)Str::uuid());
+        $this->assertNotSame($ref1,$ref2);
+        $this->assertSame(2,$service->activeCount($u['media_id']));
+        $consumer=DB::table('media_references')->where('id',$ref1)->value('consumer_id');
+        $service->release($u['media_id'],$a->id,'moment',$consumer);
+        $this->assertSame(1,$service->activeCount($u['media_id']));
+        $this->assertDatabaseHas('media_objects',['id'=>$u['media_id'],'state'=>'ready']);
+    }
+
 }

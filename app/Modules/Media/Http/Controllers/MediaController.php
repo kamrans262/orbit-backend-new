@@ -31,6 +31,33 @@ final class MediaController extends Controller
         abort_unless(Str::isUuid($k),422,'A UUID Idempotency-Key is required.');
         return hash('sha256',$k);
     }
+    /**
+     * Quotas are enforced inside a locked-user transaction to serialize
+     * competing reservations. Both live objects and in-progress sessions
+     * consume budget, including encrypted derivatives.
+     */
+    private function ensureBudget(string $owner,int $reserve): void
+    {
+        $active=DB::table('media_upload_sessions')->where('owner_user_id',$owner)
+            ->whereIn('state',['initiated','uploading'])
+            ->where('expires_at','>',now());
+        abort_if((clone $active)->count() >= (int)config('orbit_media.max_concurrent_uploads'),
+            429,'Too many active uploads.');
+        abort_if(DB::table('media_upload_sessions')->where('owner_user_id',$owner)
+            ->where('created_at','>=',now()->subDay())->count()
+            >= (int)config('orbit_media.daily_upload_limit'),429,'Daily upload quota reached.');
+        $originals=(int)DB::table('media_objects')->where('owner_user_id',$owner)
+            ->whereIn('state',['ready','verifying','deleting'])->sum('cipher_bytes');
+        $variants=(int)DB::table('media_variants as v')
+            ->join('media_objects as m','m.id','=','v.media_id')
+            ->where('m.owner_user_id',$owner)
+            ->whereIn('v.state',['ready','verifying'])->sum('v.cipher_bytes');
+        $reserved=(int)(clone $active)->sum('declared_bytes');
+        abort_if($originals+$variants+$reserved+$reserve>
+            (int)config('orbit_media.per_owner_cipher_quota_bytes'),
+            413,'Private storage quota exceeded.');
+    }
+
     private function media(string $media): object
     {
         return DB::table('media_objects')->where('id',$media)->first()
@@ -83,6 +110,8 @@ final class MediaController extends Controller
         $provider=$store->initiate($key);
         try{
             DB::transaction(function()use($m,$media,$actor,$device,$upload,$variantId,$key,$provider,$d,$digest,$idempotency):void{
+                DB::table('orbit_users')->where('id',$actor)->lockForUpdate()->first();
+                $this->ensureBudget($actor,(int)$d['declared_bytes']);
                 DB::table('media_variants')->insert([
                     'id'=>$variantId,'media_id'=>$media,'variant'=>$d['variant'],
                     'object_key'=>$key,'cipher_bytes'=>$d['declared_bytes'],
@@ -166,6 +195,8 @@ final class MediaController extends Controller
         $providerId=$store->initiate($objectKey);
         try {
             DB::transaction(function()use($actor,$device,$data,$key,$digest,$media,$upload,$objectKey,$providerId):void{
+                DB::table('orbit_users')->where('id',$actor)->lockForUpdate()->first();
+                $this->ensureBudget($actor,(int)$data['declared_bytes']);
                 DB::table('media_objects')->insert([
                     'id'=>$media,'owner_user_id'=>$actor,'purpose'=>$data['purpose'],
                     'kind'=>$data['kind'],'declared_mime'=>$data['declared_mime'],

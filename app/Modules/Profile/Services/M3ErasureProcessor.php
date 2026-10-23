@@ -24,7 +24,7 @@ final class M3ErasureProcessor
         'social_graph_outbox',
         'circles', 'circle_members', 'circle_invites', 'circle_permissions',
         'circle_primary_selections',
-        'media_objects','media_upload_sessions','media_audience_grants',
+        'media_objects','media_upload_sessions','media_audience_grants','media_references',
     ];
 
     public function preview(string $requestId): array

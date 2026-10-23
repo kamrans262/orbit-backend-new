@@ -29,6 +29,18 @@ return new class extends Migration {
             $t->index(['owner_user_id','state']);
             $t->foreign('owner_user_id')->references('id')->on('orbit_users')->restrictOnDelete();
         });
+        Schema::create('media_references', function (Blueprint $t): void {
+            $t->uuid('id')->primary();
+            $t->uuid('media_id')->index();
+            $t->uuid('owner_user_id')->index();
+            $t->string('consumer_type',16);
+            $t->uuid('consumer_id');
+            $t->timestamp('released_at')->nullable()->index();
+            $t->timestamps();
+            $t->unique(['media_id','consumer_type','consumer_id'],'media_consumer_reference_unique');
+            $t->foreign('media_id')->references('id')->on('media_objects')->cascadeOnDelete();
+            $t->foreign('owner_user_id')->references('id')->on('orbit_users')->restrictOnDelete();
+        });
         Schema::create('media_upload_sessions', function (Blueprint $t): void {
             $t->uuid('id')->primary();
             $t->uuid('media_id')->index();
@@ -123,7 +135,8 @@ return new class extends Migration {
     {
         // Rollback should only run against disposable test databases, never production data.
         foreach (['media_event_outbox','media_delete_jobs','media_device_key_envelopes',
-            'media_audience_grants','media_variants','media_upload_sessions','media_objects'] as $name) {
+            'media_audience_grants','media_variants','media_upload_sessions',
+            'media_references','media_objects'] as $name) {
             Schema::dropIfExists($name);
         }
     }
