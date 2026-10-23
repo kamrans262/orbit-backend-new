@@ -43,6 +43,72 @@ final class MediaController extends Controller
             ->where('owner_user_id',$user)->where('device_id',$device)->first()
             ?? abort(404,'Upload unavailable.');
     }
+    private function uploadObjectKey(object $u): string
+    {
+        if($u->variant_id) {
+            return DB::table('media_variants')->where('id',$u->variant_id)
+                ->where('media_id',$u->media_id)->value('object_key')
+                ?? abort(404,'Encrypted variant unavailable.');
+        }
+        return $this->media($u->media_id)->object_key;
+    }
+    public function initiateVariant(Request $r,string $media,MediaObjectStore $store): JsonResponse
+    {
+        [$actor,$device]=$this->actor($r);
+        $idempotency=$this->key($r);
+        $m=$this->media($media);
+        abort_unless($m->owner_user_id===$actor && $m->state==='ready'
+            && $m->deleted_at===null,404,'Media unavailable.');
+        $d=$r->validate([
+            'variant'=>['required','in:thumbnail,poster,waveform,transcoded'],
+            'declared_bytes'=>['required','integer','min:1'],
+            'cipher_sha256'=>['required','regex:/^[a-f0-9]{64}$/D'],
+        ]);
+        abort_if((int)$d['declared_bytes']>(int)config('orbit_media.limits.'.$m->kind)+262144,
+            413,'Encrypted variant too large.');
+        $digest=hash('sha256',json_encode(['parent'=>$media,...$d],JSON_THROW_ON_ERROR));
+        $old=DB::table('media_upload_sessions')->where('owner_user_id',$actor)
+            ->where('idempotency_key_hash',$idempotency)->first();
+        if($old){
+            abort_unless($old->device_id===$device && hash_equals($old->payload_hash,$digest),409,'Idempotency conflict.');
+            return $this->response(['upload_id'=>$old->id,'media_id'=>$media,
+                'variant'=>$d['variant'],'state'=>$old->state,
+                'expires_at'=>$old->expires_at,'part_size_bytes'=>config('orbit_media.part_size_bytes'),
+                'storage_mode'=>'multipart'],201);
+        }
+        abort_if(DB::table('media_variants')->where('media_id',$media)
+            ->where('variant',$d['variant'])->exists(),409,'Variant already exists.');
+        $upload=(string)Str::uuid7();$variantId=(string)Str::uuid7();
+        $key=config('orbit_media.path_prefix').'/'.Str::random(28).'/'.$media.'/'.$d['variant'];
+        $provider=$store->initiate($key);
+        try{
+            DB::transaction(function()use($m,$media,$actor,$device,$upload,$variantId,$key,$provider,$d,$digest,$idempotency):void{
+                DB::table('media_variants')->insert([
+                    'id'=>$variantId,'media_id'=>$media,'variant'=>$d['variant'],
+                    'object_key'=>$key,'cipher_bytes'=>$d['declared_bytes'],
+                    'cipher_sha256'=>$d['cipher_sha256'],'state'=>'initiated',
+                    'created_at'=>now(),'updated_at'=>now(),
+                ]);
+                DB::table('media_upload_sessions')->insert([
+                    'id'=>$upload,'media_id'=>$media,'variant_id'=>$variantId,
+                    'owner_user_id'=>$actor,'device_id'=>$device,
+                    'idempotency_key_hash'=>$idempotency,'payload_hash'=>$digest,
+                    'provider_upload_id_encrypted'=>Crypt::encryptString($provider),
+                    'declared_bytes'=>$d['declared_bytes'],'state'=>'initiated',
+                    'expires_at'=>now()->addHours((int)config('orbit_media.upload_session_hours')),
+                    'created_at'=>now(),'updated_at'=>now(),
+                ]);
+            },3);
+        }catch(\Throwable $e){
+            try{$store->abort($key,$provider);}catch(\Throwable){}
+            throw $e;
+        }
+        return $this->response(['upload_id'=>$upload,'media_id'=>$media,
+            'variant'=>$d['variant'],'expires_at'=>now()->addHours((int)config('orbit_media.upload_session_hours'))->toIso8601String(),
+            'part_size_bytes'=>config('orbit_media.part_size_bytes'),
+            'max_bytes'=>$d['declared_bytes'],'storage_mode'=>'multipart'],201);
+    }
+
     private function activeUpload(object $u): void
     {
         abort_if(now()->gte($u->expires_at),410,'Upload expired.');
@@ -134,7 +200,7 @@ final class MediaController extends Controller
         $u=$this->upload($r,$upload);
         $parts=in_array($u->state,['initiated','uploading'],true)
             && now()->lt($u->expires_at)
-            ? $store->uploadedParts($this->media($u->media_id)->object_key,$this->providerId($u))
+            ? $store->uploadedParts($this->uploadObjectKey($u),$this->providerId($u))
             : [];
         return $this->response(['upload_id'=>$u->id,'state'=>$u->state,
             'expires_at'=>$u->expires_at,'part_size_bytes'=>config('orbit_media.part_size_bytes'),
@@ -151,7 +217,7 @@ final class MediaController extends Controller
         $max=(int)config('orbit_media.part_size_bytes');
         abort_if($d['content_length']>$max,413,'Part too large.');
         abort_if(($d['part_number']-1)*$max >= $u->declared_bytes,422,'Part out of range.');
-        $res=$store->signPart($this->media($u->media_id)->object_key,
+        $res=$store->signPart($this->uploadObjectKey($u),
             $this->providerId($u),(int)$d['part_number'],$d['checksum_sha256'],
             (int)$d['content_length']);
         DB::table('media_upload_sessions')->where('id',$u->id)->where('state','initiated')
@@ -186,7 +252,8 @@ final class MediaController extends Controller
             $seen[$part['part_number']]=true;
         }
         $object=$this->media($u->media_id);
-        $onServer=$store->uploadedParts($object->object_key,$this->providerId($u));
+        $key=$this->uploadObjectKey($u);
+        $onServer=$store->uploadedParts($key,$this->providerId($u));
         abort_unless(count($onServer)===count($parts),409,'Uploaded part count mismatch.');
         $total=0;$max=(int)config('orbit_media.part_size_bytes');
         foreach($onServer as $i=>$p) {
@@ -196,7 +263,7 @@ final class MediaController extends Controller
             if($i<count($parts)-1) abort_unless((int)$p['bytes']===$max,422,'Incomplete non-final part.');
         }
         abort_unless($total===(int)$d['total_cipher_bytes'],422,'Ciphertext length mismatch.');
-        $store->finish($object->object_key,$this->providerId($u),$parts);
+        $store->finish($key,$this->providerId($u),$parts);
         DB::transaction(function()use($u,$d,$digest,$r):void{
             DB::table('media_upload_sessions')->where('id',$u->id)
                 ->whereIn('state',['initiated','uploading'])->update([
@@ -205,10 +272,17 @@ final class MediaController extends Controller
                     'complete_key_hash'=>$this->key($r),'complete_payload_hash'=>$digest,
                     'completed_at'=>now(),'updated_at'=>now(),
                 ]);
-            DB::table('media_objects')->where('id',$u->media_id)->update([
-                'state'=>'verifying','cipher_bytes'=>$d['total_cipher_bytes'],
-                'cipher_sha256'=>$d['cipher_sha256'],'updated_at'=>now(),
-            ]);
+            if($u->variant_id) {
+                DB::table('media_variants')->where('id',$u->variant_id)->update([
+                    'state'=>'verifying','cipher_bytes'=>$d['total_cipher_bytes'],
+                    'cipher_sha256'=>$d['cipher_sha256'],'updated_at'=>now(),
+                ]);
+            } else {
+                DB::table('media_objects')->where('id',$u->media_id)->update([
+                    'state'=>'verifying','cipher_bytes'=>$d['total_cipher_bytes'],
+                    'cipher_sha256'=>$d['cipher_sha256'],'updated_at'=>now(),
+                ]);
+            }
         });
         // Verification worker streams private ciphertext; never mark ready before hash proof.
         return $this->response(['media_id'=>$u->media_id,'state'=>'verifying'],202);
@@ -218,11 +292,17 @@ final class MediaController extends Controller
         $u=$this->upload($r,$upload);
         abort_if(in_array($u->state,['verifying','ready'],true),409,'Upload already finalized.');
         if(!in_array($u->state,['aborted','expired'],true)) {
-            try { $store->abort($this->media($u->media_id)->object_key,$this->providerId($u)); }
+            try { $store->abort($this->uploadObjectKey($u),$this->providerId($u)); }
             catch(\Throwable $e) { abort(503,'Unable to abort private storage upload.'); }
             DB::transaction(function()use($u):void {
                 DB::table('media_upload_sessions')->where('id',$u->id)->update(['state'=>'aborted','updated_at'=>now()]);
-                DB::table('media_objects')->where('id',$u->media_id)->update(['state'=>'aborted','deleted_at'=>now(),'updated_at'=>now()]);
+                if($u->variant_id) {
+                    DB::table('media_variants')->where('id',$u->variant_id)
+                        ->update(['state'=>'aborted','updated_at'=>now()]);
+                } else {
+                    DB::table('media_objects')->where('id',$u->media_id)
+                        ->update(['state'=>'aborted','deleted_at'=>now(),'updated_at'=>now()]);
+                }
             });
         }
         return response()->noContent();

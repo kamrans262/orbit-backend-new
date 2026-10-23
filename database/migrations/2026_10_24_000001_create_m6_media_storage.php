@@ -31,7 +31,8 @@ return new class extends Migration {
         });
         Schema::create('media_upload_sessions', function (Blueprint $t): void {
             $t->uuid('id')->primary();
-            $t->uuid('media_id')->unique();
+            $t->uuid('media_id')->index();
+            $t->uuid('variant_id')->nullable()->unique();
             $t->uuid('owner_user_id')->index();
             $t->uuid('device_id');
             $t->char('idempotency_key_hash',64);

@@ -53,12 +53,23 @@ final class MediaLifecycleWorker
             ->where('state','verifying')->orderBy('completed_at')->limit($limit)->get();
         foreach($verify as $u) {
             $m=DB::table('media_objects')->where('id',$u->media_id)->first();
-            if(!$m || $m->state!=='verifying')continue;
+            if(!$m)continue;
+            $variant=$u->variant_id
+                ? DB::table('media_variants')->where('id',$u->variant_id)
+                    ->where('media_id',$u->media_id)->first()
+                : null;
+            if($u->variant_id && (!$variant || $variant->state!=='verifying'))continue;
+            if(!$u->variant_id && $m->state!=='verifying')continue;
             try {
-                $valid=$this->store->verify($m->object_key,
+                $valid=$this->store->verify($variant?->object_key??$m->object_key,
                     (int)$u->actual_cipher_bytes,(string)$u->final_cipher_sha256);
                 if(!$valid) {
-                    $this->stageDelete($m->id,'checksum_mismatch');
+                    if($variant) {
+                        DB::table('media_variants')->where('id',$variant->id)
+                            ->update(['state'=>'failed','updated_at'=>now()]);
+                    } else {
+                        $this->stageDelete($m->id,'checksum_mismatch');
+                    }
                     DB::table('media_upload_sessions')->where('id',$u->id)
                         ->update(['state'=>'failed','updated_at'=>now()]);
                     $stats['rejected']++;
@@ -69,7 +80,16 @@ final class MediaLifecycleWorker
                     'sos'=>now()->addDays((int)config('orbit_media.sos_retention_days')),
                     default=>null,
                 };
-                DB::transaction(function()use($m,$u,$deadline):void {
+                DB::transaction(function()use($m,$u,$deadline,$variant):void {
+                    if($variant){
+                        $affected=DB::table('media_variants')->where('id',$variant->id)
+                            ->where('state','verifying')->update(['state'=>'ready','updated_at'=>now()]);
+                        if($affected!==1)return;
+                        DB::table('media_upload_sessions')->where('id',$u->id)
+                            ->update(['state'=>'ready','updated_at'=>now()]);
+                        $this->emit($m->id,'media.variant.ready.v1');
+                        return;
+                    }
                     $affected=DB::table('media_objects')->where('id',$m->id)
                         ->where('state','verifying')->update([
                             'state'=>'ready','ready_at'=>now(),'retention_deadline'=>$deadline,
@@ -91,12 +111,16 @@ final class MediaLifecycleWorker
         foreach($expired as $u) {
             try {
                 $m=DB::table('media_objects')->where('id',$u->media_id)->first();
+                $variant=$u->variant_id
+                    ? DB::table('media_variants')->where('id',$u->variant_id)->first() : null;
                 if($m && $u->provider_upload_id_encrypted) {
-                    $this->store->abort($m->object_key,
+                    $this->store->abort($variant?->object_key??$m->object_key,
                         Crypt::decryptString($u->provider_upload_id_encrypted));
                 }
                 DB::table('media_upload_sessions')->where('id',$u->id)->update(['state'=>'expired','updated_at'=>now()]);
-                if($m) $this->stageDelete($m->id,'orphan_upload');
+                if($variant) DB::table('media_variants')->where('id',$variant->id)
+                    ->update(['state'=>'aborted','updated_at'=>now()]);
+                elseif($m) $this->stageDelete($m->id,'orphan_upload');
                 $stats['expired_uploads']++;
             }catch(\Throwable) {$stats['errors']++;}
         }

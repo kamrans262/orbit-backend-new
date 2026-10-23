@@ -62,6 +62,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/media/uploads/{upload}/complete', [MediaController::class,'complete'])->whereUuid('upload')->middleware('throttle:10,1');
         Route::delete('/media/uploads/{upload}', [MediaController::class,'abort'])->whereUuid('upload')->middleware('throttle:20,1');
         Route::get('/media/{media}', [MediaController::class,'detail'])->whereUuid('media');
+        Route::post('/media/{media}/variants/uploads', [MediaController::class,'initiateVariant'])->whereUuid('media')->middleware('throttle:10,1');
         Route::post('/media/{media}/access', [MediaController::class,'access'])->whereUuid('media')->middleware('throttle:30,1');
         Route::get('/media/{media}/key-envelope', [MediaController::class,'keyEnvelope'])->whereUuid('media')->middleware('throttle:30,1');
         Route::post('/media/{media}/grants', [MediaController::class,'grant'])->whereUuid('media')->middleware('throttle:20,1');
