@@ -205,6 +205,46 @@ final class OrbitM5CirclesTest extends TestCase
         $this->assertFalse($policy->canAccessProtected($id,$owner->id,$friend->id,'location'));
     }
 
+    public function test_sos_default_is_simultaneous_free_and_not_disabled_by_ghost(): void
+    {
+        [$owner, $ownerToken] = $this->person('sos_owner');
+        [$friend, $friendToken] = $this->person('sos_friend');
+        $this->beFriends($ownerToken, $friendToken, $friend->id);
+        $circle = $this->createCircle($ownerToken, 'Safety group');
+        $invite = $this->withToken($ownerToken)
+            ->postJson('/api/v1/circles/'.$circle.'/invites',
+                ['invitee_id' => $friend->id])->assertCreated()->json('data.id');
+        $this->withToken($friendToken)
+            ->postJson('/api/v1/circles/invites/'.$invite.'/accept')->assertOk();
+        DB::table('orbit_user_preferences')->insertOrIgnore([
+            'user_id' => $owner->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('orbit_user_preferences')->where('user_id', $owner->id)
+            ->update(['privacy' => json_encode([
+                'ghost_mode_enabled' => true,
+                'location_visibility' => 'Nobody',
+                'location_sharing_enabled' => false,
+            ])]);
+        $router = app(\App\Modules\Circle\Services\CircleSosRoutingPolicy::class);
+        $defaults = $router->defaultResponders($circle, $owner->id);
+        $this->assertSame('simultaneous', $defaults['mode']);
+        $this->assertSame([$friend->id], $defaults['recipient_user_ids']);
+        $this->assertFalse($defaults['paid_entitlement_required']);
+        $this->assertFalse($defaults['alert_dispatched']);
+        $this->withToken($ownerToken)->postJson('/api/v1/me/blocks', [
+            'user_id' => $friend->id,
+        ])->assertCreated();
+        $this->assertSame([], $router->defaultResponders(
+            $circle, $owner->id)['recipient_user_ids']);
+        config()->set('orbit_circle.enabled', false);
+        try {
+            $router->defaultResponders($circle, $owner->id);
+            $this->fail('Disabled M5 must never supply recipient identities.');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertSame(404, $e->getStatusCode());
+        }
+    }
+
     public function test_owner_can_rename_but_nonmember_cannot_read_or_edit(): void
     {
         [$a,$ta] = $this->person('alpha');
