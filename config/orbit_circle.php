@@ -22,6 +22,20 @@ return [
     // Future M6+ protected-content consumer gates. Defaults DENY for every
     // capability until that module's actual read API, consent UI and privacy
     // tests are independently accepted. No Firebase connection is implied.
+    // Firebase transport is fully optional. No initialization or remote traffic
+    // occurs while this switch is OFF; all consumer sharing remains independent.
+    'firebase' => [
+        'enabled' => (bool) env('ORBIT_M5_FIREBASE_ENABLED', false),
+        'service_account_path' => env('ORBIT_M5_FIREBASE_SERVICE_ACCOUNT_PATH', ''),
+        'project_id' => env('ORBIT_M5_FIREBASE_PROJECT_ID', ''),
+        'database_url' => env('ORBIT_M5_FIREBASE_DATABASE_URL', ''),
+        'api_key' => env('ORBIT_M5_FIREBASE_API_KEY', ''),
+        'app_id' => env('ORBIT_M5_FIREBASE_APP_ID', ''),
+        'sender_id' => env('ORBIT_M5_FIREBASE_SENDER_ID', ''),
+    ],
+    // 30-day temporary Circle deletion: triple gated and OFF until an
+    // approved disposable-environment verification and production release.
+    'retention_autopurge_enabled' => (bool) env('ORBIT_M5_RETENTION_AUTOPURGE_ENABLED', false),
     'consumer_enabled' => [
         'location'=>false,'presence'=>false,'moments'=>false,
         'check_in'=>false,'plans'=>false,'status'=>false,
