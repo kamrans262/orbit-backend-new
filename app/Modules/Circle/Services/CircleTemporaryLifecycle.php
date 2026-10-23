@@ -156,6 +156,19 @@ final class CircleTemporaryLifecycle
         return $purged;
     }
 
+    /**
+     * Daily automatic retention, guarded by a THIRD explicit rollout flag.
+     * Reuses purgeReviewed so 30-day age, legal holds, per-row locks and
+     * anonymized audit are never bypassed. Default OFF even in tests.
+     */
+    public function purgeDue(int $limit = 25): int
+    {
+        if (config('orbit_circle.retention_autopurge_enabled') !== true) {
+            return 0;
+        }
+        return $this->purgeReviewed($limit, 'PURGE_REVIEWED_TEMPORARY_CIRCLES');
+    }
+
     /** Scope only: no cold-archive deletion until separately approved. */
     public function eligibleForRetentionReviewCount(): int
     {
