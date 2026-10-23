@@ -124,6 +124,41 @@ final class OrbitM5FirebasePreparedTest extends TestCase
         }
     }
 
+    public function test_logout_clears_published_session_acl_even_if_membership_remains(): void
+    {
+        $file = $this->configureTemporaryCredentials();
+        try {
+            Http::fake([
+                'https://oauth2.googleapis.com/token' =>
+                    Http::response(['access_token' => 'fake-service-token'], 200),
+                'https://orbit-ci-default-rtdb.firebaseio.com/orbit_m5.json' =>
+                    Http::response(['ok' => true], 200),
+            ]);
+            [$owner, $device, $session, $token] = $this->person('signout');
+            $circle = $this->withToken($token)->postJson('/api/v1/circles', [
+                'name' => 'Logout revocation',
+            ])->assertCreated()->json('data.id');
+            $publisher = app(CircleFirebaseBridge::class);
+            $publisher->publishPending(20);
+            $initial = Http::recorded(fn($req) => $req->method() === 'PATCH')
+                ->last()[0]->data();
+            $this->assertSame($device->id, $initial['acl/'.$circle][$session->id]);
+            $this->withToken($token)->postJson('/api/v1/auth/logout')->assertOk();
+            $this->assertDatabaseHas('circle_event_outbox', [
+                'circle_id' => $circle,
+                'event_type' => 'circle.session_access_changed',
+            ]);
+            $publisher->publishPending(20);
+            $revoked = Http::recorded(fn($req) => $req->method() === 'PATCH')
+                ->last()[0]->data();
+            $this->assertNull($revoked['acl/'.$circle]);
+            $this->withToken($token)
+                ->postJson('/api/v1/circles/realtime/bootstrap')->assertUnauthorized();
+        } finally {
+            @unlink($file);
+        }
+    }
+
     public function test_publisher_emits_only_session_acl_and_revision_then_removes_left_member(): void
     {
         $file = $this->configureTemporaryCredentials();
