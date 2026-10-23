@@ -90,7 +90,10 @@ final class CircleAccessPolicy
 
     public function canSubscribe(string $circleId, string $userId): bool
     {
-        // No FCM/WebSocket transport is approved/configured yet.
-        return false;
+        // This is only the preliminary Laravel membership decision.
+        // Firebase's per-session ACL and live device credentials remain
+        // independently mandatory. All switches default OFF.
+        return app(CircleFirebaseBridge::class)->enabled()
+            && $this->isMember($circleId, $userId);
     }
 }
