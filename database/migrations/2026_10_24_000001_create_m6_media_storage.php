@@ -93,7 +93,7 @@ return new class extends Migration {
             $t->longText('wrapped_key_ciphertext');
             $t->timestamp('revoked_at')->nullable();
             $t->timestamps();
-            $t->unique(['grant_id','recipient_device_id','variant']);
+            $t->unique(['grant_id','recipient_device_id','variant'],'media_envelope_recipient_unique');
             $t->foreign('grant_id')->references('id')->on('media_audience_grants')->cascadeOnDelete();
             $t->foreign('media_id')->references('id')->on('media_objects')->cascadeOnDelete();
             $t->foreign('recipient_device_id')->references('id')->on('devices')->cascadeOnDelete();
