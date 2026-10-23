@@ -370,7 +370,7 @@ final class MediaController extends Controller
             404,'Media unavailable.');
         $d=$r->validate([
             'audience_kind'=>['required','in:only_me,accepted_friends,selected_friends,selected_circles'],
-            'target_ids'=>['required','array','max:100'],
+            'target_ids'=>['present','array','max:100'],
             'target_ids.*'=>['uuid'],
             'expires_at'=>['nullable','date','after:now'],
             'key_envelopes'=>['required','array','min:1','max:300'],

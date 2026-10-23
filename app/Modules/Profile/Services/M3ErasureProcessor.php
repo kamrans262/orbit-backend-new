@@ -24,6 +24,7 @@ final class M3ErasureProcessor
         'social_graph_outbox',
         'circles', 'circle_members', 'circle_invites', 'circle_permissions',
         'circle_primary_selections',
+        'media_objects','media_upload_sessions','media_audience_grants',
     ];
 
     public function preview(string $requestId): array
@@ -104,6 +105,21 @@ final class M3ErasureProcessor
             }
             if (!$user->deletion_requested_at) {
                 throw new DomainException('Account has no active deletion request.');
+            }
+
+            // M6 encrypted objects must first be physically deleted by the
+            // separately idempotent storage worker. Never orphan ciphertext or
+            // cascade-delete someone else's media during account erasure.
+            if (\Illuminate\Support\Facades\Schema::hasTable('media_objects')) {
+                $owned=DB::table('media_objects')->where('owner_user_id',$user->id);
+                if ((clone $owned)->where('state','!=','deleted')->exists()
+                    || (clone $owned)->whereNotNull('legal_hold_until')
+                        ->where('legal_hold_until','>',now())->exists()) {
+                    throw new DomainException('M6 media requires verified ciphertext purge before account erasure.');
+                }
+                // Every owned blob is confirmed deleted. Remove metadata and
+                // envelope grants after storage cleanup, inside the erasure txn.
+                $owned->delete();
             }
 
             // Released holds can be removed, since they are user-linked and
