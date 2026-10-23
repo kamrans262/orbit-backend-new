@@ -41,6 +41,8 @@ return new class extends Migration {
             $t->unsignedBigInteger('declared_bytes');
             $t->unsignedBigInteger('actual_cipher_bytes')->nullable();
             $t->char('final_cipher_sha256',64)->nullable();
+            $t->char('complete_key_hash',64)->nullable();
+            $t->char('complete_payload_hash',64)->nullable();
             $t->string('state',16)->default('initiated');
             $t->timestamp('expires_at')->index();
             $t->timestamp('completed_at')->nullable();
@@ -70,6 +72,8 @@ return new class extends Migration {
             $t->uuid('circle_id')->nullable();
             $t->string('audience_kind',24);
             $t->unsignedBigInteger('policy_version');
+            $t->char('request_key_hash',64)->nullable();
+            $t->char('request_payload_hash',64)->nullable();
             $t->timestamp('expires_at')->nullable();
             $t->timestamp('revoked_at')->nullable();
             $t->timestamps();

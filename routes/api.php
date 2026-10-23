@@ -10,6 +10,7 @@ use App\Modules\Social\Http\Controllers\SocialContactController;
 use App\Modules\Social\Http\Controllers\SocialInviteController;
 use App\Modules\Circle\Http\Controllers\CircleController;
 use App\Modules\Circle\Http\Middleware\EnsureCircleM5Enabled;
+use App\Modules\Media\Http\Controllers\MediaController;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -54,6 +55,18 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/circles/{circle}/permissions', [CircleController::class, 'permissions'])->whereUuid('circle');
         Route::patch('/circles/{circle}/permissions', [CircleController::class, 'revokePermission'])->whereUuid('circle')->middleware('throttle:20,1');
         }); // M5 feature gate
+        // M6: media is private, authenticated and device-bound. No public asset routes.
+        Route::post('/media/uploads', [MediaController::class,'initiate'])->middleware('throttle:10,1');
+        Route::get('/media/uploads/{upload}', [MediaController::class,'uploadStatus'])->whereUuid('upload');
+        Route::post('/media/uploads/{upload}/parts', [MediaController::class,'part'])->whereUuid('upload')->middleware('throttle:120,1');
+        Route::post('/media/uploads/{upload}/complete', [MediaController::class,'complete'])->whereUuid('upload')->middleware('throttle:10,1');
+        Route::delete('/media/uploads/{upload}', [MediaController::class,'abort'])->whereUuid('upload')->middleware('throttle:20,1');
+        Route::get('/media/{media}', [MediaController::class,'detail'])->whereUuid('media');
+        Route::post('/media/{media}/access', [MediaController::class,'access'])->whereUuid('media')->middleware('throttle:30,1');
+        Route::get('/media/{media}/key-envelope', [MediaController::class,'keyEnvelope'])->whereUuid('media')->middleware('throttle:30,1');
+        Route::post('/media/{media}/grants', [MediaController::class,'grant'])->whereUuid('media')->middleware('throttle:20,1');
+        Route::delete('/media/{media}/grants/{grant}', [MediaController::class,'revoke'])->whereUuid('media')->whereUuid('grant')->middleware('throttle:20,1');
+        Route::delete('/media/{media}', [MediaController::class,'delete'])->whereUuid('media')->middleware('throttle:10,1');
         // M4 social graph: trusted-device auth, per-IP throttles, per-account quotas,
         // server-side block checks and no-store responses.
         Route::get('/people/search', [SocialGraphController::class, 'search'])->middleware('throttle:30,1');
