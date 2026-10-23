@@ -7,6 +7,7 @@ use App\Modules\Identity\Http\Controllers\AdminIdentityController;
 use App\Modules\Profile\Http\Controllers\AdminProfileController;
 use App\Modules\Social\Http\Controllers\AdminSocialGraphController;
 use App\Modules\Circle\Http\Controllers\AdminCircleController;
+use App\Modules\Media\Http\Controllers\AdminMediaController;
 use App\Modules\Config\Http\Middleware\EnsureAdmin;
 use App\Modules\Config\Http\Middleware\RequireAdminPermission;
 
@@ -37,6 +38,7 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
                 'settings.audit.read' => 'orbit.admin.settings.activity',
                 'social.read' => 'orbit.admin.social.index',
                 'circles.read' => 'orbit.admin.circles.index',
+                'media.read' => 'orbit.admin.media.index',
             ] as $permission => $route) {
                 if ($permission === 'circles.read' && config('orbit_circle.enabled') !== true) continue;
                 if ($actor?->canPerform($permission)) return redirect()->route($route);
@@ -44,6 +46,8 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
             abort(403);
         })->name('landing');
 
+        Route::get('/media', [AdminMediaController::class,'index'])
+            ->middleware(RequireAdminPermission::class.':media.read')->name('media.index');
         Route::get('/circles', [AdminCircleController::class, 'index'])
             ->middleware(RequireAdminPermission::class.':circles.read')->name('circles.index');
         Route::get('/social-graph', [AdminSocialGraphController::class, 'index'])

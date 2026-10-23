@@ -1,0 +1,146 @@
+<?php
+namespace App\Modules\Media\Services;
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Str;
+
+/**
+ * Idempotent, non-Firebase private-object lifecycle processor. Call from
+ * cron/scheduler, never mark ready solely from a client's completion claim.
+ */
+final class MediaLifecycleWorker
+{
+    public function __construct(private readonly MediaObjectStore $store) {}
+
+    private function emit(string $id,string $event): void
+    {
+        DB::table('media_event_outbox')->insert([
+            'id'=>(string)Str::uuid7(),'media_id'=>$id,
+            'event_type'=>$event,'created_at'=>now(),
+        ]);
+    }
+    private function stageDelete(string $id,string $reason): void
+    {
+        DB::transaction(function()use($id,$reason):void {
+            $row=DB::table('media_objects')->where('id',$id)->lockForUpdate()->first();
+            if(!$row || $row->state==='deleted') return;
+            if($row->state!=='deleting') {
+                DB::table('media_objects')->where('id',$id)->update([
+                    'state'=>'deleting','deleted_at'=>now(),'updated_at'=>now(),
+                ]);
+                DB::table('media_audience_grants')->where('media_id',$id)
+                    ->whereNull('revoked_at')->update(['revoked_at'=>now(),'updated_at'=>now()]);
+                DB::table('media_device_key_envelopes')->where('media_id',$id)
+                    ->whereNull('revoked_at')->update(['revoked_at'=>now(),'updated_at'=>now()]);
+                $this->emit($id,'media.expired.v1');
+            }
+            DB::table('media_delete_jobs')->insertOrIgnore([
+                'id'=>(string)Str::uuid7(),'media_id'=>$id,'reason'=>$reason,
+                'status'=>'pending','next_attempt_at'=>now(),
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+        });
+    }
+
+    public function run(int $limit=15): array
+    {
+        $limit=max(1,min($limit,100));
+        $stats=['verified'=>0,'rejected'=>0,'expired_uploads'=>0,'queued_deletions'=>0,'purged'=>0,'errors'=>0];
+        // Worker verifies the entire ciphertext stream; HEAD ETag is not a
+        // plaintext hash or trustworthy end-to-end receipt for multipart uploads.
+        $verify=DB::table('media_upload_sessions')
+            ->where('state','verifying')->orderBy('completed_at')->limit($limit)->get();
+        foreach($verify as $u) {
+            $m=DB::table('media_objects')->where('id',$u->media_id)->first();
+            if(!$m || $m->state!=='verifying')continue;
+            try {
+                $valid=$this->store->verify($m->object_key,
+                    (int)$u->actual_cipher_bytes,(string)$u->final_cipher_sha256);
+                if(!$valid) {
+                    $this->stageDelete($m->id,'checksum_mismatch');
+                    DB::table('media_upload_sessions')->where('id',$u->id)
+                        ->update(['state'=>'failed','updated_at'=>now()]);
+                    $stats['rejected']++;
+                    continue;
+                }
+                $deadline=match($m->purpose) {
+                    'moment'=>now()->addDays((int)config('orbit_media.moments_purge_days')),
+                    'sos'=>now()->addDays((int)config('orbit_media.sos_retention_days')),
+                    default=>null,
+                };
+                DB::transaction(function()use($m,$u,$deadline):void {
+                    $affected=DB::table('media_objects')->where('id',$m->id)
+                        ->where('state','verifying')->update([
+                            'state'=>'ready','ready_at'=>now(),'retention_deadline'=>$deadline,
+                            'updated_at'=>now(),
+                        ]);
+                    if($affected!==1)return;
+                    DB::table('media_upload_sessions')->where('id',$u->id)
+                        ->update(['state'=>'ready','updated_at'=>now()]);
+                    $this->emit($m->id,'media.upload.ready.v1');
+                });
+                $stats['verified']++;
+            } catch(\Throwable) {
+                $stats['errors']++;
+            }
+        }
+        $expired=DB::table('media_upload_sessions')
+            ->whereIn('state',['initiated','uploading'])
+            ->where('expires_at','<=',now())->limit($limit)->get();
+        foreach($expired as $u) {
+            try {
+                $m=DB::table('media_objects')->where('id',$u->media_id)->first();
+                if($m && $u->provider_upload_id_encrypted) {
+                    $this->store->abort($m->object_key,
+                        Crypt::decryptString($u->provider_upload_id_encrypted));
+                }
+                DB::table('media_upload_sessions')->where('id',$u->id)->update(['state'=>'expired','updated_at'=>now()]);
+                if($m) $this->stageDelete($m->id,'orphan_upload');
+                $stats['expired_uploads']++;
+            }catch(\Throwable) {$stats['errors']++;}
+        }
+        $due=DB::table('media_objects')->where('state','ready')
+            ->whereNotNull('retention_deadline')->where('retention_deadline','<=',now())
+            ->limit($limit)->pluck('id');
+        foreach($due as $id) {
+            $this->stageDelete($id,'retention_expired');
+            $stats['queued_deletions']++;
+        }
+        $jobs=DB::table('media_delete_jobs')->where('status','pending')
+            ->where('next_attempt_at','<=',now())->limit($limit)->get();
+        foreach($jobs as $job) {
+            $m=DB::table('media_objects')->where('id',$job->media_id)->first();
+            if(!$m || $m->state==='deleted') {
+                DB::table('media_delete_jobs')->where('id',$job->id)->update([
+                    'status'=>'completed','completed_at'=>now(),'updated_at'=>now(),
+                ]);
+                continue;
+            }
+            // Deny all reads immediately but do not destroy ciphertext under legal hold.
+            if($m->legal_hold_until && now()->lt($m->legal_hold_until)) continue;
+            try {
+                foreach(DB::table('media_variants')->where('media_id',$m->id)->pluck('object_key') as $key)
+                    $this->store->delete($key);
+                $this->store->delete($m->object_key);
+                DB::transaction(function()use($m,$job):void {
+                    DB::table('media_objects')->where('id',$m->id)
+                        ->update(['state'=>'deleted','updated_at'=>now()]);
+                    DB::table('media_delete_jobs')->where('id',$job->id)->update([
+                        'status'=>'completed','completed_at'=>now(),'updated_at'=>now(),
+                    ]);
+                    $this->emit($m->id,'media.purge.completed.v1');
+                });
+                $stats['purged']++;
+            } catch(\Throwable) {
+                DB::table('media_delete_jobs')->where('id',$job->id)->update([
+                    'attempts'=>$job->attempts+1,
+                    'next_attempt_at'=>now()->addMinutes(min(360,2**min(8,$job->attempts+1))),
+                    'updated_at'=>now(),
+                ]);
+                $stats['errors']++;
+            }
+        }
+        return $stats;
+    }
+}

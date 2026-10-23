@@ -32,10 +32,13 @@
   if (config('orbit_circle.enabled') === true && $navUser?->canPerform('circles.read')) {
     $accountChildren[] = ['title'=>'Circle Management','route'=>'orbit.admin.circles.index','patterns'=>['orbit.admin.circles.*']];
   }
+  if (config('orbit_media.enabled') === true && $navUser?->canPerform('media.read')) {
+    $accountChildren[] = ['title'=>'Encrypted Media Operations','route'=>'orbit.admin.media.index','patterns'=>['orbit.admin.media.*']];
+  }
   if ($accountChildren !== []) {
     $navGroups[] = [
       'title'=>'Accounts', 'icon'=>'users',
-      'patterns'=>['orbit.admin.users.*','orbit.admin.deletions.*','orbit.admin.settings.*','orbit.admin.social.*','orbit.admin.circles.*'],
+      'patterns'=>['orbit.admin.users.*','orbit.admin.deletions.*','orbit.admin.settings.*','orbit.admin.social.*','orbit.admin.circles.*','orbit.admin.media.*'],
       'children'=>$accountChildren,
     ];
   }
