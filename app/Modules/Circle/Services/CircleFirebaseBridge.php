@@ -94,7 +94,8 @@ final class CircleFirebaseBridge
             'aud' => 'https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit',
             'iat' => $now, 'exp' => $now + 900,
             'uid' => $session->id,
-            'claims' => ['orbit_m5' => true, 'orbit_device' => $session->device_id],
+            'claims' => ['orbit_m5' => true, 'orbit_device' => $session->device_id,
+                'orbit_session' => $session->id],
         ], $creds);
         return ['enabled' => true, 'custom_token' => $token, 'firebase' => $client,
             'uid' => $session->id, 'expires_in' => 900];
