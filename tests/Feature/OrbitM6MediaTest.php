@@ -291,4 +291,55 @@ final class OrbitM6MediaTest extends TestCase
         $this->assertDatabaseHas('media_objects',['id'=>$u['media_id'],'state'=>'ready']);
     }
 
+
+    public function test_admin_account_quota_requires_elevated_permission():void
+    {
+        [$owner,$token]=$this->person('owner');
+        $this->ready($token);
+        $role=AdminRole::create(['name'=>'M6 read role '.Str::uuid(),'permissions'=>['media.read']]);
+        $admin=AdminUser::create([
+            'name'=>'M6 quota auditor','email'=>Str::uuid().'@example.test',
+            'status'=>'active','password'=>'Secure-Password!123',
+            'totp_secret'=>(new Totp())->generateSecret(),
+        ]);
+        $admin->roles()->attach($role->id);
+        $this->be($admin,'admin');
+        $this->get('/admin/media?owner_id='.$owner->id)->assertForbidden();
+        $role->update(['permissions'=>['media.read','media.quotas.read']]);
+        $this->get('/admin/media?owner_id='.$owner->id)->assertOk()
+            ->assertViewHas('quota',fn($q)=>$q['used_bytes']===1024
+                && $q['limit_bytes']===(int)config('orbit_media.per_owner_cipher_quota_bytes'));
+    }
+    public function test_admin_retry_only_reschedules_prior_failure_with_audit():void
+    {
+        [$owner,$token]=$this->person('owner');
+        $media=$this->ready($token);
+        $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->deleteJson('/api/v1/media/'.$media['media_id'])->assertStatus(202);
+        $job=DB::table('media_delete_jobs')->where('media_id',$media['media_id'])->first();
+        DB::table('media_delete_jobs')->where('id',$job->id)->update([
+            'attempts'=>1,'next_attempt_at'=>now()->addDay(),
+        ]);
+        $role=AdminRole::create(['name'=>'M6 operations role '.Str::uuid(),
+            'permissions'=>['media.read']]);
+        $admin=AdminUser::create([
+            'name'=>'M6 operator','email'=>Str::uuid().'@example.test',
+            'status'=>'active','password'=>'Secure-Password!123',
+            'totp_secret'=>(new Totp())->generateSecret(),
+        ]);
+        $admin->roles()->attach($role->id);
+        $this->be($admin,'admin');
+        $body=['job_id'=>$job->id,'ticket'=>'M6-Test-12345','confirm'=>'RETRY'];
+        $this->post('/admin/media/jobs/retry',$body)->assertForbidden();
+        $role->update(['permissions'=>['media.read','media.jobs.retry']]);
+        $this->post('/admin/media/jobs/retry',$body)->assertRedirect();
+        $this->assertDatabaseHas('media_admin_audits',[
+            'action'=>'media.delete.retry_scheduled','admin_user_id'=>$admin->id,
+            'ticket'=>'M6-Test-12345',
+        ]);
+        $this->assertTrue(DB::table('media_delete_jobs')->where('id',$job->id)
+            ->where('next_attempt_at','<=',now())->exists());
+        $this->assertDatabaseHas('media_objects',['id'=>$media['media_id'],'state'=>'deleting']);
+    }
+
 }
