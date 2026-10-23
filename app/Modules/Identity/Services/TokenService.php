@@ -122,6 +122,15 @@ final class TokenService
             'id' => (string) Str::uuid7(), 'user_id' => $uid,
             'device_id' => $did, 'action' => $action, 'reason_code' => $reason, 'created_at' => now(),
         ]);
+        if ($uid !== null && in_array($action, [
+            'auth.logout', 'auth.logout_all', 'session.revoked',
+            'session.refresh_replay', 'device.revoked',
+            'auth.password_reset', 'account.deletion_requested',
+            'device.recovery_completed',
+        ], true)) {
+            app(\App\Modules\Circle\Services\CircleLifecycleIntegrity::class)
+                ->identityAccessChanged($uid);
+        }
     }
     private function response(OrbitSession $session, string $refresh): array
     {

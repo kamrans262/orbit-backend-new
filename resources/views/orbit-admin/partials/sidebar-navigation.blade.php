@@ -29,10 +29,13 @@
   if ($navUser?->canPerform('social.read')) {
     $accountChildren[] = ['title'=>'Friends & Blocking','route'=>'orbit.admin.social.index','patterns'=>['orbit.admin.social.*']];
   }
+  if (config('orbit_circle.enabled') === true && $navUser?->canPerform('circles.read')) {
+    $accountChildren[] = ['title'=>'Circle Management','route'=>'orbit.admin.circles.index','patterns'=>['orbit.admin.circles.*']];
+  }
   if ($accountChildren !== []) {
     $navGroups[] = [
       'title'=>'Accounts', 'icon'=>'users',
-      'patterns'=>['orbit.admin.users.*','orbit.admin.deletions.*','orbit.admin.settings.*','orbit.admin.social.*'],
+      'patterns'=>['orbit.admin.users.*','orbit.admin.deletions.*','orbit.admin.settings.*','orbit.admin.social.*','orbit.admin.circles.*'],
       'children'=>$accountChildren,
     ];
   }

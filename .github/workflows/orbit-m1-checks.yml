@@ -1,9 +1,9 @@
 name: Orbit Laravel validation (M1 + M2 + M3 + Admin UI)
 on:
   pull_request:
-    branches: [main, feature/m1-foundation-config, feature/m2-auth-identity, feature/m3-profiles-settings, feature/m3-admin-console, feature/admin-ui-layout-polish, feature/m3-completion-erasure, feature/device-recovery]
+    branches: [main, feature/m1-foundation-config, feature/m2-auth-identity, feature/m3-profiles-settings, feature/m3-admin-console, feature/admin-ui-layout-polish, feature/m3-completion-erasure, feature/device-recovery, feature/m5-circles-backend-admin]
   push:
-    branches: [feature/m1-foundation-config, feature/m2-auth-identity, feature/m3-profiles-settings, feature/m3-admin-console, feature/admin-ui-layout-polish, feature/device-recovery, release/m4-hostinger-preserve-m3-2026-10-21]
+    branches: [feature/m1-foundation-config, feature/m2-auth-identity, feature/m3-profiles-settings, feature/m3-admin-console, feature/admin-ui-layout-polish, feature/device-recovery, release/m4-hostinger-preserve-m3-2026-10-21, feature/m5-circles-backend-admin]
 jobs:
   php-tests:
     runs-on: ubuntu-latest
@@ -54,3 +54,11 @@ jobs:
           find app routes database/migrations tests -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Laravel unit and integration tests
         run: php artisan test
+      - name: M5 manual release gate must reject empty evidence
+        run: |
+          python3 -m py_compile scripts/m5_ct_acceptance_gate.py
+          if python3 scripts/m5_ct_acceptance_gate.py docs/M5_CT40_EVIDENCE_TEMPLATE.csv; then
+            echo "ERROR: Empty CT evidence incorrectly passed."
+            exit 1
+          fi
+

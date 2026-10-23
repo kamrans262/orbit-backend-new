@@ -8,6 +8,8 @@ use App\Modules\Identity\Http\Middleware\AuthenticateOrbitToken;
 use App\Modules\Social\Http\Controllers\SocialGraphController;
 use App\Modules\Social\Http\Controllers\SocialContactController;
 use App\Modules\Social\Http\Controllers\SocialInviteController;
+use App\Modules\Circle\Http\Controllers\CircleController;
+use App\Modules\Circle\Http\Middleware\EnsureCircleM5Enabled;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -22,6 +24,36 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/auth/refresh', [IdentityController::class, 'refresh'])->middleware('throttle:30,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        Route::middleware(EnsureCircleM5Enabled::class)->group(function (): void {
+        // M5 private Circles: no public directory, no passive membership consent.
+        Route::get('/me/circles/primary', [CircleController::class, 'primary']);
+        Route::put('/me/circles/primary', [CircleController::class, 'choosePrimary'])->middleware('throttle:15,1');
+        Route::get('/circles/features', [CircleController::class, 'features']);
+        Route::post('/circles/realtime/bootstrap', [CircleController::class, 'realtimeBootstrap'])
+            ->middleware('throttle:6,1');
+        Route::get('/circles', [CircleController::class, 'listing']);
+        Route::post('/circles', [CircleController::class, 'create'])->middleware('throttle:10,1');
+        Route::get('/circles/archived', [CircleController::class, 'archived']);
+        Route::get('/circles/invites/incoming', [CircleController::class, 'incoming']);
+        Route::post('/circles/invites/code/preview', [CircleController::class, 'previewCode'])->middleware('throttle:8,1');
+        Route::post('/circles/invites/code/redeem', [CircleController::class, 'redeemCode'])->middleware('throttle:6,1');
+        Route::post('/circles/invites/{invite}/accept', [CircleController::class, 'accept'])->whereUuid('invite')->middleware('throttle:20,1');
+        Route::post('/circles/invites/{invite}/decline', [CircleController::class, 'decline'])->whereUuid('invite')->middleware('throttle:20,1');
+        Route::get('/circles/{circle}', [CircleController::class, 'detail'])->whereUuid('circle');
+        Route::patch('/circles/{circle}', [CircleController::class, 'update'])->whereUuid('circle')->middleware('throttle:20,1');
+        Route::get('/circles/{circle}/members', [CircleController::class, 'members'])->whereUuid('circle');
+        Route::post('/circles/{circle}/leave', [CircleController::class, 'leave'])->whereUuid('circle')->middleware('throttle:20,1');
+        Route::post('/circles/{circle}/ownership-transfer', [CircleController::class, 'transfer'])->whereUuid('circle')->middleware('throttle:5,1');
+        Route::post('/circles/{circle}/archive', [CircleController::class, 'archive'])->whereUuid('circle')->middleware('throttle:5,1');
+        Route::post('/circles/{circle}/restore', [CircleController::class, 'restore'])->whereUuid('circle')->middleware('throttle:5,1');
+        Route::delete('/circles/{circle}/members/{user}', [CircleController::class, 'remove'])->whereUuid('circle')->whereUuid('user')->middleware('throttle:20,1');
+        Route::patch('/circles/{circle}/members/{user}', [CircleController::class, 'role'])->whereUuid('circle')->whereUuid('user')->middleware('throttle:20,1');
+        Route::get('/circles/{circle}/invites', [CircleController::class, 'outgoing'])->whereUuid('circle');
+        Route::post('/circles/{circle}/invites', [CircleController::class, 'invite'])->whereUuid('circle')->middleware('throttle:10,1');
+        Route::delete('/circles/{circle}/invites/{invite}', [CircleController::class, 'revoke'])->whereUuid('circle')->whereUuid('invite')->middleware('throttle:20,1');
+        Route::get('/circles/{circle}/permissions', [CircleController::class, 'permissions'])->whereUuid('circle');
+        Route::patch('/circles/{circle}/permissions', [CircleController::class, 'revokePermission'])->whereUuid('circle')->middleware('throttle:20,1');
+        }); // M5 feature gate
         // M4 social graph: trusted-device auth, per-IP throttles, per-account quotas,
         // server-side block checks and no-store responses.
         Route::get('/people/search', [SocialGraphController::class, 'search'])->middleware('throttle:30,1');
