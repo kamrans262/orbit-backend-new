@@ -20,6 +20,8 @@ final class MediaPolicy
         if (!OrbitUser::query()->whereKey($viewer)->where('status','active')
             ->whereNull('deletion_requested_at')->exists()) return false;
         if ($media->retention_deadline !== null && now()->greaterThanOrEqualTo($media->retention_deadline)) return false;
+        // Moment media is authorized for seven days even though the purge deadline is day 30.
+        if ($media->purpose === 'moment' && now()->gte(\Illuminate\Support\Carbon::parse($media->created_at)->addDays((int)config('orbit_media.moments_view_days')))) return false;
         if ($media->owner_user_id === $viewer) return true;
         if ($this->social->isBlockedEitherWay($viewer,$media->owner_user_id)) return false;
         if ($media->purpose === 'sos') return false; // Separate authorized SOS responder policy in M16.
