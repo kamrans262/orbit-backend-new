@@ -166,6 +166,26 @@ final class CircleFirebaseBridge
     }
 
     /**
+     * Inline best-effort invalidation after a successful MariaDB commit.
+     * Circle mutations NEVER roll back or show false failure if Firebase is
+     * unavailable. The durable outbox independently retries publication.
+     */
+    public function afterCommit(string $circleId): void
+    {
+        if (!$this->enabled()) return;
+        DB::afterCommit(function () use ($circleId): void {
+            try {
+                $this->syncCircle($circleId);
+            } catch (\Throwable $error) {
+                // No sensitive tokens or private Circle details in logs.
+                \Illuminate\Support\Facades\Log::warning(
+                    'M5 realtime publish deferred to retry worker.'
+                );
+            }
+        });
+    }
+
+    /**
      * An outbox retry does not grant access. Failure preserves the event for a
      * later bounded retry. Never log OAuth tokens or credential JSON.
      */
