@@ -263,7 +263,7 @@ final class MediaController extends Controller
             if($i<count($parts)-1) abort_unless((int)$p['bytes']===$max,422,'Incomplete non-final part.');
         }
         abort_unless($total===(int)$d['total_cipher_bytes'],422,'Ciphertext length mismatch.');
-        $store->finish($key,$this->providerId($u),$parts);
+        $store->finish($key,$this->providerId($u),$onServer);
         DB::transaction(function()use($u,$d,$digest,$r):void{
             DB::table('media_upload_sessions')->where('id',$u->id)
                 ->whereIn('state',['initiated','uploading'])->update([

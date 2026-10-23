@@ -37,6 +37,7 @@ class MediaObjectStore
             'Bucket'=>$this->bucket(),'Key'=>$key,
             'ContentType'=>'application/octet-stream',
             'Metadata'=>['orbit-encrypted'=>'v1'],
+            'ChecksumAlgorithm'=>'SHA256',
         ]);
         return (string)$result['UploadId'];
     }
@@ -69,7 +70,8 @@ class MediaObjectStore
             foreach($response['Parts']??[] as $p) {
                 $marker=(int)$p['PartNumber'];
                 $list[]=['part_number'=>$marker,'etag'=>(string)$p['ETag'],
-                    'bytes'=>(int)$p['Size']];
+                    'bytes'=>(int)$p['Size'],
+                    'checksum_sha256'=>(string)($p['ChecksumSHA256']??'')];
             }
         } while (($response['IsTruncated']??false)===true);
         return $list;
@@ -81,6 +83,7 @@ class MediaObjectStore
             'Bucket'=>$this->bucket(),'Key'=>$key,'UploadId'=>$uploadId,
             'MultipartUpload'=>['Parts'=>array_map(fn($p)=>[
                 'PartNumber'=>(int)$p['part_number'],'ETag'=>$p['etag'],
+                ...(($p['checksum_sha256']??'')!==''?['ChecksumSHA256'=>$p['checksum_sha256']]:[]),
             ],$parts)],
         ]);
     }

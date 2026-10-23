@@ -196,4 +196,70 @@ final class OrbitM6MediaTest extends TestCase
         $role->update(['permissions'=>['users.read']]);
         $this->get('/admin/media')->assertForbidden();
     }
+
+    public function test_encrypted_variant_never_becomes_ready_without_verification():void
+    {
+        [$owner,$token]=$this->person('owner');
+        $media=$this->ready($token);
+        $this->store->parts=[];
+        $v=$this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/media/'.$media['media_id'].'/variants/uploads',[
+                'variant'=>'thumbnail','declared_bytes'=>128,'cipher_sha256'=>str_repeat('b',64),
+            ])->assertCreated()->json('data');
+        $this->assertDatabaseHas('media_variants',['media_id'=>$media['media_id'],'state'=>'initiated']);
+        $this->store->parts=[['part_number'=>1,'etag'=>'"thumbnail-etag"','bytes'=>128]];
+        $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/media/uploads/'.$v['upload_id'].'/complete',[
+                'total_cipher_bytes'=>128,'cipher_sha256'=>str_repeat('b',64),
+                'parts'=>[['part_number'=>1,'etag'=>'"thumbnail-etag"']],
+            ])->assertStatus(202);
+        $this->assertDatabaseHas('media_variants',['media_id'=>$media['media_id'],'state'=>'verifying']);
+        $this->assertSame(1,app(MediaLifecycleWorker::class)->run()['verified']);
+        $this->assertDatabaseHas('media_variants',['media_id'=>$media['media_id'],
+            'variant'=>'thumbnail','state'=>'ready']);
+        $this->withToken($token)->getJson('/api/v1/media/'.$media['media_id'])
+            ->assertOk()->assertJsonPath('data.variants.0','thumbnail');
+    }
+
+    public function test_friend_media_grant_is_revoked_immediately_after_block():void
+    {
+        [$owner,$ownerToken]=$this->person('owner');
+        [$friend,$friendToken,$friendDevice]=$this->person('friend');
+        [$low,$high]=app(\App\Modules\Social\Services\SocialGraphService::class)
+            ->canonical($owner->id,$friend->id);
+        DB::table('friendships')->insert(['user_low_id'=>$low,'user_high_id'=>$high,'created_at'=>now()]);
+        $media=$this->ready($ownerToken);
+        $this->withToken($ownerToken)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/media/'.$media['media_id'].'/grants',[
+                'audience_kind'=>'selected_friends','target_ids'=>[$friend->id],
+                'key_envelopes'=>[[
+                    'device_id'=>$friendDevice->id,'variant'=>'original',
+                    'key_version'=>'v1','algorithm'=>'x25519+hkdf+chacha20poly1305',
+                    'wrapped_key_ciphertext'=>str_repeat('E',64),
+                ]],
+            ])->assertCreated();
+        $this->withToken($friendToken)->postJson('/api/v1/media/'.$media['media_id'].'/access',[
+            'device_id'=>$friendDevice->id,'variant'=>'original',
+        ])->assertOk();
+        $this->withToken($ownerToken)->postJson('/api/v1/me/blocks',[
+            'user_id'=>$friend->id,
+        ])->assertCreated();
+        $this->withToken($friendToken)->postJson('/api/v1/media/'.$media['media_id'].'/access',[
+            'device_id'=>$friendDevice->id,'variant'=>'original',
+        ])->assertNotFound();
+    }
+
+    public function test_missing_provider_configuration_never_falls_back_to_public_storage():void
+    {
+        [$owner,$token]=$this->person('owner');
+        app()->instance(MediaObjectStore::class,new MediaObjectStore());
+        config()->set('orbit_media.bucket',null);
+        $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/media/uploads',[
+                'purpose'=>'moment','kind'=>'image','declared_mime'=>'image/jpeg',
+                'declared_bytes'=>1024,'cipher_suite'=>'xchacha20poly1305-v1',
+            ])->assertStatus(503);
+        $this->assertDatabaseCount('media_objects',0);
+    }
+
 }
