@@ -38,6 +38,7 @@ final class CircleLifecycleIntegrity
                 'id'=>(string) Str::uuid7(),'circle_id'=>$id,
                 'event_type'=>$event,'created_at'=>now(),
             ]);
+            app(CircleFirebaseBridge::class)->afterCommit($id);
         }
     }
 
@@ -56,6 +57,7 @@ final class CircleLifecycleIntegrity
                 'id'=>(string) Str::uuid7(),'circle_id'=>$id,
                 'event_type'=>'circle.member_account_removed','created_at'=>now(),
             ]);
+            app(CircleFirebaseBridge::class)->afterCommit($id);
         }
     }
 }
