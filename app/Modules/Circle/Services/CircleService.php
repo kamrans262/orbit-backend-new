@@ -63,6 +63,7 @@ final class CircleService
             'id'=>(string) Str::uuid7(),'circle_id'=>$id,
             'event_type'=>$event,'created_at'=>now(),
         ]);
+        app(CircleFirebaseBridge::class)->afterCommit($id);
     }
 
     private function format(object $row, string $viewer): array
@@ -158,6 +159,7 @@ final class CircleService
                 'id'=>(string) Str::uuid7(),'circle_id'=>$id,
                 'event_type'=>'circle.created','created_at'=>$now,
             ]);
+            app(CircleFirebaseBridge::class)->afterCommit($id);
             return $this->detail($id,$user);
         }, 3);
     }
