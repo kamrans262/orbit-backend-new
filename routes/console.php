@@ -42,3 +42,13 @@ Artisan::command('orbit:circles:firebase-publish', function () {
 })->purpose('Publish scoped revision invalidations to approved Firebase RTDB');
 
 Schedule::command('orbit:circles:firebase-publish')->everyMinute()->withoutOverlapping();
+
+/** Disabled until 30-day retention policy and controlled release are approved. */
+Artisan::command('orbit:circles:retention-purge-due', function () {
+    $count = app(\App\Modules\Circle\Services\CircleTemporaryLifecycle::class)
+        ->purgeDue(25);
+    $this->info('Eligible, legally unheld temporary archives purged: '.$count);
+})->purpose('Triple-gated daily audited 30-day temporary Circle retention');
+
+Schedule::command('orbit:circles:retention-purge-due')->dailyAt('03:15')
+    ->withoutOverlapping();
