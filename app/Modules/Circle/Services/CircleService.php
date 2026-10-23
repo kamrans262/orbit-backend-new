@@ -472,21 +472,14 @@ final class CircleService
     public function permissions(string $id, string $user): array
     {
         $this->circle($id,$user);
-        // Persisted grants are not activated without feature-specific consent and consumers.
-        $saved = DB::table('circle_permissions')->where('circle_id',$id)
-            ->where('scope_key','user:'.$user)->get(['permission_key','enabled','expires_at']);
-        return ['sharing_active'=>false,'grants_enabled'=>false,
-            'saved'=>$saved->map(fn ($r) => ['permission_key'=>$r->permission_key,
-                'enabled'=>false,'expires_at'=>$r->expires_at])->all()];
+        return app(CircleConsentPolicy::class)->preview($id,$user);
     }
 
     public function disablePermission(string $id, string $user, string $key): array
     {
         return DB::transaction(function () use ($id,$user,$key): array {
             $this->circle($id,$user,false,true);
-            DB::table('circle_permissions')->updateOrInsert([
-                'circle_id'=>$id,'scope_key'=>'user:'.$user,'permission_key'=>$key,
-            ],['subject_user_id'=>$user,'enabled'=>false,'expires_at'=>null,'updated_at'=>now()]);
+            app(CircleConsentPolicy::class)->revoke($id,$user,$key);
             $this->change($id,'circle.permission_revoked');
             return ['permission_key'=>$key,'enabled'=>false];
         }, 3);
