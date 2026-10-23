@@ -186,6 +186,13 @@ final class OrbitM5CirclesTest extends TestCase
         // This tests a future *consumer* authorization decision; no location
         // API or Firebase transport exists or is switched on by M5 itself.
         $this->assertTrue($policy->canAccessProtected($id,$owner->id,$friend->id,'location'));
+        // Disabling the overall M5 rollout must revoke a previously valid
+        // consent decision, even if a downstream consumer flag remains ON.
+        config()->set('orbit_circle.enabled',false);
+        $this->assertFalse($policy->isMember($id,$owner->id));
+        $this->assertFalse($policy->canAccessProtected($id,$owner->id,$friend->id,'location'));
+        config()->set('orbit_circle.enabled',true);
+        $this->assertTrue($policy->canAccessProtected($id,$owner->id,$friend->id,'location'));
         $this->assertFalse($policy->canSubscribe($id,$owner->id));
         DB::table('circle_permissions')->where('circle_id',$id)
             ->where('subject_user_id',$friend->id)
