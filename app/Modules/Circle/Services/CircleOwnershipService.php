@@ -47,6 +47,7 @@ final class CircleOwnershipService
                 'id'=>(string) Str::uuid7(),'circle_id'=>$circleId,
                 'event_type'=>'circle.ownership_transferred','created_at'=>now(),
             ]);
+            app(CircleFirebaseBridge::class)->afterCommit($circleId);
             return ['circle_id'=>$circleId,'owner_id'=>$recipient];
         },3);
     }
