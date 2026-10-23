@@ -33,7 +33,14 @@ final class CircleFirebaseBridge
             || filesize($path) > 65536) {
             throw new RuntimeException('M5 Firebase service-account file unavailable.');
         }
-        $data = json_decode((string) file_get_contents($path), true);
+        $real = realpath($path);
+        $webRoot = realpath(public_path());
+        if ($real === false || ($webRoot !== false &&
+            ($real === $webRoot ||
+             str_starts_with($real, $webRoot.DIRECTORY_SEPARATOR)))) {
+            throw new RuntimeException('Firebase credentials cannot reside in web root.');
+        }
+        $data = json_decode((string) file_get_contents($real), true);
         if (!is_array($data) || ($data['type'] ?? '') !== 'service_account'
             || !filter_var($data['client_email'] ?? null, FILTER_VALIDATE_EMAIL)
             || !is_string($data['private_key'] ?? null)
