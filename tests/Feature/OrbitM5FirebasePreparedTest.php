@@ -80,6 +80,7 @@ final class OrbitM5FirebasePreparedTest extends TestCase
         $this->assertStringContainsString('auth.uid', $revision['.read']);
         $this->assertStringContainsString('orbit_session', $revision['.read']);
         $this->assertStringContainsString('orbit_device', $revision['.read']);
+        $this->assertStringContainsString('orbit_session_expires_ms', $revision['.read']);
     }
 
     public function test_firebase_is_fully_inert_until_both_server_gates_are_enabled(): void
@@ -121,6 +122,8 @@ final class OrbitM5FirebasePreparedTest extends TestCase
             $this->assertSame($session->id, $claims['uid']);
             $this->assertSame($device->id, $claims['claims']['orbit_device']);
             $this->assertSame($session->id, $claims['claims']['orbit_session']);
+            $this->assertSame($session->expires_at->getTimestamp() * 1000,
+                $claims['claims']['orbit_session_expires_ms']);
             $this->assertTrue($claims['claims']['orbit_m5']);
             $creds = json_decode(file_get_contents($file), true);
             $private = openssl_pkey_get_private($creds['private_key']);
