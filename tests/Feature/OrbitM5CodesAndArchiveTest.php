@@ -202,6 +202,45 @@ final class OrbitM5CodesAndArchiveTest extends TestCase
         $this->assertNotSame($id,DB::table('circle_retention_audits')->value('circle_hash'));
     }
 
+    public function test_automatic_30_day_retention_is_triple_gated_and_respects_hold(): void
+    {
+        config()->set('orbit_circle.temporary_circles_enabled', true);
+        [$owner, $token] = $this->identity('autoretention');
+        $id = $this->withToken($token)->postJson('/api/v1/circles', [
+            'name' => 'Time limited',
+            'expires_at' => now()->addHour()->toIso8601String(),
+        ])->assertCreated()->json('data.id');
+        $stableId = $this->withToken($token)->postJson('/api/v1/circles', [
+            'name' => 'Permanent Circle',
+        ])->assertCreated()->json('data.id');
+        DB::table('circles')->where('id', $id)->update([
+            'archived_at' => now()->subDays(31),
+            'retention_hold_at' => now(),
+        ]);
+        DB::table('circles')->where('id', $stableId)->update([
+            'archived_at' => now()->subDays(50),
+        ]);
+        $lifecycle = app(\App\Modules\Circle\Services\CircleTemporaryLifecycle::class);
+        $this->assertSame(0, $lifecycle->purgeDue());
+        config()->set('orbit_circle.retention_autopurge_enabled', true);
+        try {
+            $lifecycle->purgeDue();
+            $this->fail('Two other gates must still be required.');
+        } catch (\DomainException $error) {
+            $this->assertStringContainsString('not authorized', $error->getMessage());
+        }
+        config()->set('orbit_circle.retention_policy_approved', true);
+        config()->set('orbit_circle.retention_purge_enabled', true);
+        $this->assertSame(0, $lifecycle->purgeDue());
+        $this->assertDatabaseHas('circles', ['id' => $id]);
+        DB::table('circles')->where('id', $id)->update(['retention_hold_at' => null]);
+        $this->assertSame(1, $lifecycle->purgeDue());
+        $this->assertSame(0, $lifecycle->purgeDue());
+        $this->assertDatabaseMissing('circles', ['id' => $id]);
+        $this->assertDatabaseHas('circles', ['id' => $stableId]);
+        $this->assertDatabaseCount('circle_retention_audits', 1);
+    }
+
     public function test_temporary_expiry_requires_separate_feature_gate(): void
     {
         config()->set('orbit_circle.temporary_circles_enabled',false);
