@@ -164,6 +164,44 @@ final class OrbitM5CodesAndArchiveTest extends TestCase
             ->where('id',$id)->value('expires_at'));
     }
 
+    public function test_temporary_retention_requires_two_gates_and_respects_legal_hold(): void
+    {
+        config()->set('orbit_circle.temporary_circles_enabled',true);
+        [$owner,$token]=$this->identity('retention');
+        $id=$this->withToken($token)->postJson('/api/v1/circles',[
+            'name'=>'Temporary Retention',
+            'expires_at'=>now()->addHour()->toIso8601String(),
+        ])->assertCreated()->json('data.id');
+        DB::table('circles')->where('id',$id)->update([
+            'archived_at'=>now()->subDays(31),
+        ]);
+        $service=app(\App\Modules\Circle\Services\CircleTemporaryLifecycle::class);
+        $this->assertSame(1,$service->eligibleForRetentionReviewCount());
+        try {
+            $service->purgeReviewed(1,'PURGE_REVIEWED_TEMPORARY_CIRCLES');
+            $this->fail('Purge must require explicit policy and enabled flag.');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('not authorized',$e->getMessage());
+        }
+        $this->assertDatabaseHas('circles',['id'=>$id]);
+        config()->set('orbit_circle.retention_policy_approved',true);
+        config()->set('orbit_circle.retention_purge_enabled',true);
+        DB::table('circles')->where('id',$id)->update([
+            'retention_hold_at'=>now(),
+        ]);
+        $this->assertSame(0,$service->eligibleForRetentionReviewCount());
+        $this->assertSame(0,$service->purgeReviewed(1,'PURGE_REVIEWED_TEMPORARY_CIRCLES'));
+        $this->assertDatabaseHas('circles',['id'=>$id]);
+        DB::table('circles')->where('id',$id)->update(['retention_hold_at'=>null]);
+        $this->assertSame(1,$service->purgeReviewed(1,'PURGE_REVIEWED_TEMPORARY_CIRCLES'));
+        $this->assertSame(0,$service->purgeReviewed(1,'PURGE_REVIEWED_TEMPORARY_CIRCLES'));
+        $this->assertDatabaseMissing('circles',['id'=>$id]);
+        $this->assertDatabaseCount('circle_retention_audits',1);
+        $this->assertSame('temporary_circle_purged',
+            DB::table('circle_retention_audits')->value('action'));
+        $this->assertNotSame($id,DB::table('circle_retention_audits')->value('circle_hash'));
+    }
+
     public function test_temporary_expiry_requires_separate_feature_gate(): void
     {
         config()->set('orbit_circle.temporary_circles_enabled',false);
