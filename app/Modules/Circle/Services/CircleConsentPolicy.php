@@ -62,11 +62,15 @@ final class CircleConsentPolicy
     {
         if (!in_array($capability,self::CAPABILITIES,true)) return false;
         if (!(bool)$record->enabled) return false;
-        if ($record->expires_at === null ||
-            Carbon::parse($record->expires_at)->lte(now())) return false;
         $settings=$record->value_json
             ? json_decode($record->value_json,true) : null;
-        if(!is_array($settings) || ($settings['reviewed'] ?? false)!==true) {
+        if(!is_array($settings) || ($settings['reviewed'] ?? false)!==true
+            || ($settings['audience'] ?? '')!=='circle') return false;
+        // Permanent consent requires a specific affirmative choice.
+        // Otherwise the stored grant expires at its server-side timestamp.
+        if($record->expires_at===null) {
+            if(($settings['duration']??'')!=='persistent') return false;
+        } elseif(Carbon::parse($record->expires_at)->lte(now())) {
             return false;
         }
         if($capability==='location') {
