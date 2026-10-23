@@ -95,7 +95,7 @@ final class OrbitM5FirebasePreparedTest extends TestCase
             [$user, $device, $session, $token] = $this->person('verified');
             $payload = $this->withToken($token)
                 ->postJson('/api/v1/circles/realtime/bootstrap')->assertOk()
-                ->assertHeader('Cache-Control', 'no-store')->json('data');
+                ->assertHeader('Cache-Control', 'no-store, private')->json('data');
             $this->assertTrue($payload['enabled']);
             $this->assertSame($session->id, $payload['uid']);
             $this->assertSame(900, $payload['expires_in']);
