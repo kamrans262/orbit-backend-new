@@ -40,7 +40,7 @@ final class MomentController extends Controller
             'audience_revision'=>$rev,'payload_digest'=>$digest,'status'=>'pending','created_at'=>now(),
         ]);
     }
-    private function brief(object $m,string $context):array
+    private function brief(object $m,string $context,string $viewer):array
     {
         $media=DB::table('moment_media as mm')
             ->join('media_objects as media','media.id','=','mm.media_id')
@@ -66,7 +66,11 @@ final class MomentController extends Controller
             ->filter(fn($id)=>$social->isFriend($m->creator_id,(string)$id)
                 && !$social->isBlockedEitherWay($m->creator_id,(string)$id))
             ->values()->all();
+        $reaction=DB::table('moment_reactions')->where('moment_id',$m->id)
+            ->where('user_id',$viewer)->where('context_id',$context)
+            ->whereNull('deleted_at')->value('reaction_code');
         return ['id'=>$m->id,'creator_id'=>$m->creator_id,'media_id'=>$mediaId,
+            'my_reaction'=>$reaction,
             'tagged_user_ids'=>$tags,
             'place_ciphertext'=>$m->location_consent?$m->place_ciphertext:null,
             'place_key_version'=>$m->location_consent?$m->place_key_version:null,
@@ -237,7 +241,7 @@ final class MomentController extends Controller
         foreach($candidates as $m){
             $last=$m;$context=$policy->context($m,$viewer,$circle?'circle:'.$circle:null);
             if(!$context)continue;
-            $items[]=$this->brief($m,$context);
+            $items[]=$this->brief($m,$context,$viewer);
             if(count($items)>=$limit)break;
         }
         return $this->reply(['items'=>$items,'next_cursor'=>$last?[
@@ -251,7 +255,7 @@ final class MomentController extends Controller
     {
         [$viewer]=$this->actor($r);$m=$this->moment($moment);
         $context=$p->requireContext($m,$viewer,$r->query('context_id'));
-        return $this->reply($this->brief($m,$context));
+        return $this->reply($this->brief($m,$context,$viewer));
     }
     public function manifest(Request $r,string $moment,MomentPolicy $p):JsonResponse
     {
