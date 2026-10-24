@@ -8,12 +8,14 @@ Flutter feature branch: feature/m6-media-flutter-integration.
 - Configuration and fail-closed private storage: config/orbit_media.php
 - Additive MariaDB data model (seven tables): database/migrations/2026_10_24_000001_create_m6_media_storage.php
 - R2/S3 multi-part signed ciphertext provider: app/Modules/Media/Services/MediaObjectStore.php
+- Hostinger private shared-hosting ciphertext store: app/Modules/Media/Services/HostingerPrivateMediaStore.php
+- Expired original and aborted/failed derivative recovery: app/Modules/Media/Http/Controllers/MediaController.php
 - Server-side privacy/ACL enforcement: app/Modules/Media/Services/MediaPolicy.php
 - REST routes and API operations: routes/api.php and app/Modules/Media/Http/Controllers/MediaController.php
 - Verified ciphertext/retention worker: app/Modules/Media/Services/MediaLifecycleWorker.php and routes/console.php
 - Blade Admin read-only encrypted storage metrics: app/Modules/Media/Http/Controllers/AdminMediaController.php and resources/views/orbit-admin/media.blade.php
 - M3 erasure cross-module safeguards: app/Modules/Profile/Services/M3ErasureProcessor.php
-- M6 feature and regression tests: tests/Feature/OrbitM6MediaTest.php and .github/workflows/orbit-m1-checks.yml
+- M6 feature and recovery tests: tests/Feature/OrbitM6MediaTest.php and tests/Feature/OrbitM6HostingerMediaTest.php and .github/workflows/orbit-m1-checks.yml
 - Standard AWS SDK dependency: composer.json + composer.lock (locked by M6-only same-branch dependency resolution job).
 - Engineering decisions and release gates: docs/M6_STAGE2_IMPLEMENTATION_AND_RELEASE_GATES.md
 
@@ -22,9 +24,9 @@ The approved Stage 1 v1.1 audit contains 149 requirements, 20 resolved engineeri
 
 ## High-priority verification before enabling ORBIT_MEDIA_ENABLED
 1. Exact branch-head GitHub CI must pass MariaDB migration, PHP syntax, Laravel regression and M6 API tests. M3 account erasure must remain guarded.
-2. Test AWS SDK and signed private R2 URLs against the client's configured bucket; confirm supported SHA256 composite multipart, object HEAD/read hash, abort/retry, short TTL and no public access.
-3. Stage 3 mobile must provide actual client-side AEAD media encryption, compression, device key wrapping, encrypted derivatives and stateful resumable transfers. Never claim backend ciphertext hashing proves clients encrypted correctly.
-4. M7 Moments, M13 chat attachments, M16 SOS uploads and M23 camera editing consumers require separate feature-level consent/action confirmation. M6 supplies their reusable storage integration, not fabricated downstream product behaviors.
+2. Test Hostinger private storage in staging: disk quota, upload limits, authenticated 1 MiB chunk replay, on-disk hash verification, private downloads, scheduled cleanup and no public access. Test private R2 URLs and AWS SDK only if R2/S3 is selected.
+3. Stage 3 mobile provides client-side AEAD media encryption, photo/video processing, device key wrapping, encrypted derivatives, a private-save action, and stateful resumable transfers. Verify actual devices, long-offline retry and user-visible flows; never claim backend ciphertext hashing proves clients encrypted correctly.
+4. M7 Moments publishing, M13 message/voice composer, M16 SOS uploads and M23 advanced camera editing consumers require separate feature-level consent/action confirmation. M6 supplies their reusable storage integration, not fabricated downstream product behaviors.
 5. Enforce controlled retention and lawful holds; verify that generated URLs cannot promise instantaneous revocation until TTL expires and that no already-downloaded ciphertext is remotely wiped.
 6. Enable only after separate staging/production approval, Hostinger backups, actual storage credentials, and working scheduled lifecycle jobs. Keep Firebase disabled.
 
