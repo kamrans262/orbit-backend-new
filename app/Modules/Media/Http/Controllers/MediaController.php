@@ -58,6 +58,63 @@ final class MediaController extends Controller
             413,'Private storage quota exceeded.');
     }
 
+    /**
+     * Release a terminal upload reservation so the SAME encrypted transfer may be
+     * safely retried with its stable idempotency key after the session TTL.
+     * Never recycle verified data, granted media, or a live verification job.
+     */
+    private function recycleStaleUpload(object $old,string $owner,string $device,
+        string $payloadDigest,MediaObjectStore $store): void
+    {
+        abort_unless($old->owner_user_id===$owner && $old->device_id===$device
+            && hash_equals((string)$old->payload_hash,$payloadDigest),409,'Upload retry conflicts.');
+        $stale=in_array($old->state,['expired','aborted','failed'],true)
+            || (in_array($old->state,['initiated','uploading'],true)
+                && now()->gte($old->expires_at));
+        abort_unless($stale,409,'Upload is not eligible for recovery.');
+        $m=$this->media($old->media_id);
+        abort_unless($m->owner_user_id===$owner && $m->deleted_at===null,409);
+        $variant=$old->variant_id
+            ? DB::table('media_variants')->where('id',$old->variant_id)->first() : null;
+        if($old->variant_id) {
+            abort_unless($variant && in_array($variant->state,
+                ['initiated','aborted','failed'],true),409,'Variant is not reusable.');
+            abort_unless(!DB::table('media_device_key_envelopes')
+                ->where('media_id',$m->id)->where('variant',$variant->variant)->exists(),
+                409,'Variant has active key envelopes.');
+            $objectKey=$variant->object_key;
+        } else {
+            abort_unless(in_array($m->state,['initiated','aborted','failed'],true)
+                && !DB::table('media_variants')->where('media_id',$m->id)->exists()
+                && !DB::table('media_audience_grants')->where('media_id',$m->id)->exists()
+                && !DB::table('media_references')->where('media_id',$m->id)->exists(),
+                409,'Previously verified or shared media cannot be recycled.');
+            $objectKey=$m->object_key;
+        }
+        // Storage cleanup precedes reuse: never inherit partial/corrupt chunks.
+        // An expired multipart upload may already have disappeared at the provider.
+        if($old->provider_upload_id_encrypted) {
+            try {
+                $store->abort($objectKey,$this->providerId($old));
+            } catch(\\Throwable) {
+                // Still require successful object cleanup; the old upload is unusable.
+            }
+        }
+        $store->delete($objectKey);
+        DB::transaction(function()use($old,$variant):void {
+            $current=DB::table('media_upload_sessions')->where('id',$old->id)
+                ->lockForUpdate()->first();
+            abort_unless($current && $current->state===$old->state,409,
+                'Upload changed during recovery.');
+            DB::table('media_upload_sessions')->where('id',$old->id)->delete();
+            if($variant) {
+                DB::table('media_variants')->where('id',$variant->id)->delete();
+            } else {
+                DB::table('media_objects')->where('id',$old->media_id)->delete();
+            }
+        },3);
+    }
+
     private function media(string $media): object
     {
         return DB::table('media_objects')->where('id',$media)->first()
@@ -98,13 +155,26 @@ final class MediaController extends Controller
             ->where('idempotency_key_hash',$idempotency)->first();
         if($old){
             abort_unless($old->device_id===$device && hash_equals($old->payload_hash,$digest),409,'Idempotency conflict.');
-            return $this->response(['upload_id'=>$old->id,'media_id'=>$media,
-                'variant'=>$d['variant'],'state'=>$old->state,
-                'expires_at'=>$old->expires_at,'part_size_bytes'=>$store->partBytes(),
-                'storage_mode'=>$store->mode()],201);
+            if(in_array($old->state,['expired','aborted','failed'],true)
+                || (in_array($old->state,['initiated','uploading'],true)
+                    && now()->gte($old->expires_at))) {
+                $this->recycleStaleUpload($old,$actor,$device,$digest,$store);
+            } else {
+                return $this->response(['upload_id'=>$old->id,'media_id'=>$media,
+                    'variant'=>$d['variant'],'state'=>$old->state,
+                    'expires_at'=>$old->expires_at,'part_size_bytes'=>$store->partBytes(),
+                    'storage_mode'=>$store->mode()],201);
+            }
         }
-        abort_if(DB::table('media_variants')->where('media_id',$media)
-            ->where('variant',$d['variant'])->exists(),409,'Variant already exists.');
+        $existing=DB::table('media_variants')->where('media_id',$media)
+            ->where('variant',$d['variant'])->first();
+        if($existing) {
+            $previous=DB::table('media_upload_sessions')->where('variant_id',$existing->id)->first();
+            abort_unless($previous && $previous->owner_user_id===$actor
+                && $previous->device_id===$device,409,'Variant belongs to another upload.');
+            $this->recycleStaleUpload($previous,$actor,$device,
+                (string)$previous->payload_hash,$store);
+        }
         $upload=(string)Str::uuid7();$variantId=(string)Str::uuid7();
         $key=config('orbit_media.path_prefix').'/'.Str::random(28).'/'.$media.'/'.$d['variant'];
         $provider=$store->initiate($key);
@@ -232,10 +302,16 @@ final class MediaController extends Controller
         if($old) {
             abort_unless(hash_equals($old->payload_hash,$digest),409,'Idempotency key used for another request.');
             abort_unless($old->device_id===$device,409,'Upload session belongs to another device.');
-            return $this->response(['upload_id'=>$old->id,'media_id'=>$old->media_id,
-                'state'=>$old->state,'expires_at'=>$old->expires_at,
-                'part_size_bytes'=>$store->partBytes(),
-                'storage_mode'=>$store->mode()],201);
+            if(in_array($old->state,['expired','aborted','failed'],true)
+                || (in_array($old->state,['initiated','uploading'],true)
+                    && now()->gte($old->expires_at))) {
+                $this->recycleStaleUpload($old,$actor,$device,$digest,$store);
+            } else {
+                return $this->response(['upload_id'=>$old->id,'media_id'=>$old->media_id,
+                    'state'=>$old->state,'expires_at'=>$old->expires_at,
+                    'part_size_bytes'=>$store->partBytes(),
+                    'storage_mode'=>$store->mode()],201);
+            }
         }
         $media=(string)Str::uuid7(); $upload=(string)Str::uuid7();
         $objectKey=config('orbit_media.path_prefix').'/'.Str::random(28).'/'.$media;
