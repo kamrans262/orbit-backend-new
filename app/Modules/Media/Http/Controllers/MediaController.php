@@ -73,7 +73,14 @@ final class MediaController extends Controller
                 && now()->gte($old->expires_at));
         abort_unless($stale,409,'Upload is not eligible for recovery.');
         $m=$this->media($old->media_id);
-        abort_unless($m->owner_user_id===$owner && $m->deleted_at===null,409);
+        abort_unless($m->owner_user_id===$owner,409);
+        // The expiry worker may already have queued or completed orphan cleanup.
+        // Owner-requested deletion and shared/finalized media are NEVER reusable.
+        if($m->deleted_at!==null) {
+            $reason=DB::table('media_delete_jobs')->where('media_id',$m->id)->value('reason');
+            abort_unless(!$old->variant_id && $old->state==='expired'
+                && $reason==='orphan_upload',409,'Deleted media cannot be retried.');
+        }
         $variant=$old->variant_id
             ? DB::table('media_variants')->where('id',$old->variant_id)->first() : null;
         if($old->variant_id) {
@@ -84,7 +91,8 @@ final class MediaController extends Controller
                 409,'Variant has active key envelopes.');
             $objectKey=$variant->object_key;
         } else {
-            abort_unless(in_array($m->state,['initiated','aborted','failed'],true)
+            abort_unless((in_array($m->state,['initiated','aborted','failed'],true)
+                || ($old->state==='expired' && in_array($m->state,['deleting','deleted'],true)))
                 && !DB::table('media_variants')->where('media_id',$m->id)->exists()
                 && !DB::table('media_audience_grants')->where('media_id',$m->id)->exists()
                 && !DB::table('media_references')->where('media_id',$m->id)->exists(),
@@ -96,7 +104,7 @@ final class MediaController extends Controller
         if($old->provider_upload_id_encrypted) {
             try {
                 $store->abort($objectKey,$this->providerId($old));
-            } catch(\\Throwable) {
+            } catch(\Throwable) {
                 // Still require successful object cleanup; the old upload is unusable.
             }
         }
