@@ -6,7 +6,7 @@ Flutter feature branch: feature/m6-media-flutter-integration.
 
 ## Back-end implementation map
 - Configuration and fail-closed private storage: config/orbit_media.php
-- Additive MariaDB data model (seven tables): database/migrations/2026_10_24_000001_create_m6_media_storage.php
+- Additive MariaDB data model (nine tables): database/migrations/2026_10_24_000001_create_m6_media_storage.php
 - R2/S3 multi-part signed ciphertext provider: app/Modules/Media/Services/MediaObjectStore.php
 - Hostinger private shared-hosting ciphertext store: app/Modules/Media/Services/HostingerPrivateMediaStore.php
 - Expired original and aborted/failed derivative recovery: app/Modules/Media/Http/Controllers/MediaController.php
