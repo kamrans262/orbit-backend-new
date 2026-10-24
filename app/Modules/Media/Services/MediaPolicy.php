@@ -36,8 +36,10 @@ final class MediaPolicy
                 // M7 recipient grants may be prepared before publication.
                 // While M7 is enabled, those prepared envelopes NEVER grant
                 // access to unpublished/cancelled Moment ciphertext.
-                if(config('orbit_moments.enabled') === true
-                    && $media->owner_user_id !== $viewer) return false;
+                // M6 drafts and M7 incomplete publications are NEVER
+                // readable by recipients, regardless of an M7 feature flag.
+                // This remains fail-closed during staged rollbacks.
+                if($media->owner_user_id !== $viewer) return false;
                 if(now()->gte(\Illuminate\Support\Carbon::parse($media->created_at)
                     ->addDays((int)config('orbit_media.moments_view_days')))) return false;
             }
