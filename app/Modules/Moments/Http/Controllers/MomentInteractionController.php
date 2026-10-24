@@ -119,11 +119,26 @@ final class MomentInteractionController extends Controller
         abort_if(!empty($d['consent_evidence_ciphertext'])&&!$d['evidence_consent'],422,'Explicit evidence consent required.');
         if($comment)abort_unless(DB::table('moment_comments')->where('id',$comment)
             ->where('moment_id',$moment)->where('context_id',$context)->exists(),404);
-        $id=(string)Str::uuid7();
-        DB::table('moment_reports')->insert(['id'=>$id,'moment_id'=>$moment,'comment_id'=>$comment,
-            'reporter_id'=>$user,'context_id'=>$context,'reason'=>$d['reason'],'details_ciphertext'=>$d['details_ciphertext']??null,
-            'consent_evidence_ciphertext'=>$d['consent_evidence_ciphertext']??null,
-            'evidence_consent'=>$d['evidence_consent'],'status'=>'pending','created_at'=>now(),'updated_at'=>now()]);
-        return $this->reply(['report_id'=>$id,'received'=>true],201);
+        $key=$this->key($r);
+        $digest=hash('sha256',json_encode(['moment_id'=>$moment,'comment_id'=>$comment,
+            'context_id'=>$context,'payload'=>$d],JSON_THROW_ON_ERROR));
+        return DB::transaction(function()use($user,$moment,$comment,$context,$d,$key,$digest):JsonResponse{
+            // Serialize same actor's concurrent retries to avoid duplicate user reports.
+            DB::table('orbit_users')->where('id',$user)->lockForUpdate()->first();
+            $old=DB::table('moment_reports')->where('reporter_id',$user)
+                ->where('request_key_hash',$key)->first();
+            if($old){
+                abort_unless(hash_equals($old->request_payload_hash,$digest),409,'Report retry conflict.');
+                return $this->reply(['report_id'=>$old->id,'received'=>true],200);
+            }
+            $id=(string)Str::uuid7();
+            DB::table('moment_reports')->insert(['id'=>$id,'moment_id'=>$moment,'comment_id'=>$comment,
+                'reporter_id'=>$user,'context_id'=>$context,'reason'=>$d['reason'],
+                'details_ciphertext'=>$d['details_ciphertext']??null,
+                'consent_evidence_ciphertext'=>$d['consent_evidence_ciphertext']??null,
+                'evidence_consent'=>$d['evidence_consent'],'request_key_hash'=>$key,
+                'request_payload_hash'=>$digest,'status'=>'pending','created_at'=>now(),'updated_at'=>now()]);
+            return $this->reply(['report_id'=>$id,'received'=>true],201);
+        },3);
     }
 }

@@ -162,10 +162,12 @@ final class OrbitM7MomentsTest extends TestCase
         $this->assertDatabaseCount('moment_comments',1);
         $this->withToken($token)->getJson('/api/v1/moments/'.$id.'/comments')
             ->assertOk()->assertJsonCount(1,'data.items');
-        $this->withToken($token)->postJson('/api/v1/moments/'.$id.'/reports',[
+        $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments/'.$id.'/reports',[
             'reason'=>'privacy','evidence_consent'=>false,
         ])->assertCreated();
-        $this->withToken($token)->postJson('/api/v1/moments/'.$id.'/reports',[
+        $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments/'.$id.'/reports',[
             'reason'=>'privacy','evidence_consent'=>false,
             'consent_evidence_ciphertext'=>str_repeat('X',64),
         ])->assertUnprocessable();

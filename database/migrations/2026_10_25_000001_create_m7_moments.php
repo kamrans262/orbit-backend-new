@@ -41,8 +41,8 @@ return new class extends Migration {
   });
   Schema::create('moment_reports',function(Blueprint $t):void{
    $t->uuid('id')->primary();$t->uuid('moment_id');$t->uuid('comment_id')->nullable();$t->uuid('reporter_id');$t->string('context_id',64);$t->string('reason',32);
-   $t->longText('details_ciphertext')->nullable();$t->longText('consent_evidence_ciphertext')->nullable();$t->boolean('evidence_consent')->default(false);$t->string('status',16)->default('pending');$t->timestamps();
-   $t->index(['status','created_at']);$t->index(['moment_id','status']);$t->foreign('moment_id')->references('id')->on('moments')->cascadeOnDelete();$t->foreign('comment_id')->references('id')->on('moment_comments')->nullOnDelete();$t->foreign('reporter_id')->references('id')->on('orbit_users')->restrictOnDelete();
+   $t->char('request_key_hash',64);$t->char('request_payload_hash',64);$t->longText('details_ciphertext')->nullable();$t->longText('consent_evidence_ciphertext')->nullable();$t->boolean('evidence_consent')->default(false);$t->string('status',16)->default('pending');$t->timestamps();
+   $t->index(['status','created_at']);$t->index(['moment_id','status']);$t->unique(['reporter_id','request_key_hash'],'moment_report_idempotency');$t->foreign('moment_id')->references('id')->on('moments')->cascadeOnDelete();$t->foreign('comment_id')->references('id')->on('moment_comments')->nullOnDelete();$t->foreign('reporter_id')->references('id')->on('orbit_users')->restrictOnDelete();
   });
   Schema::create('moment_moderation_actions',function(Blueprint $t):void{
    $t->uuid('id')->primary();$t->uuid('report_id');$t->uuid('operator_id');$t->string('action',24);$t->string('ticket',80);$t->string('reason_code',48);$t->timestamp('created_at')->useCurrent();$t->index(['report_id','created_at']);
