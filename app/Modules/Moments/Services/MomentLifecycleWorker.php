@@ -8,7 +8,7 @@ final class MomentLifecycleWorker
 {
     public function run(int $limit=30):array
     {
-        $stats=['expired'=>0,'queued_purges'=>0,'held'=>0,'errors'=>0];
+        $stats=['expired'=>0,'queued_purges'=>0,'held'=>0,'errors'=>0,'orphan_grants_revoked'=>0];
         // Retention remains active for existing content even if posting is later disabled.
         $jobs=DB::table('moment_lifecycle_jobs')->where('state','pending')
             ->where('due_at','<=',now())->orderBy('due_at')->limit(max(1,min($limit,100)))->get();
@@ -62,6 +62,33 @@ final class MomentLifecycleWorker
                 DB::table('moment_lifecycle_jobs')->where('id',$job->id)->increment('attempts',1,[
                     'last_error_code'=>'lifecycle_transaction_failed','updated_at'=>now()]);
             }
+        }
+        // Recover interrupted M7 preparation without deleting M6 private
+        // Only-Me uploads. Once a Moment is committed, active recipient grants
+        // are referenced by its current audience revision.
+        $orphanGrants=DB::table('media_audience_grants as g')
+            ->join('media_objects as media','media.id','=','g.media_id')
+            ->where('media.purpose','moment')
+            ->where('media.created_at','<',now()->subHours(2))
+            ->where('g.audience_kind','!=','only_me')
+            ->whereNull('g.revoked_at')
+            ->whereNotExists(function($q){
+                $q->selectRaw('1')->from('moment_recipients as mr')
+                    ->join('moments as m','m.id','=','mr.moment_id')
+                    ->whereColumn('mr.authorizing_grant_id','g.id')
+                    ->whereColumn('mr.version','m.audience_revision')
+                    ->whereNull('mr.revoked_at')
+                    ->where('m.state','published');
+            })
+            ->limit(max(1,min($limit,100)))->pluck('g.id')->all();
+        if($orphanGrants){
+            DB::transaction(function()use($orphanGrants,&$stats):void{
+                DB::table('media_device_key_envelopes')->whereIn('grant_id',$orphanGrants)
+                    ->whereNull('revoked_at')->update(['revoked_at'=>now()]);
+                $stats['orphan_grants_revoked']=DB::table('media_audience_grants')
+                    ->whereIn('id',$orphanGrants)->whereNull('revoked_at')
+                    ->update(['revoked_at'=>now(),'updated_at'=>now()]);
+            },3);
         }
         return $stats;
     }
