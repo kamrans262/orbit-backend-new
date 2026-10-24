@@ -292,4 +292,40 @@ final class OrbitM7MomentsTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_place_metadata_is_private_ciphertext_and_requires_explicit_consent():void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $media=$this->readyPrivateMedia($owner,$device);
+        $body=['client_id'=>(string)Str::uuid(),'media_id'=>$media,
+            'audience_kind'=>'only_me','target_ids'=>[],
+            'place_ciphertext'=>str_repeat('Q',80),
+            'place_key_version'=>'v1'];
+        $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments',$body)->assertUnprocessable();
+        $body['location_consent']=true;
+        $id=$this->withToken($token)
+            ->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments',$body)->assertCreated()
+            ->json('data.moment_id');
+        $this->withToken($token)->getJson('/api/v1/moments/'.$id)
+            ->assertOk()->assertJsonPath('data.place_ciphertext',str_repeat('Q',80))
+            ->assertJsonPath('data.tagged_user_ids',[]);
+        [$stranger,$otherDevice,$otherToken]=$this->principal();
+        $this->withToken($otherToken)->getJson('/api/v1/moments/'.$id)->assertNotFound();
+        $this->assertDatabaseHas('moments',['id'=>$id,'location_consent'=>true]);
+    }
+
+    public function test_moment_rejects_tagging_unrelated_people():void
+    {
+        [$owner,$device,$token]=$this->principal();
+        [$other]=$this->principal();
+        $media=$this->readyPrivateMedia($owner,$device);
+        $payload=['client_id'=>(string)Str::uuid(),'media_id'=>$media,
+            'audience_kind'=>'only_me','target_ids'=>[],
+            'tagged_user_ids'=>[$other->id]];
+        $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments',$payload)->assertUnprocessable();
+        $this->assertDatabaseCount('moment_people_tags',0);
+    }
+
 }

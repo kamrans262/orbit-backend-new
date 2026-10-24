@@ -47,7 +47,17 @@ final class MomentController extends Controller
             ->where('mm.moment_id',$m->id)->where('mm.role','primary')
             ->first(['media.id','media.kind','media.declared_duration_ms']);
         $mediaId=$media?->id;
+        $social=app(SocialGraphService::class);
+        // A friendship ending hides its tags on every subsequent read.
+        $tags=DB::table('moment_people_tags')
+            ->where('moment_id',$m->id)->whereNull('revoked_at')
+            ->pluck('tagged_user_id')
+            ->filter(fn($id)=>$social->isFriend($m->creator_id,(string)$id))
+            ->values()->all();
         return ['id'=>$m->id,'creator_id'=>$m->creator_id,'media_id'=>$mediaId,
+            'tagged_user_ids'=>$tags,
+            'place_ciphertext'=>$m->location_consent?$m->place_ciphertext:null,
+            'place_key_version'=>$m->location_consent?$m->place_key_version:null,
             'media_kind'=>$media?->kind??'image',
             'duration_ms'=>$media?->declared_duration_ms,
             'context_id'=>$context,'published_at'=>$m->published_at,
@@ -81,8 +91,16 @@ final class MomentController extends Controller
             'target_ids'=>['present','array','max:100'],'target_ids.*'=>['uuid','distinct'],
             'caption_ciphertext'=>['nullable','string','max:8192'],
             'caption_key_version'=>['nullable','string','max:40'],
+            'location_consent'=>['sometimes','boolean'],
+            'place_ciphertext'=>['nullable','string','max:8192'],
+            'place_key_version'=>['nullable','string','max:40'],
+            'tagged_user_ids'=>['sometimes','array','max:20'],
+            'tagged_user_ids.*'=>['required','uuid','distinct'],
         ]);
         abort_if(!empty($d['caption_ciphertext'])&&empty($d['caption_key_version']),422);
+        abort_if(!empty($d['place_ciphertext'])
+            && (empty($d['place_key_version']) || empty($d['location_consent'])),422,
+            'Explicit location consent and encrypted place are required.');
         $digest=hash('sha256',json_encode($d,JSON_THROW_ON_ERROR));
         return DB::transaction(function()use($r,$d,$key,$digest,$owner,$audience,$refs):JsonResponse{
             DB::table('orbit_users')->where('id',$owner)->lockForUpdate()->first();
@@ -100,11 +118,25 @@ final class MomentController extends Controller
                 'Media is already attached to another consumer.');
             abort_if(DB::table('moments')->where('creator_id',$owner)->where('client_id',$d['client_id'])->exists(),409,'Client publish conflict.');
             $pairs=$audience->resolve($owner,$media->id,$d['audience_kind'],$d['target_ids']);
+            $tags=$d['tagged_user_ids']??[];
+            if($tags){
+                $eligible=array_column($pairs,'recipient');
+                $social=app(SocialGraphService::class);
+                foreach($tags as $tag){
+                    abort_unless(in_array($tag,$eligible,true)
+                        && $tag!==$owner && $social->isFriend($owner,$tag)
+                        && !$social->isBlockedEitherWay($owner,$tag),422,
+                        'Tagged person is not eligible for this Moment.');
+                }
+            }
             $id=(string)Str::uuid7();$when=now();
             DB::table('moments')->insert([
                 'id'=>$id,'creator_id'=>$owner,'client_id'=>$d['client_id'],
                 'request_key_hash'=>$key,'request_payload_hash'=>$digest,'state'=>'published',
                 'audience_kind'=>$d['audience_kind'],'caption_ciphertext'=>$d['caption_ciphertext']??null,
+                'place_ciphertext'=>$d['place_ciphertext']??null,
+                'place_key_version'=>$d['place_key_version']??null,
+                'location_consent'=>(bool)($d['location_consent']??false),
                 'caption_key_version'=>$d['caption_key_version']??null,'published_at'=>$when,
                 'rail_expires_at'=>$when->copy()->addHours((int)config('orbit_moments.rail_hours',24)),
                 'view_expires_at'=>$when->copy()->addDays((int)config('orbit_moments.view_days',7)),
@@ -114,6 +146,11 @@ final class MomentController extends Controller
             DB::table('moment_media')->insert(['moment_id'=>$id,'media_id'=>$media->id,'role'=>'primary','position'=>0,'created_at'=>$when]);
             $refs->attach($media->id,$owner,'moment',$id);
             $this->pairsWrite($id,$pairs,$d['audience_kind'],$d['target_ids'],1);
+            foreach($tags as $tag){
+                DB::table('moment_people_tags')->insert([
+                    'moment_id'=>$id,'tagged_user_id'=>$tag,'created_at'=>$when,
+                ]);
+            }
             // The M6 worker must never remove media seven days after an old upload
             // when Moment visibility is measured from server publication time.
             DB::table('media_objects')->where('id',$media->id)
