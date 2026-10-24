@@ -75,6 +75,14 @@ final class MomentLifecycleController extends Controller
                     'moment_id'=>$moment,'audience_kind'=>$d['audience_kind'],
                     'target_id'=>$target,'context_id'=>$context,'version'=>$revision,'created_at'=>now()]);
             }
+            // Privacy: an audience change must immediately hide tags for
+            // people excluded from every new authorized context. A stale tag
+            // may never reveal a former recipient in an unrelated Circle.
+            $eligibleTagged=array_unique(array_column($pairs,'recipient'));
+            $tagQuery=DB::table('moment_people_tags')->where('moment_id',$moment)
+                ->whereNull('revoked_at');
+            if($eligibleTagged)$tagQuery->whereNotIn('tagged_user_id',$eligibleTagged);
+            $tagQuery->update(['revoked_at'=>now()]);
             DB::table('moments')->where('id',$moment)->update([
                 'audience_kind'=>$d['audience_kind'],'audience_revision'=>$revision,'updated_at'=>now()]);
             DB::table('media_objects')->where('id',$media)->increment('policy_version');
