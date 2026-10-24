@@ -42,8 +42,14 @@ final class MomentController extends Controller
     }
     private function brief(object $m,string $context):array
     {
-        $mediaId=DB::table('moment_media')->where('moment_id',$m->id)->where('role','primary')->value('media_id');
+        $media=DB::table('moment_media as mm')
+            ->join('media_objects as media','media.id','=','mm.media_id')
+            ->where('mm.moment_id',$m->id)->where('mm.role','primary')
+            ->first(['media.id','media.kind','media.declared_duration_ms']);
+        $mediaId=$media?->id;
         return ['id'=>$m->id,'creator_id'=>$m->creator_id,'media_id'=>$mediaId,
+            'media_kind'=>$media?->kind??'image',
+            'duration_ms'=>$media?->declared_duration_ms,
             'context_id'=>$context,'published_at'=>$m->published_at,
             'rail_expires_at'=>$m->rail_expires_at,'view_expires_at'=>$m->view_expires_at,
             'audience_revision'=>(int)$m->audience_revision,'publish_version'=>(int)$m->publish_version,
