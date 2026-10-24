@@ -392,7 +392,12 @@ final class OrbitM6MediaTest extends TestCase
         $this->be($admin,'admin');
         $body=['job_id'=>$job->id,'ticket'=>'M6-Test-12345','confirm'=>'RETRY'];
         $this->post('/admin/media/jobs/retry',$body)->assertForbidden();
+        $this->get('/admin/media')->assertOk()
+            ->assertDontSee($job->id);
         $role->update(['permissions'=>['media.read','media.jobs.retry']]);
+        $this->get('/admin/media')->assertOk()
+            ->assertSee('Failed deletion jobs')->assertSee($job->id)
+            ->assertDontSee($owner->id)->assertDontSee($media['media_id']);
         $this->post('/admin/media/jobs/retry',$body)->assertRedirect();
         $this->assertDatabaseHas('media_admin_audits',[
             'action'=>'media.delete.retry_scheduled','admin_user_id'=>$admin->id,
