@@ -3,7 +3,7 @@
 Source baseline: Orbit M6 Stage 1 approved decisions v1.1 (149 requirements; 20 decisions; 56 acceptance scenarios) and engineering authored versioned media API. **No code or production deployment other than this existing feature branch.**
 
 ## Implemented code
-- Seven additive media tables: objects, upload sessions, ciphertext variants, explicit audience grants, wrapped per-device key envelopes, deletion jobs, and event outbox.
+- Nine additive media tables: objects, upload sessions, ciphertext variants, explicit audience grants, wrapped per-device key envelopes, deletion jobs, and event outbox.
 - Private authenticated API: multipart initiation/status/parts/complete/abort, media metadata, short-lived ciphertext read, device envelope access, per-user grant/revocation/deletion and encrypted variant upload initiation.
 - No public object key/secret in JSON; no server-side image/video decryption or thumbnail processing.
 - Privacy gate consults live trusted session, M4 friend/block graph and M5 Circle consent. SOS reads fail closed until M16 approved responder consumer.
