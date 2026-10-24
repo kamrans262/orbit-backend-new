@@ -36,12 +36,30 @@ final class MomentLifecycleController extends Controller
         $d=$r->validate(['audience_kind'=>['required','in:only_me,accepted_friends,selected_friends,selected_circles'],
             'target_ids'=>['present','array','max:100'],'target_ids.*'=>['uuid','distinct'],
             'revision'=>['required','integer','min:1']]);
-        abort_unless((int)$d['revision']===(int)$m->audience_revision,409,'Audience version conflict.');
+        // The locked revision is checked inside the transaction, including
+        // an idempotent same-intent retry after an uncertain network result.
         $media=DB::table('moment_media')->where('moment_id',$moment)->where('role','primary')->value('media_id');
         abort_unless($media,404);
         return DB::transaction(function()use($m,$moment,$d,$media,$svc):JsonResponse{
             $locked=DB::table('moments')->where('id',$moment)->lockForUpdate()->first();
-            abort_unless($locked && (int)$locked->audience_revision===(int)$d['revision'],409);
+            abort_unless($locked && $locked->state==='published'
+                && now()->lt($locked->view_expires_at),404);
+            $current=(int)$locked->audience_revision;
+            if((int)$d['revision']===$current-1 &&
+                $locked->audience_kind===$d['audience_kind']){
+                // A lost HTTP response to the immediately previous mutation
+                // can be safely replayed without revoking/recreating grants.
+                $saved=DB::table('moment_audience')->where('moment_id',$moment)
+                    ->where('version',$current)->whereNull('revoked_at')
+                    ->whereNotNull('target_id')->pluck('target_id')->all();
+                $want=$d['target_ids'];
+                sort($saved);sort($want);
+                if($saved===$want){
+                    return $this->reply(['audience_revision'=>$current,
+                        'recipient_keys_confirmed'=>true,'replayed'=>true]);
+                }
+            }
+            abort_unless($current===(int)$d['revision'],409,'Audience version conflict.');
             $pairs=$svc->resolve($m->creator_id,$media,$d['audience_kind'],$d['target_ids']);
             $old=DB::table('moment_recipients')->where('moment_id',$moment)->whereNull('revoked_at')->get();
             $newKeys=array_flip(array_map(fn($p)=>$p['recipient'].'|'.$p['context'].'|'.$p['grant_id'],$pairs));
