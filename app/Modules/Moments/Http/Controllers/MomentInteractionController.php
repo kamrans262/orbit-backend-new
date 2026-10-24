@@ -78,15 +78,23 @@ final class MomentInteractionController extends Controller
     }
     public function comments(Request $r,string $moment,MomentPolicy $p):JsonResponse {
         [$user,$m,$context]=$this->scope($r,$moment,$p);
-        $d=$r->validate(['before'=>['nullable','date'],'limit'=>['nullable','integer','min:1','max:30']]);
+        $d=$r->validate(['before'=>['nullable','date'],'before_id'=>['nullable','uuid'],
+            'limit'=>['nullable','integer','min:1','max:30']]);
+        abort_if(isset($d['before_id'])&&!isset($d['before']),422,'Comment cursor requires timestamp.');
         $q=DB::table('moment_comments')->where('moment_id',$moment)->where('context_id',$context)->whereNull('deleted_at');
-        if(isset($d['before']))$q->where('created_at','<',$d['before']);
+        if(isset($d['before']))$q->where(function($cursor)use($d):void{
+            $cursor->where('created_at','<',$d['before']);
+            if(isset($d['before_id']))$cursor->orWhere(function($tie)use($d):void{
+                $tie->where('created_at',$d['before'])->where('id','<',$d['before_id']);
+            });
+        });
         $rows=$q->orderByDesc('created_at')->orderByDesc('id')->limit($d['limit']??20)->get();
         return $this->reply(['items'=>$rows->map(fn($v)=>[
             'id'=>$v->id,'parent_id'=>$v->parent_id,'author_id'=>$v->author_id,
             'context_id'=>$v->context_id,'body_ciphertext'=>$v->body_ciphertext,
             'key_version'=>$v->key_version,'created_at'=>$v->created_at])->all(),
-            'next_before'=>$rows->last()?->created_at]);
+            'next_before'=>$rows->last()?->created_at,
+            'next_before_id'=>$rows->last()?->id]);
     }
     public function comment(Request $r,string $moment,MomentPolicy $p):JsonResponse {
         [$user,$m,$context]=$this->scope($r,$moment,$p);$key=$this->key($r);
