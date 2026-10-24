@@ -237,4 +237,28 @@ final class OrbitM7MomentsTest extends TestCase
         $this->get('/admin/moments')->assertForbidden();
     }
 
+    public function test_interrupted_prep_reclaims_only_orphan_recipient_keys_not_private_owner_keys():void
+    {
+        [$owner,$device,$token]=$this->principal();
+        [$friend,$friendDevice,$friendToken]=$this->principal();
+        $media=$this->readyPrivateMedia($owner,$device);
+        DB::table('media_objects')->where('id',$media)
+            ->update(['created_at'=>now()->subHours(4)]);
+        $orphan=(string)Str::uuid7();
+        DB::table('media_audience_grants')->insert([
+            'id'=>$orphan,'media_id'=>$media,'issuer_user_id'=>$owner->id,
+            'recipient_user_id'=>$friend->id,'circle_id'=>null,
+            'audience_kind'=>'selected_friends','policy_version'=>2,
+            'created_at'=>now()->subHours(3),'updated_at'=>now()->subHours(3),
+        ]);
+        $stats=app(MomentLifecycleWorker::class)->run();
+        $this->assertSame(1,$stats['orphan_grants_revoked']);
+        $this->assertNotNull(DB::table('media_audience_grants')
+            ->where('id',$orphan)->value('revoked_at'));
+        $this->assertDatabaseHas('media_audience_grants',[
+            'media_id'=>$media,'recipient_user_id'=>$owner->id,
+            'audience_kind'=>'only_me','revoked_at'=>null,
+        ]);
+    }
+
 }
