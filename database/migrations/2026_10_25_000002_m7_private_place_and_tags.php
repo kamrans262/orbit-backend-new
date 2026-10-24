@@ -18,7 +18,7 @@ return new class extends Migration {
             $table->timestamp('created_at')->useCurrent();
             $table->primary(['moment_id','tagged_user_id'],'moment_people_tag_pk');
             $table->foreign('moment_id')->references('id')->on('moments')->cascadeOnDelete();
-            $table->foreign('tagged_user_id')->references('id')->on('orbit_users')->restrictOnDelete();
+            $table->foreign('tagged_user_id')->references('id')->on('orbit_users')->cascadeOnDelete();
         });
     }
     public function down():void {

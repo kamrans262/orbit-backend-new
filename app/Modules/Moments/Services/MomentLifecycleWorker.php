@@ -8,7 +8,8 @@ final class MomentLifecycleWorker
 {
     public function run(int $limit=30):array
     {
-        $stats=['expired'=>0,'queued_purges'=>0,'held'=>0,'errors'=>0,'orphan_grants_revoked'=>0];
+        $stats=['expired'=>0,'queued_purges'=>0,'held'=>0,'errors'=>0,
+            'orphan_grants_revoked'=>0,'invalid_tags_revoked'=>0];
         // Retention remains active for existing content even if posting is later disabled.
         $jobs=DB::table('moment_lifecycle_jobs')->where('state','pending')
             ->where('due_at','<=',now())->orderBy('due_at')->limit(max(1,min($limit,100)))->get();
@@ -51,6 +52,7 @@ final class MomentLifecycleWorker
                                 'created_at'=>now(),'updated_at'=>now()]);
                             $stats['queued_purges']++;
                         }
+                        DB::table('moment_people_tags')->where('moment_id',$m->id)->delete();
                         DB::table('moments')->where('id',$m->id)->update(['state'=>'deleted',
                             'deleted_at'=>$m->deleted_at??now(),'updated_at'=>now()]);
                     }
@@ -62,6 +64,40 @@ final class MomentLifecycleWorker
                 DB::table('moment_lifecycle_jobs')->where('id',$job->id)->increment('attempts',1,[
                     'last_error_code'=>'lifecycle_transaction_failed','updated_at'=>now()]);
             }
+        }
+        // Tag grants cannot survive a friendship removal or block. Prune only
+        // mismatched pairs, never inspect private caption or ciphertext.
+        $invalid=DB::table('moment_people_tags as t')
+            ->join('moments as m','m.id','=','t.moment_id')
+            ->whereNull('t.revoked_at')
+            ->where(function($invalid):void{
+                $invalid->whereNotExists(function($friends):void{
+                    $friends->selectRaw('1')->from('friendships as f')
+                        ->where(function($pair):void{
+                            $pair->where(fn($q)=>$q
+                                ->whereColumn('f.user_low_id','m.creator_id')
+                                ->whereColumn('f.user_high_id','t.tagged_user_id'))
+                                ->orWhere(fn($q)=>$q
+                                    ->whereColumn('f.user_high_id','m.creator_id')
+                                    ->whereColumn('f.user_low_id','t.tagged_user_id'));
+                        });
+                })->orWhereExists(function($blocked):void{
+                    $blocked->selectRaw('1')->from('blocks as b')
+                        ->where(fn($q)=>$q->where(fn($z)=>$z
+                            ->whereColumn('b.blocker_id','m.creator_id')
+                            ->whereColumn('b.blocked_id','t.tagged_user_id'))
+                            ->orWhere(fn($z)=>$z
+                                ->whereColumn('b.blocker_id','t.tagged_user_id')
+                                ->whereColumn('b.blocked_id','m.creator_id')));
+                });
+            })
+            ->limit(max(1,min($limit,100)))
+            ->get(['t.moment_id','t.tagged_user_id']);
+        foreach($invalid as $t){
+            $stats['invalid_tags_revoked']+=DB::table('moment_people_tags')
+                ->where('moment_id',$t->moment_id)
+                ->where('tagged_user_id',$t->tagged_user_id)
+                ->whereNull('revoked_at')->update(['revoked_at'=>now()]);
         }
         // Recover interrupted M7 preparation without deleting M6 private
         // Only-Me uploads. Once a Moment is committed, active recipient grants
