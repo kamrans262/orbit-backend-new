@@ -83,7 +83,10 @@ final class MomentController extends Controller
             $old=DB::table('moment_idempotency')->where('owner_id',$owner)->where('request_key_hash',$key)->first();
             if($old){
                 abort_unless(hash_equals($old->payload_digest,$digest),409,'Idempotency conflict.');
-                return $this->reply(['moment_id'=>$old->moment_id,'published'=>true],200);
+                return $this->reply(['moment_id'=>$old->moment_id,'published'=>true,
+                    'audience_keys_confirmed'=>true,
+                    'audience_revision'=>(int)(DB::table('moments')
+                        ->where('id',$old->moment_id)->value('audience_revision')??1)],200);
             }
             $media=DB::table('media_objects')->where('id',$d['media_id'])->lockForUpdate()->first();
             abort_unless($media&&$media->owner_user_id===$owner,404,'Media unavailable.');

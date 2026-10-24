@@ -211,6 +211,10 @@ final class OrbitM7MomentsTest extends TestCase
         $id=$this->withToken($token)->withHeader('Idempotency-Key',$key)
             ->postJson('/api/v1/moments',$request)->assertCreated()->json('data.moment_id');
         $this->withToken($friendToken)->getJson('/api/v1/media/'.$media)->assertOk();
+        // An M6 key grant alone cannot bypass the M7 audience revision.
+        DB::table('moment_recipients')->where('moment_id',$id)
+            ->where('viewer_id',$friend->id)->update(['revoked_at'=>now()]);
+        $this->withToken($friendToken)->getJson('/api/v1/media/'.$media)->assertNotFound();
         $this->withToken($friendToken)->getJson('/api/v1/moments/'.$id)->assertOk();
         $this->withToken($token)->patchJson('/api/v1/me/preferences/privacy',[
             'moment_default_audience'=>'Nobody',

@@ -26,7 +26,9 @@ final class MediaPolicy
             // Publication time, not upload time, owns the 7-day M7 viewer lease.
             $published = Schema::hasTable('moment_media') ? DB::table('moment_media as mm')
                 ->join('moments as m','m.id','=','mm.moment_id')
-                ->where('mm.media_id',$media->id)->first(['m.state','m.deleted_at','m.view_expires_at']) : null;
+                ->where('mm.media_id',$media->id)
+                ->first(['m.id as moment_id','m.audience_revision','m.state',
+                    'm.deleted_at','m.view_expires_at']) : null;
             if ($published) {
                 if (config('orbit_moments.enabled') !== true || $published->state !== 'published'
                     || $published->deleted_at !== null || now()->gte($published->view_expires_at)) return false;
@@ -44,7 +46,20 @@ final class MediaPolicy
         if ($this->social->isBlockedEitherWay($viewer,$media->owner_user_id)) return false;
         if ($media->purpose === 'sos') return false; // Separate authorized SOS responder policy in M16.
         $grants=DB::table('media_audience_grants')->where('media_id',$media->id)
-            ->where('recipient_user_id',$viewer)->whereNull('revoked_at')
+            ->where('recipient_user_id',$viewer)
+            ->when(isset($published) && $published!==null, function ($query)use($published,$viewer) {
+                // M7 publication ACL, not all historically prepared M6 grants,
+                // decides who may download a Moment ciphertext.
+                $query->whereExists(function($member)use($published,$viewer) {
+                    $member->selectRaw('1')->from('moment_recipients as mr')
+                        ->whereColumn('mr.authorizing_grant_id','media_audience_grants.id')
+                        ->where('mr.moment_id',$published->moment_id)
+                        ->where('mr.viewer_id',$viewer)
+                        ->where('mr.version',$published->audience_revision)
+                        ->whereNull('mr.revoked_at');
+                });
+            })
+            ->whereNull('revoked_at')
             ->where(fn($q)=>$q->whereNull('expires_at')->orWhere('expires_at','>',now()))
             ->get();
         foreach($grants as $g) {
