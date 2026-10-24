@@ -22,6 +22,7 @@ final class MediaPolicy
             ->whereNull('deletion_requested_at')->exists()) return false;
         if ($media->retention_deadline !== null && now()->greaterThanOrEqualTo($media->retention_deadline)) return false;
         // Moment media is authorized for seven days even though the purge deadline is day 30.
+        $published = null;
         if ($media->purpose === 'moment') {
             // Publication time, not upload time, owns the 7-day M7 viewer lease.
             $published = Schema::hasTable('moment_media') ? DB::table('moment_media as mm')
