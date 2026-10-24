@@ -9,7 +9,7 @@ final class MomentLifecycleWorker
     public function run(int $limit=30):array
     {
         $stats=['expired'=>0,'queued_purges'=>0,'held'=>0,'errors'=>0];
-        if(config('orbit_moments.enabled')!==true)return $stats;
+        // Retention remains active for existing content even if posting is later disabled.
         $jobs=DB::table('moment_lifecycle_jobs')->where('state','pending')
             ->where('due_at','<=',now())->orderBy('due_at')->limit(max(1,min($limit,100)))->get();
         foreach($jobs as $job){

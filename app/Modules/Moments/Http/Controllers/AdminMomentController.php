@@ -41,6 +41,12 @@ final class AdminMomentController extends Controller
             'reason_code'=>['required','in:reviewed_safe,privacy_violation,abusive_content,spam,other'],
             'confirm'=>['required','in:REVIEWED'],
         ]);
+        // Restricting E2EE content needs separately approved evidence review;
+        // the launch flag is OFF until Trust/Security signs off the process.
+        if($data['action']==='restrict') {
+            abort_unless(config('orbit_moments.moderation_restrict_enabled')===true,403,
+                'Moment restriction requires approved evidence-review policy.');
+        }
         $admin=auth()->guard('admin')->user();abort_unless($admin,403);
         DB::transaction(function()use($report,$data,$admin):void{
             $record=DB::table('moment_reports')->where('id',$report)->lockForUpdate()->first();

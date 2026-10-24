@@ -136,7 +136,15 @@ final class MomentController extends Controller
         $limit=(int)($d['limit']??20);$limit=min($limit,(int)config('orbit_moments.max_feed_page',30));
         $rail=$r->is('api/v1/moments/rail');
         $q=DB::table('moments')->where('state','published')->whereNull('deleted_at')
-            ->where('view_expires_at','>',now());
+            ->where('view_expires_at','>',now())
+            ->where(function($authorized)use($viewer){
+                $authorized->where('creator_id',$viewer)->orWhereExists(function($sub)use($viewer){
+                    $sub->selectRaw('1')->from('moment_recipients as visible')
+                        ->whereColumn('visible.moment_id','moments.id')
+                        ->whereColumn('visible.version','moments.audience_revision')
+                        ->where('visible.viewer_id',$viewer)->whereNull('visible.revoked_at');
+                });
+            });
         if($rail)$q->where('rail_expires_at','>',now());
         if($profile)$q->where('creator_id',$profile);
         if($circle)$q->whereExists(function($sub)use($viewer,$circle){

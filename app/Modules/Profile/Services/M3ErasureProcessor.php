@@ -25,6 +25,8 @@ final class M3ErasureProcessor
         'circles', 'circle_members', 'circle_invites', 'circle_permissions',
         'circle_primary_selections',
         'media_objects','media_upload_sessions','media_audience_grants','media_references',
+        'moments','moment_recipients','moment_reactions','moment_comments',
+        'moment_views','moment_reports','moment_idempotency',
     ];
 
     public function preview(string $requestId): array
@@ -102,6 +104,20 @@ final class M3ErasureProcessor
             }
             if ($this->unregisteredUserTables() !== []) {
                 throw new DomainException('Unregistered user-owned tables block erasure; register their cleanup.');
+            }
+            // M7 erasure is a separate cross-module storage and moderation
+            // contract. An M3-only erasure must NEVER leave moment authors,
+            // viewer receipts, encrypted comment metadata, or report rows orphaned.
+            if (\Illuminate\Support\Facades\Schema::hasTable('moments')) {
+                $m7UserTables=['moments'=>'creator_id','moment_recipients'=>'viewer_id',
+                    'moment_reactions'=>'user_id','moment_comments'=>'author_id',
+                    'moment_views'=>'viewer_id','moment_reports'=>'reporter_id',
+                    'moment_idempotency'=>'owner_id'];
+                foreach($m7UserTables as $table=>$column) {
+                    if(DB::table($table)->where($column,$user->id)->exists()) {
+                        throw new DomainException('M7 private Moment records require an authorized cross-module erasure and storage-purge review.');
+                    }
+                }
             }
             if (!$user->deletion_requested_at) {
                 throw new DomainException('Account has no active deletion request.');

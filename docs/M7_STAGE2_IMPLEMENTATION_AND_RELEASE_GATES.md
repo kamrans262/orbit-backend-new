@@ -16,3 +16,6 @@ Only Laravel 13/MariaDB/Hostinger-private media and EXISTING Orbit Blade CSS/lay
 - Administrators never receive a key. Report submissions can include only voluntarily submitted encrypted evidence, never an automatic screenshot/upload.
 - M3 erasure remains fail-closed on new user-owned Moment records and must be explicitly certified for cross-module personal data erasure in the final gate.
 - Not all 201 Stage 1 requirements map to Stage 2; Stage 3 owns Flutter UI, playback, caching, native camera editing. Stage 4 owns live acceptance and 74 test-case verification.
+
+## M3 backward-compatible erasure gate
+M7 user-linked tables are registered with M3's FK audit. M3 erasure proceeds normally for accounts with NO M7 footprint. Accounts with Moments, reactions, comments, views, recipients, reports, or M7 idempotency records are blocked pending M7 cross-module deletion and retention approval; this avoids destroying raw media metadata before ciphertext purge. M7 lifecycle continues processing existing records even when creation feature flag is disabled. Moderator restriction remains separately disabled with ORBIT_M7_MODERATION_RESTRICT_ENABLED=false until policy approval.
