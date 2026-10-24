@@ -69,8 +69,18 @@ final class MomentController extends Controller
         $reaction=DB::table('moment_reactions')->where('moment_id',$m->id)
             ->where('user_id',$viewer)->where('context_id',$context)
             ->whereNull('deleted_at')->value('reaction_code');
+        // Only the owner can inspect the complete intended audience. Other
+        // viewers receive only their own authorized context (never a roster).
+        $ownerAudience=[];
+        if($viewer===$m->creator_id){
+            $targets=DB::table('moment_audience')->where('moment_id',$m->id)
+                ->where('version',$m->audience_revision)->whereNull('revoked_at')
+                ->whereNotNull('target_id')->pluck('target_id')->all();
+            $ownerAudience=['audience_kind'=>$m->audience_kind,'target_ids'=>$targets];
+        }
         return ['id'=>$m->id,'creator_id'=>$m->creator_id,'media_id'=>$mediaId,
             'my_reaction'=>$reaction,
+            ...$ownerAudience,
             'tagged_user_ids'=>$tags,
             'place_ciphertext'=>$m->location_consent?$m->place_ciphertext:null,
             'place_key_version'=>$m->location_consent?$m->place_key_version:null,
