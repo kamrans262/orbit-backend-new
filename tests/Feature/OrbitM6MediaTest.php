@@ -290,6 +290,10 @@ final class OrbitM6MediaTest extends TestCase
             ->canonical($owner->id,$friend->id);
         DB::table('friendships')->insert(['user_low_id'=>$low,'user_high_id'=>$high,'created_at'=>now()]);
         $media=$this->ready($ownerToken);
+        // M6 grant/block test applies to general encrypted message media.
+        // M7 Moments do not become recipient-readable before publication.
+        DB::table('media_objects')->where('id',$media['media_id'])
+            ->update(['purpose'=>'message']);
         $this->withToken($ownerToken)->withHeader('Idempotency-Key',(string)Str::uuid())
             ->postJson('/api/v1/media/'.$media['media_id'].'/grants',[
                 'audience_kind'=>'selected_friends','target_ids'=>[$friend->id],
