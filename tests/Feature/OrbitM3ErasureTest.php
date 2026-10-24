@@ -182,6 +182,7 @@ final class OrbitM3ErasureTest extends TestCase
         DB::table('moment_reports')->insert([
             'id'=>$report,'moment_id'=>$moment,'reporter_id'=>$owner->id,'context_id'=>'self',
             'reason'=>'privacy','status'=>'pending','evidence_consent'=>false,
+            'request_key_hash'=>str_repeat('3',64),'request_payload_hash'=>str_repeat('4',64),
             'created_at'=>now(),'updated_at'=>now(),
         ]);
         try {
