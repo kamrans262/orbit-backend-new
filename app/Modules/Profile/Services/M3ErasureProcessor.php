@@ -27,6 +27,7 @@ final class M3ErasureProcessor
         'media_objects','media_upload_sessions','media_audience_grants','media_references',
         'moments','moment_recipients','moment_reactions','moment_comments',
         'moment_views','moment_reports','moment_idempotency',
+        'moment_people_tags',
     ];
 
     public function preview(string $requestId): array

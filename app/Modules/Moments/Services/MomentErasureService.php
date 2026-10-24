@@ -47,6 +47,11 @@ final class MomentErasureService
         // Rows in other users' Moments also contain this account's identity.
         $comments=DB::table('moment_comments')->where('author_id',$user)->delete();
         $reactions=DB::table('moment_reactions')->where('user_id',$user)->delete();
+        // Each tag names the user; do not retain it when the account is erased.
+        // Owned Moment tags cascade when the Moment row is finally deleted.
+        $tags=Schema::hasTable('moment_people_tags')
+            ? DB::table('moment_people_tags')->where('tagged_user_id',$user)->delete()
+            : 0;
         $views=DB::table('moment_views')->where('viewer_id',$user)->delete();
         $recipients=DB::table('moment_recipients')->where('viewer_id',$user)->delete();
         $idempotency=DB::table('moment_idempotency')->where('owner_id',$user)->delete();
@@ -60,7 +65,7 @@ final class MomentErasureService
         $ownCount=DB::table('moments')->where('creator_id',$user)->delete();
         return [
             'moments'=>$ownCount,'comments'=>$comments,
-            'interactions'=>$reactions+$views+$recipients+$idempotency,
+            'interactions'=>$reactions+$views+$recipients+$idempotency+$tags,
             'reports'=>$reportCount,
         ];
     }
