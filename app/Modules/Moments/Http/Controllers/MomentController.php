@@ -281,7 +281,11 @@ final class MomentController extends Controller
     {
         [$owner]=$this->actor($r);$m=$this->moment($moment);
         abort_unless($m->creator_id===$owner&&$m->state==='published'&&now()->lt($m->view_expires_at),404);
-        $v=(int)$r->header('If-Match',0);abort_unless($v===(int)$m->publish_version,409,'Version conflict.');
+        // Native clients can send the version as a JSON field because the
+        // trusted-device transport deliberately limits custom request headers.
+        // Both If-Match and body revisions use the same optimistic lock.
+        $v=(int)$r->header('If-Match',$r->input('revision',0));
+        abort_unless($v===(int)$m->publish_version,409,'Version conflict.');
         $d=$r->validate(['caption_ciphertext'=>['nullable','string','max:8192'],
             'caption_key_version'=>['nullable','string','max:40']]);
         abort_if(!empty($d['caption_ciphertext'])&&empty($d['caption_key_version']),422);
