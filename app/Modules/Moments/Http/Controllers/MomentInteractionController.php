@@ -119,17 +119,24 @@ final class MomentInteractionController extends Controller
     public function report(Request $r,string $moment,MomentPolicy $p,?string $comment=null):JsonResponse {
         [$user,$m,$context]=$this->scope($r,$moment,$p);$d=$r->validate([
             'reason'=>['required','in:spam,harassment,threat,scam,impersonation,nudity,violence,safety_concern,privacy,other'],
+            'report_target'=>['sometimes','in:moment,comment,account'],
             'details_ciphertext'=>['nullable','string','max:8192'],
             'consent_evidence_ciphertext'=>['nullable','string','max:65535'],
             'evidence_consent'=>['required','boolean'],
         ]);
         abort_if(!empty($d['consent_evidence_ciphertext'])&&!$d['evidence_consent'],422,'Explicit evidence consent required.');
+        $target=$d['report_target']??($comment?'comment':'moment');
+        if($comment && $target!=='comment')abort(422,'Report target mismatch.');
+        if($target==='comment' && !$comment)abort(422,'Comment required.');
+        if($target==='account' && $m->creator_id===$user)
+            abort(422,'Cannot report own account.');
         if($comment)abort_unless(DB::table('moment_comments')->where('id',$comment)
             ->where('moment_id',$moment)->where('context_id',$context)->exists(),404);
         $key=$this->key($r);
         $digest=hash('sha256',json_encode(['moment_id'=>$moment,'comment_id'=>$comment,
+            'report_target'=>$target,
             'context_id'=>$context,'payload'=>$d],JSON_THROW_ON_ERROR));
-        return DB::transaction(function()use($user,$moment,$comment,$context,$d,$key,$digest):JsonResponse{
+        return DB::transaction(function()use($user,$moment,$comment,$context,$d,$key,$digest,$target,$m):JsonResponse{
             // Serialize same actor's concurrent retries to avoid duplicate user reports.
             DB::table('orbit_users')->where('id',$user)->lockForUpdate()->first();
             $old=DB::table('moment_reports')->where('reporter_id',$user)
@@ -141,6 +148,8 @@ final class MomentInteractionController extends Controller
             $id=(string)Str::uuid7();
             DB::table('moment_reports')->insert(['id'=>$id,'moment_id'=>$moment,'comment_id'=>$comment,
                 'reporter_id'=>$user,'context_id'=>$context,'reason'=>$d['reason'],
+                'report_target'=>$target,
+                'reported_user_id'=>$target==='account'?$m->creator_id:null,
                 'details_ciphertext'=>$d['details_ciphertext']??null,
                 'consent_evidence_ciphertext'=>$d['consent_evidence_ciphertext']??null,
                 'evidence_consent'=>$d['evidence_consent'],'request_key_hash'=>$key,
