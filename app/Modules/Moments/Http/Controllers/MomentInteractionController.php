@@ -111,7 +111,7 @@ final class MomentInteractionController extends Controller
     }
     public function report(Request $r,string $moment,MomentPolicy $p,?string $comment=null):JsonResponse {
         [$user,$m,$context]=$this->scope($r,$moment,$p);$d=$r->validate([
-            'reason'=>['required','in:harassment,spam,privacy,unsafe,other'],
+            'reason'=>['required','in:spam,harassment,threat,scam,impersonation,nudity,violence,safety_concern,privacy,other'],
             'details_ciphertext'=>['nullable','string','max:8192'],
             'consent_evidence_ciphertext'=>['nullable','string','max:65535'],
             'evidence_consent'=>['required','boolean'],

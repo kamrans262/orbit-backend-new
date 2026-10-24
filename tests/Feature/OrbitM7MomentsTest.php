@@ -111,6 +111,9 @@ final class OrbitM7MomentsTest extends TestCase
     {
         [$user,$device,$token]=$this->principal();
         $media=$this->readyPrivateMedia($user,$device);
+        $this->withToken($token)->patchJson('/api/v1/me/preferences/privacy',[
+            'moment_default_audience'=>'Selected People',
+        ])->assertOk();
         $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
             ->postJson('/api/v1/moments',[
                 'client_id'=>(string)Str::uuid(),'media_id'=>$media,
