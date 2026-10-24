@@ -103,6 +103,8 @@ final class OrbitM7MomentsTest extends TestCase
         $this->withToken($theirToken)->getJson('/api/v1/moments/'.$id.'/media-manifest')->assertNotFound();
         $this->withToken($token)->putJson('/api/v1/moments/'.$id.'/reaction',['reaction_code'=>'love'])
             ->assertOk()->assertJsonPath('data.my_reaction','love');
+        $this->withToken($token)->getJson('/api/v1/moments/'.$id)
+            ->assertOk()->assertJsonPath('data.my_reaction','love');
         $this->withToken($token)->postJson('/api/v1/moments/'.$id.'/views')->assertNoContent();
         $this->assertDatabaseCount('moment_views',0);
         $this->withToken($token)->patchJson('/api/v1/me/preferences/privacy',[
@@ -110,6 +112,33 @@ final class OrbitM7MomentsTest extends TestCase
         ])->assertOk();
         $this->withToken($token)->postJson('/api/v1/moments/'.$id.'/views')->assertNoContent();
         $this->assertDatabaseCount('moment_views',1);
+    }
+
+    public function test_owner_caption_edit_and_audience_retry_require_versions():void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $media=$this->readyPrivateMedia($owner,$device);
+        $id=$this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments',[
+                'client_id'=>(string)Str::uuid(),'media_id'=>$media,
+                'audience_kind'=>'only_me','target_ids'=>[],
+            ])->assertCreated()->json('data.moment_id');
+        $this->withToken($token)->patchJson('/api/v1/moments/'.$id,[
+            'revision'=>1,'caption_ciphertext'=>str_repeat('C',64),
+            'caption_key_version'=>'v1',
+        ])->assertOk()->assertJsonPath('data.publish_version',2);
+        $this->withToken($token)->patchJson('/api/v1/moments/'.$id,[
+            'revision'=>1,'caption_ciphertext'=>str_repeat('C',64),
+            'caption_key_version'=>'v1',
+        ])->assertStatus(409);
+        $payload=['audience_kind'=>'only_me','target_ids'=>[],'revision'=>1];
+        $this->withToken($token)->postJson('/api/v1/moments/'.$id.'/audience',
+            $payload)->assertOk()->assertJsonPath('data.audience_revision',2);
+        $this->withToken($token)->postJson('/api/v1/moments/'.$id.'/audience',
+            $payload)->assertOk()->assertJsonPath('data.replayed',true);
+        $this->withToken($token)->getJson('/api/v1/moments/'.$id)
+            ->assertOk()->assertJsonPath('data.audience_kind','only_me')
+            ->assertJsonPath('data.publish_version',2);
     }
 
     public function test_unauthorized_grants_never_create_a_moment():void
