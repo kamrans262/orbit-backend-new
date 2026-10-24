@@ -21,6 +21,13 @@ final class MomentAudienceService
     public function resolve(string $owner,string $mediaId,string $kind,array $targets):array
     {
         abort_unless(in_array($kind,['only_me','accepted_friends','selected_friends','selected_circles'],true),422);
+        // M3 global Moment privacy setting is an upper bound, not just a UI default.
+        $raw=DB::table('orbit_user_preferences')->where('user_id',$owner)->value('privacy');
+        $prefs=is_string($raw)?json_decode($raw,true):null;
+        $global=is_array($prefs)?($prefs['moment_default_audience']??'Nobody'):'Nobody';
+        if($kind==='selected_circles')abort_unless($global==='My Circle',403,'Circle Moment consent is not enabled.');
+        if(in_array($kind,['accepted_friends','selected_friends'],true))
+            abort_unless($global==='Selected People',403,'Friend Moment audience is not enabled.');
         $targets=array_values(array_unique($targets));
         abort_if(count($targets)>100,413);
         abort_if(in_array($kind,['only_me','accepted_friends'],true)&&count($targets)!==0,422,'Unexpected audience targets.');
@@ -75,9 +82,11 @@ final class MomentAudienceService
                 ->whereNotNull('approved_at')->whereNull('revoked_at')->where('trust_state','trusted')
                 ->whereNotNull('public_key')->get(['id','public_key']);
             abort_if($devices->isEmpty(),409,'Recipient has no trusted device.');
+            $validKeys=0;
             foreach($devices as $device){
                 $pub=base64_decode((string)$device->public_key,true);
                 if($pub===false||strlen($pub)!==32)continue;
+                $validKeys++;
                 foreach(['original',$variant] as $v) {
                     abort_unless(DB::table('media_device_key_envelopes')
                         ->where('grant_id',$grant->id)->where('recipient_device_id',$device->id)
@@ -85,6 +94,7 @@ final class MomentAudienceService
                         'The encrypted device envelope manifest is incomplete.');
                 }
             }
+            abort_if($validKeys===0,409,'Recipient has no valid trusted device key.');
             $pair['grant_id']=$grant->id;
         }
         unset($pair);

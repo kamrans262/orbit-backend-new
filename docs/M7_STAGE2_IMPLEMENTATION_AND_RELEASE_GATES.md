@@ -19,3 +19,6 @@ Only Laravel 13/MariaDB/Hostinger-private media and EXISTING Orbit Blade CSS/lay
 
 ## M3 backward-compatible erasure gate
 M7 user-linked tables are registered with M3's FK audit. M3 erasure proceeds normally for accounts with NO M7 footprint. Accounts with Moments, reactions, comments, views, recipients, reports, or M7 idempotency records are blocked pending M7 cross-module deletion and retention approval; this avoids destroying raw media metadata before ciphertext purge. M7 lifecycle continues processing existing records even when creation feature flag is disabled. Moderator restriction remains separately disabled with ORBIT_M7_MODERATION_RESTRICT_ENABLED=false until policy approval.
+
+## Enforced M3 privacy ceiling
+The user's stored `moment_default_audience` value is authoritative. `Nobody` allows Only Me; `Selected People` allows accepted/selected friends; `My Circle` allows selected Circles only, subject to M5 explicit consent. Publish and subsequent feed/media reads re-check it; the client cannot upgrade privacy by changing a request body. Any missing preference fails closed. Server rejects a recipient with zero valid trusted 32-byte device keys.

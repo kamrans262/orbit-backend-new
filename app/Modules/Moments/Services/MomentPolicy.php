@@ -33,6 +33,9 @@ final class MomentPolicy
                 ->whereNull('revoked_at')->exists() ? $requested : null;
         }
         if($this->social->isBlockedEitherWay($viewer,$moment->creator_id))return null;
+        $privacyRaw=DB::table('orbit_user_preferences')->where('user_id',$moment->creator_id)->value('privacy');
+        $privacy=is_string($privacyRaw)?json_decode($privacyRaw,true):null;
+        $global=is_array($privacy)?($privacy['moment_default_audience']??'Nobody'):'Nobody';
         $mediaId=DB::table('moment_media')->where('moment_id',$moment->id)->where('role','primary')->value('media_id');
         if(!$mediaId)return null;
         $media=DB::table('media_objects')->where('id',$mediaId)->first();
@@ -47,7 +50,8 @@ final class MomentPolicy
             ->get();
         foreach($records as $row) {
             if($requested!==null && $requested!==$row->context_id)continue;
-            if($row->context_id==='friends' && in_array($row->audience_kind,['accepted_friends','selected_friends'],true)
+            if($row->context_id==='friends' && $global==='Selected People'
+                && in_array($row->audience_kind,['accepted_friends','selected_friends'],true)
                 && $this->social->isFriend($viewer,$moment->creator_id))return 'friends';
             if(str_starts_with($row->context_id,'circle:') && $row->circle_id!==null
                 && $row->context_id==='circle:'.$row->circle_id
