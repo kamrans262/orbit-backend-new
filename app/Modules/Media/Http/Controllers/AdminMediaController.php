@@ -47,7 +47,14 @@ final class AdminMediaController extends Controller
             $quota=['used_bytes'=>$used,'reserved_bytes'=>$pending,
                 'limit_bytes'=>(int)config('orbit_media.per_owner_cipher_quota_bytes')];
         }
-        return response()->view('orbit-admin.media',compact('metrics','row','quota'))
+        // Job UUIDs only: no media/owner IDs, private names, key material or paths.
+        $failedJobs=$r->user('admin')?->canPerform('media.jobs.retry')
+            ? DB::table('media_delete_jobs')->where('status','pending')
+                ->where('attempts','>',0)
+                ->orderBy('next_attempt_at')->limit(20)
+                ->get(['id','attempts','next_attempt_at'])
+            : collect();
+        return response()->view('orbit-admin.media',compact('metrics','row','quota','failedJobs'))
             ->header('Cache-Control','private, no-store')
             ->header('X-Content-Type-Options','nosniff');
     }
