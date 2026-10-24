@@ -1,0 +1,120 @@
+<?php
+namespace App\Modules\Moments\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use App\Modules\Moments\Services\MomentPolicy;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+
+final class MomentInteractionController extends Controller
+{
+    private function actor(Request $r):string {
+        abort_unless(config('orbit_moments.enabled')===true&&config('orbit_media.enabled')===true,404);
+        $s=$r->attributes->get('orbit_session');abort_unless($s,401);return (string)$s->user_id;
+    }
+    private function reply(array $d,int $status=200):JsonResponse {
+        return response()->json(['data'=>$d],$status)->header('Cache-Control','private, no-store');
+    }
+    private function key(Request $r):string {
+        $k=(string)$r->header('Idempotency-Key');abort_unless(Str::isUuid($k),422);
+        return hash('sha256',$k);
+    }
+    private function scope(Request $r,string $moment,MomentPolicy $p):array {
+        $viewer=$this->actor($r);
+        $m=DB::table('moments')->where('id',$moment)->first()??abort(404);
+        return [$viewer,$m,$p->requireContext($m,$viewer,
+            $r->input('context_id',$r->query('context_id')))];
+    }
+    public function view(Request $r,string $moment,MomentPolicy $p):\Illuminate\Http\Response {
+        [$user,$m,$context]=$this->scope($r,$moment,$p);
+        DB::table('moment_views')->updateOrInsert(['moment_id'=>$moment,'viewer_id'=>$user,'context_id'=>$context],
+            ['id'=>(string)Str::uuid7(),'first_viewed_at'=>now(),'last_viewed_at'=>now()]);
+        return response()->noContent();
+    }
+    public function viewers(Request $r,string $moment,MomentPolicy $p):JsonResponse {
+        $owner=$this->actor($r);$m=DB::table('moments')->where('id',$moment)->first();
+        abort_unless($m && $m->creator_id===$owner && $p->active($m),404);
+        $rows=DB::table('moment_views')->where('moment_id',$moment)
+            ->orderByDesc('last_viewed_at')->limit(100)->get();
+        $out=[];
+        foreach($rows as $row) {
+            if($row->viewer_id===$owner || !$p->context($m,$row->viewer_id,$row->context_id))continue;
+            $out[]=['viewer_id'=>$row->viewer_id,'last_viewed_at'=>$row->last_viewed_at];
+        }
+        return $this->reply(['viewers'=>$out]); // No public viewer totals.
+    }
+    public function react(Request $r,string $moment,MomentPolicy $p):JsonResponse {
+        [$user,$m,$context]=$this->scope($r,$moment,$p);$d=$r->validate(['reaction_code'=>['required','in:like,love,haha,wow,sad,angry']]);
+        DB::table('moment_reactions')->updateOrInsert([
+            'moment_id'=>$moment,'user_id'=>$user,'context_id'=>$context
+        ],[
+            'id'=>(string)Str::uuid7(),'reaction_code'=>$d['reaction_code'],'deleted_at'=>null,'updated_at'=>now(),'created_at'=>now(),
+        ]);
+        return $this->reply(['my_reaction'=>$d['reaction_code']]);
+    }
+    public function unreact(Request $r,string $moment,MomentPolicy $p):\Illuminate\Http\Response {
+        [$user,$m,$context]=$this->scope($r,$moment,$p);
+        DB::table('moment_reactions')->where('moment_id',$moment)->where('user_id',$user)
+            ->where('context_id',$context)->update(['deleted_at'=>now(),'updated_at'=>now()]);
+        return response()->noContent();
+    }
+    public function comments(Request $r,string $moment,MomentPolicy $p):JsonResponse {
+        [$user,$m,$context]=$this->scope($r,$moment,$p);
+        $d=$r->validate(['before'=>['nullable','date'],'limit'=>['nullable','integer','min:1','max:30']]);
+        $q=DB::table('moment_comments')->where('moment_id',$moment)->where('context_id',$context)->whereNull('deleted_at');
+        if(isset($d['before']))$q->where('created_at','<',$d['before']);
+        $rows=$q->orderByDesc('created_at')->orderByDesc('id')->limit($d['limit']??20)->get();
+        return $this->reply(['items'=>$rows->map(fn($v)=>[
+            'id'=>$v->id,'parent_id'=>$v->parent_id,'author_id'=>$v->author_id,
+            'context_id'=>$v->context_id,'body_ciphertext'=>$v->body_ciphertext,
+            'key_version'=>$v->key_version,'created_at'=>$v->created_at])->all(),
+            'next_before'=>$rows->last()?->created_at]);
+    }
+    public function comment(Request $r,string $moment,MomentPolicy $p):JsonResponse {
+        [$user,$m,$context]=$this->scope($r,$moment,$p);$key=$this->key($r);
+        $d=$r->validate(['body_ciphertext'=>['required','string','min:32','max:8192'],
+            'key_version'=>['required','string','max:40'],'parent_id'=>['nullable','uuid'],
+            'context_id'=>['nullable','string','max:64']]);
+        if(isset($d['parent_id']))abort_unless(DB::table('moment_comments')->where('id',$d['parent_id'])
+            ->where('moment_id',$moment)->where('context_id',$context)->whereNull('deleted_at')->exists(),404,'Reply unavailable.');
+        // One request key per author within a Moment to prevent offline duplicates.
+        $id=(string)Str::uuid7();
+        $digest=hash('sha256',json_encode($d,JSON_THROW_ON_ERROR));
+        $existing=DB::table('moment_comments')->where('moment_id',$moment)->where('author_id',$user)->where('request_key_hash',$key)->first();
+        if($existing) {
+            abort_unless(hash_equals($existing->request_payload_hash,$digest),409);
+            return $this->reply(['comment_id'=>$existing->id],200);
+        }
+        DB::table('moment_comments')->insert(['id'=>$id,'moment_id'=>$moment,'author_id'=>$user,
+            'parent_id'=>$d['parent_id']??null,'context_id'=>$context,'body_ciphertext'=>$d['body_ciphertext'],
+            'key_version'=>$d['key_version'],'request_key_hash'=>$key,'request_payload_hash'=>$digest,
+            'created_at'=>now(),'updated_at'=>now()]);
+        return $this->reply(['comment_id'=>$id],201);
+    }
+    public function deleteComment(Request $r,string $moment,string $comment,MomentPolicy $p):\Illuminate\Http\Response {
+        [$user,$m,$context]=$this->scope($r,$moment,$p);
+        $row=DB::table('moment_comments')->where('id',$comment)->where('moment_id',$moment)->where('context_id',$context)->first();
+        abort_unless($row && ($row->author_id===$user || $m->creator_id===$user),404);
+        DB::table('moment_comments')->where('id',$comment)->update(['deleted_at'=>now(),'updated_at'=>now()]);
+        return response()->noContent();
+    }
+    public function report(Request $r,string $moment,MomentPolicy $p,?string $comment=null):JsonResponse {
+        [$user,$m,$context]=$this->scope($r,$moment,$p);$d=$r->validate([
+            'reason'=>['required','in:harassment,spam,privacy,unsafe,other'],
+            'details_ciphertext'=>['nullable','string','max:8192'],
+            'consent_evidence_ciphertext'=>['nullable','string','max:65535'],
+            'evidence_consent'=>['required','boolean'],
+        ]);
+        abort_if(!empty($d['consent_evidence_ciphertext'])&&!$d['evidence_consent'],422,'Explicit evidence consent required.');
+        if($comment)abort_unless(DB::table('moment_comments')->where('id',$comment)
+            ->where('moment_id',$moment)->where('context_id',$context)->exists(),404);
+        $id=(string)Str::uuid7();
+        DB::table('moment_reports')->insert(['id'=>$id,'moment_id'=>$moment,'comment_id'=>$comment,
+            'reporter_id'=>$user,'context_id'=>$context,'reason'=>$d['reason'],'details_ciphertext'=>$d['details_ciphertext']??null,
+            'consent_evidence_ciphertext'=>$d['consent_evidence_ciphertext']??null,
+            'evidence_consent'=>$d['evidence_consent'],'status'=>'pending','created_at'=>now(),'updated_at'=>now()]);
+        return $this->reply(['report_id'=>$id,'received'=>true],201);
+    }
+}

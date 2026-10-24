@@ -64,3 +64,10 @@ Artisan::command('orbit:media:process', function () {
 })->purpose('Verify ciphertext uploads, expire sessions and safely purge deleted/expired media');
 
 Schedule::command('orbit:media:process')->everyFiveMinutes()->withoutOverlapping();
+
+/** M7: local-only expiry + retention staging; no Firebase or push delivery. */
+Artisan::command('orbit:moments:process', function () {
+    $result=app(\App\Modules\Moments\Services\MomentLifecycleWorker::class)->run(30);
+    $this->info('M7 Moment lifecycle: '.json_encode($result));
+})->purpose('Expire private Moment views and queue legally unheld encrypted retention purges');
+Schedule::command('orbit:moments:process')->hourly()->withoutOverlapping();

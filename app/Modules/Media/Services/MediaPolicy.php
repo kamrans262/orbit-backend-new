@@ -5,6 +5,7 @@ use App\Models\OrbitUser;
 use App\Modules\Circle\Services\CircleAccessPolicy;
 use App\Modules\Social\Services\SocialGraphService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class MediaPolicy
 {
@@ -21,7 +22,17 @@ final class MediaPolicy
             ->whereNull('deletion_requested_at')->exists()) return false;
         if ($media->retention_deadline !== null && now()->greaterThanOrEqualTo($media->retention_deadline)) return false;
         // Moment media is authorized for seven days even though the purge deadline is day 30.
-        if ($media->purpose === 'moment' && now()->gte(\Illuminate\Support\Carbon::parse($media->created_at)->addDays((int)config('orbit_media.moments_view_days')))) return false;
+        if ($media->purpose === 'moment') {
+            // Publication time, not upload time, owns the 7-day M7 viewer lease.
+            $published = Schema::hasTable('moment_media') ? DB::table('moment_media as mm')
+                ->join('moments as m','m.id','=','mm.moment_id')
+                ->where('mm.media_id',$media->id)->first(['m.state','m.deleted_at','m.view_expires_at']) : null;
+            if ($published) {
+                if (config('orbit_moments.enabled') !== true || $published->state !== 'published'
+                    || $published->deleted_at !== null || now()->gte($published->view_expires_at)) return false;
+            } elseif(now()->gte(\Illuminate\Support\Carbon::parse($media->created_at)
+                ->addDays((int)config('orbit_media.moments_view_days')))) return false;
+        }
         if ($media->owner_user_id === $viewer) return true;
         if ($this->social->isBlockedEitherWay($viewer,$media->owner_user_id)) return false;
         if ($media->purpose === 'sos') return false; // Separate authorized SOS responder policy in M16.

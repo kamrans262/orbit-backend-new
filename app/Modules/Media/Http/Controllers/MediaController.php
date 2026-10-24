@@ -244,7 +244,7 @@ final class MediaController extends Controller
     {
         [$actor]=$this->actor($r);
         $d=$r->validate([
-            'audience_kind'=>['required','in:only_me,selected_friends,selected_circles'],
+            'audience_kind'=>['required','in:only_me,accepted_friends,selected_friends,selected_circles'],
             'recipient_ids'=>['required','array','max:100'],
             'recipient_ids.*'=>['required','uuid','distinct'],
             'circle_id'=>['nullable','uuid'],
