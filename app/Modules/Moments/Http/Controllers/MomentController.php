@@ -137,6 +137,23 @@ final class MomentController extends Controller
         },3);
     }
 
+    public function receipt(Request $r,string $client):JsonResponse
+    {
+        [$owner]=$this->actor($r);
+        abort_unless(Str::isUuid($client),404,'Publication not found.');
+        $moment=DB::table('moments')->where('creator_id',$owner)
+            ->where('client_id',$client)->first();
+        abort_unless($moment,404,'Publication not found.');
+        // The explicit owner-only lookup resolves an ambiguous network timeout
+        // without publishing twice or accepting a client-generated success.
+        return $this->reply([
+            'moment_id'=>$moment->id,'published'=>$moment->state==='published',
+            'state'=>$moment->state,
+            'audience_keys_confirmed'=>$moment->state==='published',
+            'audience_revision'=>(int)$moment->audience_revision,
+        ]);
+    }
+
     public function feed(Request $r,MomentPolicy $policy,?string $circle=null,?string $profile=null):JsonResponse
     {
         [$viewer]=$this->actor($r);

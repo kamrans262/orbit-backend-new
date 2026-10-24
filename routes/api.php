@@ -83,6 +83,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/moments/revisions', [MomentController::class,'revisions'])->middleware('throttle:40,1');
         Route::get('/circles/{circle}/moments', [MomentController::class,'circleFeed'])->whereUuid('circle')->middleware('throttle:45,1');
         Route::get('/users/{user}/moments', [MomentController::class,'profileFeed'])->whereUuid('user')->middleware('throttle:45,1');
+        Route::get('/moments/receipt/{client}', [MomentController::class,'receipt'])
+            ->whereUuid('client')->middleware('throttle:20,1');
         Route::get('/moments/{moment}', [MomentController::class,'detail'])->whereUuid('moment');
         Route::get('/moments/{moment}/media-manifest', [MomentController::class,'manifest'])->whereUuid('moment');
         Route::patch('/moments/{moment}', [MomentController::class,'edit'])->whereUuid('moment')->middleware('throttle:15,1');
