@@ -215,7 +215,7 @@ final class OrbitM7MomentsTest extends TestCase
         DB::table('moment_recipients')->where('moment_id',$id)
             ->where('viewer_id',$friend->id)->update(['revoked_at'=>now()]);
         $this->withToken($friendToken)->getJson('/api/v1/media/'.$media)->assertNotFound();
-        $this->withToken($friendToken)->getJson('/api/v1/moments/'.$id)->assertOk();
+        $this->withToken($friendToken)->getJson('/api/v1/moments/'.$id)->assertNotFound();
         $this->withToken($token)->patchJson('/api/v1/me/preferences/privacy',[
             'moment_default_audience'=>'Nobody',
         ])->assertOk();
