@@ -104,6 +104,11 @@ final class OrbitM7MomentsTest extends TestCase
         $this->withToken($token)->putJson('/api/v1/moments/'.$id.'/reaction',['reaction_code'=>'love'])
             ->assertOk()->assertJsonPath('data.my_reaction','love');
         $this->withToken($token)->postJson('/api/v1/moments/'.$id.'/views')->assertNoContent();
+        $this->assertDatabaseCount('moment_views',0);
+        $this->withToken($token)->patchJson('/api/v1/me/preferences/privacy',[
+            'read_receipts_enabled'=>true,
+        ])->assertOk();
+        $this->withToken($token)->postJson('/api/v1/moments/'.$id.'/views')->assertNoContent();
         $this->assertDatabaseCount('moment_views',1);
     }
 
