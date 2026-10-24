@@ -57,9 +57,17 @@ final class MomentLifecycleController extends Controller
             DB::table('moment_audience')->where('moment_id',$moment)->whereNull('revoked_at')->update(['revoked_at'=>now()]);
             // Active unique(context,viewer) reuses rows instead of duplicating versions.
             $revision=(int)$locked->audience_revision+1;
-            foreach($pairs as $pair)DB::table('moment_recipients')->updateOrInsert([
-                'moment_id'=>$moment,'viewer_id'=>$pair['recipient'],'context_id'=>$pair['context']
-            ],['authorizing_grant_id'=>$pair['grant_id'],'version'=>$revision,'revoked_at'=>null]);
+            foreach($pairs as $pair){
+                $where=['moment_id'=>$moment,'viewer_id'=>$pair['recipient'],'context_id'=>$pair['context']];
+                if(DB::table('moment_recipients')->where($where)->exists()){
+                    DB::table('moment_recipients')->where($where)->update([
+                        'authorizing_grant_id'=>$pair['grant_id'],'version'=>$revision,'revoked_at'=>null]);
+                }else{
+                    DB::table('moment_recipients')->insert($where+[
+                        'id'=>(string)Str::uuid7(),'authorizing_grant_id'=>$pair['grant_id'],
+                        'version'=>$revision,'created_at'=>now()]);
+                }
+            }
             $targets=$d['audience_kind']==='only_me'||$d['audience_kind']==='accepted_friends'?[null]:$d['target_ids'];
             foreach($targets as $target){
                 $context=$d['audience_kind']==='selected_circles'?'circle:'.$target:($d['audience_kind']==='only_me'?'self':'friends');

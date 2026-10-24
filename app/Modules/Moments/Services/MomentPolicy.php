@@ -26,7 +26,12 @@ final class MomentPolicy
     public function context(object $moment,string $viewer,?string $requested=null):?string
     {
         if (!$this->active($moment)) return null;
-        if($moment->creator_id===$viewer) return $requested===null || $requested==='self'?'self':null;
+        if($moment->creator_id===$viewer) {
+            if($requested===null||$requested==='self')return 'self';
+            return DB::table('moment_audience')->where('moment_id',$moment->id)
+                ->where('version',$moment->audience_revision)->where('context_id',$requested)
+                ->whereNull('revoked_at')->exists() ? $requested : null;
+        }
         if($this->social->isBlockedEitherWay($viewer,$moment->creator_id))return null;
         $mediaId=DB::table('moment_media')->where('moment_id',$moment->id)->where('role','primary')->value('media_id');
         if(!$mediaId)return null;

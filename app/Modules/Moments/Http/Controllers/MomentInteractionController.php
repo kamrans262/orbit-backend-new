@@ -29,8 +29,13 @@ final class MomentInteractionController extends Controller
     }
     public function view(Request $r,string $moment,MomentPolicy $p):\Illuminate\Http\Response {
         [$user,$m,$context]=$this->scope($r,$moment,$p);
-        DB::table('moment_views')->updateOrInsert(['moment_id'=>$moment,'viewer_id'=>$user,'context_id'=>$context],
-            ['id'=>(string)Str::uuid7(),'first_viewed_at'=>now(),'last_viewed_at'=>now()]);
+        $where=['moment_id'=>$moment,'viewer_id'=>$user,'context_id'=>$context];
+        if(DB::table('moment_views')->where($where)->exists()){
+            DB::table('moment_views')->where($where)->update(['last_viewed_at'=>now()]);
+        }else{
+            DB::table('moment_views')->insert($where+['id'=>(string)Str::uuid7(),
+                'first_viewed_at'=>now(),'last_viewed_at'=>now()]);
+        }
         return response()->noContent();
     }
     public function viewers(Request $r,string $moment,MomentPolicy $p):JsonResponse {
@@ -47,11 +52,15 @@ final class MomentInteractionController extends Controller
     }
     public function react(Request $r,string $moment,MomentPolicy $p):JsonResponse {
         [$user,$m,$context]=$this->scope($r,$moment,$p);$d=$r->validate(['reaction_code'=>['required','in:like,love,haha,wow,sad,angry']]);
-        DB::table('moment_reactions')->updateOrInsert([
-            'moment_id'=>$moment,'user_id'=>$user,'context_id'=>$context
-        ],[
-            'id'=>(string)Str::uuid7(),'reaction_code'=>$d['reaction_code'],'deleted_at'=>null,'updated_at'=>now(),'created_at'=>now(),
-        ]);
+        $where=['moment_id'=>$moment,'user_id'=>$user,'context_id'=>$context];
+        if(DB::table('moment_reactions')->where($where)->exists()){
+            DB::table('moment_reactions')->where($where)->update([
+                'reaction_code'=>$d['reaction_code'],'deleted_at'=>null,'updated_at'=>now()]);
+        }else{
+            DB::table('moment_reactions')->insert($where+['id'=>(string)Str::uuid7(),
+                'reaction_code'=>$d['reaction_code'],'deleted_at'=>null,
+                'created_at'=>now(),'updated_at'=>now()]);
+        }
         return $this->reply(['my_reaction'=>$d['reaction_code']]);
     }
     public function unreact(Request $r,string $moment,MomentPolicy $p):\Illuminate\Http\Response {

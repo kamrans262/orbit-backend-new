@@ -32,8 +32,8 @@ return new class extends Migration {
    $t->unique(['moment_id','user_id','context_id']);$t->foreign('moment_id')->references('id')->on('moments')->cascadeOnDelete();$t->foreign('user_id')->references('id')->on('orbit_users')->restrictOnDelete();
   });
   Schema::create('moment_comments',function(Blueprint $t):void{
-   $t->uuid('id')->primary();$t->uuid('moment_id');$t->uuid('author_id');$t->uuid('parent_id')->nullable();$t->string('context_id',64);$t->longText('body_ciphertext');$t->string('key_version',40);$t->timestamp('deleted_at')->nullable();$t->timestamps();
-   $t->index(['moment_id','context_id','created_at','id']);$t->foreign('moment_id')->references('id')->on('moments')->cascadeOnDelete();$t->foreign('author_id')->references('id')->on('orbit_users')->restrictOnDelete();$t->foreign('parent_id')->references('id')->on('moment_comments')->nullOnDelete();
+   $t->uuid('id')->primary();$t->uuid('moment_id');$t->uuid('author_id');$t->uuid('parent_id')->nullable();$t->string('context_id',64);$t->longText('body_ciphertext');$t->string('key_version',40);$t->char('request_key_hash',64);$t->char('request_payload_hash',64);$t->timestamp('deleted_at')->nullable();$t->timestamps();
+   $t->index(['moment_id','context_id','created_at','id']);$t->unique(['moment_id','author_id','request_key_hash'],'moment_comment_idempotency');$t->foreign('moment_id')->references('id')->on('moments')->cascadeOnDelete();$t->foreign('author_id')->references('id')->on('orbit_users')->restrictOnDelete();$t->foreign('parent_id')->references('id')->on('moment_comments')->nullOnDelete();
   });
   Schema::create('moment_views',function(Blueprint $t):void{
    $t->uuid('id')->primary();$t->uuid('moment_id');$t->uuid('viewer_id');$t->string('context_id',64);$t->timestamp('first_viewed_at');$t->timestamp('last_viewed_at');

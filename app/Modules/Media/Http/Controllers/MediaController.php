@@ -635,21 +635,24 @@ final class MediaController extends Controller
                     ->pluck('user_id');
                 foreach($members as $id) {
                     if($policy->recipientEligible($actor,$id,$kind,$circleId))
-                        $recipients[$id]=$circleId;
+                        $recipients[$id.'|'.$circleId]=['user_id'=>$id,'circle_id'=>$circleId];
                 }
             }
         }
-        abort_if(count($recipients)>100,413,'Too many recipients.');
-        abort_unless(count($recipients)>0,422,'No eligible recipients.');
+        $recipientIds=[];
+        foreach($recipients as $keyId=>$meta)$recipientIds[]=is_array($meta)?$meta['user_id']:$keyId;
+        $recipientIds=array_values(array_unique($recipientIds));
+        abort_if(count($recipientIds)>100,413,'Too many recipients.');
+        abort_unless(count($recipientIds)>0,422,'No eligible recipients.');
         $envelopes=[];
         foreach($d['key_envelopes'] as $e) {
             $owner=DB::table('devices')->where('id',$e['device_id'])
                 ->whereNotNull('approved_at')->whereNull('revoked_at')
                 ->where('trust_state','trusted')->value('user_id');
-            abort_unless($owner && array_key_exists($owner,$recipients),422,'Device not eligible.');
+            abort_unless($owner && in_array($owner,$recipientIds,true),422,'Device not eligible.');
             $envelopes[$owner][]=$e;
         }
-        foreach(array_keys($recipients) as $id) abort_unless(isset($envelopes[$id]),422,'Recipient key envelope missing.');
+        foreach($recipientIds as $id) abort_unless(isset($envelopes[$id]),422,'Recipient key envelope missing.');
         $digest=hash('sha256',json_encode($d,JSON_THROW_ON_ERROR));
         $old=DB::table('media_audience_grants')->where('media_id',$media)
             ->where('issuer_user_id',$actor)->where('request_key_hash',$key)->get();
@@ -661,6 +664,7 @@ final class MediaController extends Controller
         $grantIds=DB::transaction(function()use($media,$actor,$m,$recipients,$kind,$envelopes,$key,$digest,$d):array {
             $ids=[];$newVersion=$m->policy_version+1;
             foreach($recipients as $id=>$circle) {
+                if(is_array($circle)) { $id=$circle['user_id']; $circle=$circle['circle_id']; }
                 $g=(string)Str::uuid7();$ids[]=$g;
                 DB::table('media_audience_grants')->insert([
                     'id'=>$g,'media_id'=>$media,'issuer_user_id'=>$actor,
