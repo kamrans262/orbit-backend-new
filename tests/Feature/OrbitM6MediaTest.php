@@ -126,6 +126,67 @@ final class OrbitM6MediaTest extends TestCase
         $this->assertSame(1024,DB::table('media_upload_sessions')->where('id',$one['upload_id'])->value('declared_bytes'));
         $this->assertNotNull(DB::table('media_upload_sessions')->where('id',$one['upload_id'])->value('provider_upload_id_encrypted'));
     }
+    public function test_expired_original_reissues_new_upload_with_same_transfer_key():void
+    {
+        [$owner,$token]=$this->person('recovery');
+        $key=(string)Str::uuid();
+        $first=$this->init($token,$key);
+        DB::table('media_upload_sessions')->where('id',$first['upload_id'])
+            ->update(['expires_at'=>now()->subMinute()]);
+        $recovered=$this->init($token,$key);
+        $this->assertNotSame($first['upload_id'],$recovered['upload_id']);
+        $this->assertNotSame($first['media_id'],$recovered['media_id']);
+        $this->assertDatabaseMissing('media_objects',['id'=>$first['media_id']]);
+        $this->assertDatabaseHas('media_upload_sessions',
+            ['id'=>$recovered['upload_id'],'state'=>'initiated']);
+        $this->assertDatabaseCount('media_objects',1);
+        $this->assertCount(1,$this->store->deleted);
+    }
+
+    public function test_expired_original_recovers_after_retention_worker_purged_orphan():void
+    {
+        [$owner,$token]=$this->person('longoffline');
+        $key=(string)Str::uuid();
+        $first=$this->init($token,$key);
+        DB::table('media_upload_sessions')->where('id',$first['upload_id'])
+            ->update(['expires_at'=>now()->subMinute()]);
+        $worker=app(MediaLifecycleWorker::class)->run();
+        $this->assertSame(1,$worker['expired_uploads']);
+        $this->assertDatabaseHas('media_objects',['id'=>$first['media_id'],'state'=>'deleted']);
+        $again=$this->init($token,$key);
+        $this->assertNotSame($first['media_id'],$again['media_id']);
+        $this->assertDatabaseCount('media_objects',1);
+    }
+
+    public function test_expired_and_failed_variant_reservations_can_be_replaced():void
+    {
+        [$owner,$token]=$this->person('derivatives');
+        $media=$this->ready($token);
+        $id=$media['media_id'];
+        $route='/api/v1/media/'.$id.'/variants/uploads';
+        $body=['variant'=>'thumbnail','declared_bytes'=>128,
+            'cipher_sha256'=>str_repeat('b',64)];
+        $key=(string)Str::uuid();
+        $first=$this->withToken($token)->withHeader('Idempotency-Key',$key)
+            ->postJson($route,$body)->assertCreated()->json('data');
+        DB::table('media_upload_sessions')->where('id',$first['upload_id'])
+            ->update(['expires_at'=>now()->subMinute()]);
+        $retried=$this->withToken($token)->withHeader('Idempotency-Key',$key)
+            ->postJson($route,$body)->assertCreated()->json('data');
+        $this->assertNotSame($first['upload_id'],$retried['upload_id']);
+        $this->assertDatabaseCount('media_variants',1);
+        DB::table('media_upload_sessions')->where('id',$retried['upload_id'])
+            ->update(['state'=>'failed']);
+        DB::table('media_variants')->where('media_id',$id)
+            ->where('variant','thumbnail')->update(['state'=>'failed']);
+        $newKey=(string)Str::uuid();
+        $later=$this->withToken($token)->withHeader('Idempotency-Key',$newKey)
+            ->postJson($route,$body)->assertCreated()->json('data');
+        $this->assertNotSame($retried['upload_id'],$later['upload_id']);
+        $this->assertDatabaseCount('media_variants',1);
+        $this->assertDatabaseHas('media_objects',['id'=>$id,'state'=>'ready']);
+    }
+
     public function test_full_ciphertext_receipt_and_private_owner_metadata():void
     {
         [$a,$ta,$device]=$this->person('alpha');
