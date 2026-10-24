@@ -261,7 +261,7 @@ final class OrbitM7MomentsTest extends TestCase
         ]);
     }
 
-    public function test_authenticated_voice_moment_publishes_without_image_variant():void
+    public function test_voice_moment_requires_verified_independently_encrypted_waveform():void
     {
         [$owner,$device,$token]=$this->principal();
         $media=$this->readyPrivateMedia($owner,$device);
@@ -269,9 +269,16 @@ final class OrbitM7MomentsTest extends TestCase
             'kind'=>'audio','declared_mime'=>'audio/mp4',
             'declared_duration_ms'=>45000,
         ]);
-        DB::table('media_variants')->where('media_id',$media)->delete();
+        // The image derivative is not valid for an audio Moment.
+        $withoutWave=['client_id'=>(string)Str::uuid(),'media_id'=>$media,
+            'audience_kind'=>'only_me','target_ids'=>[]];
+        $this->withToken($token)
+            ->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments',$withoutWave)->assertStatus(409);
+        DB::table('media_variants')->where('media_id',$media)
+            ->where('variant','thumbnail')->update(['variant'=>'waveform']);
         DB::table('media_device_key_envelopes')->where('media_id',$media)
-            ->where('variant','thumbnail')->delete();
+            ->where('variant','thumbnail')->update(['variant'=>'waveform']);
         $client=(string)Str::uuid();
         $payload=['client_id'=>$client,'media_id'=>$media,
             'audience_kind'=>'only_me','target_ids'=>[]];

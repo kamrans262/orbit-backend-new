@@ -35,9 +35,9 @@ final class MomentAudienceService
         $m=DB::table('media_objects')->where('id',$mediaId)->where('owner_user_id',$owner)
             ->where('purpose','moment')->where('state','ready')->whereNull('deleted_at')->first();
         abort_unless($m,404,'Verified media unavailable.');
-        $variant=match($m->kind){'image'=>'thumbnail','video'=>'poster','audio'=>null,default=>'unsupported'};
+        $variant=match($m->kind){'image'=>'thumbnail','video'=>'poster','audio'=>'waveform',default=>'unsupported'};
         abort_unless($variant!=='unsupported',422,'Unsupported Moment media.');
-        if($variant!==null)abort_unless(DB::table('media_variants')->where('media_id',$mediaId)
+        abort_unless(DB::table('media_variants')->where('media_id',$mediaId)
             ->where('variant',$variant)->where('state','ready')->exists(),409,
             'Encrypted thumbnail or poster must be verified first.');
         $pairs=[];
@@ -87,7 +87,7 @@ final class MomentAudienceService
                 $pub=base64_decode((string)$device->public_key,true);
                 if($pub===false||strlen($pub)!==32)continue;
                 $validKeys++;
-                foreach($variant===null?['original']:['original',$variant] as $v) {
+                foreach(['original',$variant] as $v) {
                     abort_unless(DB::table('media_device_key_envelopes')
                         ->where('grant_id',$grant->id)->where('recipient_device_id',$device->id)
                         ->where('variant',$v)->whereNull('revoked_at')->exists(),409,
