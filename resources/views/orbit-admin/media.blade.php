@@ -15,6 +15,7 @@
   <article class="stat-card"><span class="stat-label">Deleting</span><strong>{{ $metrics['deleting'] }}</strong></article>
   <article class="stat-card"><span class="stat-label">Stored ciphertext MiB</span><strong>{{ number_format($metrics['encrypted_bytes']/1048576,1) }}</strong></article>
   <article class="stat-card"><span class="stat-label">Deletion queue</span><strong>{{ $metrics['queued_purges'] }}</strong></article>
+  <article class="stat-card"><span class="stat-label">Failed verification</span><strong>{{ $metrics['failed'] }}</strong><p>Encrypted objects rejected during integrity verification</p></article>
   <article class="stat-card"><span class="stat-label">Expired upload sessions</span><strong>{{ $metrics['expired_sessions'] }}</strong></article>
   <article class="stat-card"><span class="stat-label">Reserved uploads</span><strong>{{ $metrics['active_reservations'] }}</strong></article>
   <article class="stat-card"><span class="stat-label">Retrying deletions</span><strong>{{ $metrics['retried_deletions'] }}</strong></article>
@@ -66,6 +67,19 @@
 </section>
 @endif
 @if(auth()->guard('admin')->user()?->canPerform('media.jobs.retry'))
+<section class="panel" style="margin-top:18px">
+  <div class="panel-head"><div><p class="eyebrow">PRIVATE CLEANUP QUEUE</p><h2>Failed deletion jobs</h2>
+    <p>Job references only. No media ID, account details, filenames, thumbnails, keys or storage paths are shown.</p></div></div>
+  @forelse($failedJobs as $job)
+  <div class="admin-kv" role="group" aria-label="Retryable deletion job" style="margin-bottom:12px">
+    <div class="kv"><small>Job UUID</small><strong style="overflow-wrap:anywhere">{{ $job->id }}</strong></div>
+    <div class="kv"><small>Attempts</small><strong>{{ $job->attempts }}</strong></div>
+    <div class="kv"><small>Scheduled retry (UTC)</small><strong>{{ $job->next_attempt_at }}</strong></div>
+  </div>
+  @empty
+  <div class="admin-guidance" role="status">No failed cleanup jobs are waiting for retry.</div>
+  @endforelse
+</section>
 <section class="panel" style="margin-top:18px">
   <div class="panel-head"><div><p class="eyebrow">ELEVATED PRIVILEGE / AUDITED ACTION</p><h2>Retry failed storage cleanup</h2>
     <p>Only an existing pending deletion job with prior failed attempts can be rescheduled. Never bypasses holds or deletes immediately.</p></div></div>
