@@ -53,7 +53,7 @@ final class MomentPolicy
             if($row->context_id==='friends' && $global==='Selected People'
                 && in_array($row->audience_kind,['accepted_friends','selected_friends'],true)
                 && $this->social->isFriend($viewer,$moment->creator_id))return 'friends';
-            if(str_starts_with($row->context_id,'circle:') && $row->circle_id!==null
+            if($global==='My Circle' && str_starts_with($row->context_id,'circle:') && $row->circle_id!==null
                 && $row->context_id==='circle:'.$row->circle_id
                 && $this->circles->canAccessProtected($row->circle_id,$viewer,$moment->creator_id,'moments'))return $row->context_id;
         }

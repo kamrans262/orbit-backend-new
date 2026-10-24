@@ -71,6 +71,11 @@ final class MediaPolicy
             if ($g->audience_kind === 'selected_friends' || $g->audience_kind === 'accepted_friends') {
                 if ($this->social->isFriend($media->owner_user_id,$viewer)) return true;
             }
+            if(isset($published) && $published !== null && $g->audience_kind==='selected_circles'){
+                $raw=DB::table('orbit_user_preferences')->where('user_id',$media->owner_user_id)->value('privacy');
+                $prefs=is_string($raw)?json_decode($raw,true):null;
+                if(!is_array($prefs)||($prefs['moment_default_audience']??'Nobody')!=='My Circle')continue;
+            }
             if ($g->audience_kind === 'selected_circles' && $g->circle_id !== null
                 && $this->circles->isMember($g->circle_id,$viewer)
                 && $this->circles->isMember($g->circle_id,$media->owner_user_id)
