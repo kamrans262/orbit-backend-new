@@ -30,8 +30,15 @@ final class MediaPolicy
             if ($published) {
                 if (config('orbit_moments.enabled') !== true || $published->state !== 'published'
                     || $published->deleted_at !== null || now()->gte($published->view_expires_at)) return false;
-            } elseif(now()->gte(\Illuminate\Support\Carbon::parse($media->created_at)
-                ->addDays((int)config('orbit_media.moments_view_days')))) return false;
+            } else {
+                // M7 recipient grants may be prepared before publication.
+                // While M7 is enabled, those prepared envelopes NEVER grant
+                // access to unpublished/cancelled Moment ciphertext.
+                if(config('orbit_moments.enabled') === true
+                    && $media->owner_user_id !== $viewer) return false;
+                if(now()->gte(\Illuminate\Support\Carbon::parse($media->created_at)
+                    ->addDays((int)config('orbit_media.moments_view_days')))) return false;
+            }
         }
         if ($media->owner_user_id === $viewer) return true;
         if ($this->social->isBlockedEitherWay($viewer,$media->owner_user_id)) return false;
