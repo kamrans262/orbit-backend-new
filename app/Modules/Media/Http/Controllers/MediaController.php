@@ -264,7 +264,7 @@ final class MediaController extends Controller
                 abort_unless($policy->recipientEligible(
                     $actor,$recipient,$audience,$circle),404,'Recipient unavailable.');
                 if($circle)abort_unless($circles->canAccessProtected(
-                    $circle,$actor,$recipient,'moments'),404,'Recipient unavailable.');
+                    $circle,$recipient,$actor,'moments'),404,'Recipient unavailable.');
             }
             $devices=DB::table('devices')->where('user_id',$recipient)
                 ->where('trust_state','trusted')->whereNotNull('approved_at')
@@ -634,7 +634,8 @@ final class MediaController extends Controller
                 $members=DB::table('circle_members')->where('circle_id',$circleId)->whereNull('removed_at')
                     ->pluck('user_id');
                 foreach($members as $id) {
-                    if($policy->recipientEligible($actor,$id,$kind,$circleId))
+                    if($policy->recipientEligible($actor,$id,$kind,$circleId)
+                        && $circles->canAccessProtected($circleId,$id,$actor,'moments'))
                         $recipients[$id.'|'.$circleId]=['user_id'=>$id,'circle_id'=>$circleId];
                 }
             }
