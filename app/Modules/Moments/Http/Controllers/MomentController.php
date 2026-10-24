@@ -48,11 +48,23 @@ final class MomentController extends Controller
             ->first(['media.id','media.kind','media.declared_duration_ms']);
         $mediaId=$media?->id;
         $social=app(SocialGraphService::class);
-        // A friendship ending hides its tags on every subsequent read.
-        $tags=DB::table('moment_people_tags')
-            ->where('moment_id',$m->id)->whereNull('revoked_at')
-            ->pluck('tagged_user_id')
-            ->filter(fn($id)=>$social->isFriend($m->creator_id,(string)$id))
+        // A tag is sensitive identity metadata. Only disclose people who
+        // currently belong to this same authorized audience context. Being
+        // friends with the author alone does NOT permit Circle A to discover
+        // a person who can only view through Circle B.
+        $tags=DB::table('moment_people_tags as tag')
+            ->where('tag.moment_id',$m->id)->whereNull('tag.revoked_at')
+            ->whereExists(function($q)use($m,$context):void{
+                $q->selectRaw('1')->from('moment_recipients as recipient')
+                    ->whereColumn('recipient.viewer_id','tag.tagged_user_id')
+                    ->where('recipient.moment_id',$m->id)
+                    ->where('recipient.version',$m->audience_revision)
+                    ->whereNull('recipient.revoked_at');
+                if($context!=='self')$q->where('recipient.context_id',$context);
+            })
+            ->pluck('tag.tagged_user_id')
+            ->filter(fn($id)=>$social->isFriend($m->creator_id,(string)$id)
+                && !$social->isBlockedEitherWay($m->creator_id,(string)$id))
             ->values()->all();
         return ['id'=>$m->id,'creator_id'=>$m->creator_id,'media_id'=>$mediaId,
             'tagged_user_ids'=>$tags,
