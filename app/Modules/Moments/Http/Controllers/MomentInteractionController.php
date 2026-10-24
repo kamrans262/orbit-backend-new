@@ -29,6 +29,13 @@ final class MomentInteractionController extends Controller
     }
     public function view(Request $r,string $moment,MomentPolicy $p):\Illuminate\Http\Response {
         [$user,$m,$context]=$this->scope($r,$moment,$p);
+        // M3 read-receipt preference overrides M7 viewer tracking.
+        // No stored view or cross-Circle viewer fingerprint without opt-in.
+        $raw=DB::table('orbit_user_preferences')->where('user_id',$user)->value('privacy');
+        $prefs=is_string($raw)?json_decode($raw,true):null;
+        if(!is_array($prefs)||($prefs['read_receipts_enabled']??false)!==true){
+            return response()->noContent();
+        }
         $where=['moment_id'=>$moment,'viewer_id'=>$user,'context_id'=>$context];
         if(DB::table('moment_views')->where($where)->exists()){
             DB::table('moment_views')->where($where)->update(['last_viewed_at'=>now()]);
