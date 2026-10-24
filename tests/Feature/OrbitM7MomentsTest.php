@@ -173,7 +173,7 @@ final class OrbitM7MomentsTest extends TestCase
         [$owner,$device,$token]=$this->principal();
         $media=$this->readyPrivateMedia($owner,$device);
         [$friend,$friendDevice,$friendToken]=$this->principal();
-        [$lo,$hi]=app(\\App\\Modules\\Social\\Services\\SocialGraphService::class)->canonical($owner->id,$friend->id);
+        [$lo,$hi]=app(\App\Modules\Social\Services\SocialGraphService::class)->canonical($owner->id,$friend->id);
         DB::table('friendships')->insert(['user_low_id'=>$lo,'user_high_id'=>$hi,'created_at'=>now()]);
         $grant=(string)Str::uuid7();
         DB::table('media_audience_grants')->insert([
