@@ -23,7 +23,10 @@ final class AdminMediaController extends Controller
             'deleting'=>DB::table('media_objects')->where('state','deleting')->count(),
             'encrypted_bytes'=>DB::table('media_objects')->where('state','ready')->sum('cipher_bytes'),
             'queued_purges'=>DB::table('media_delete_jobs')->where('status','pending')->count(),
-            'failed'=>DB::table('media_objects')->where('state','failed')->count(),
+            // The verification worker records failed sessions; rejected
+            // originals transition to deleting, so counting media_objects
+            // alone would silently hide these failures from operations.
+            'failed'=>DB::table('media_upload_sessions')->where('state','failed')->count(),
             'expired_sessions'=>DB::table('media_upload_sessions')->where('state','expired')->count(),
             'active_reservations'=>DB::table('media_upload_sessions')->whereIn('state',['initiated','uploading'])->where('expires_at','>',now())->count(),
             'retried_deletions'=>DB::table('media_delete_jobs')->where('attempts','>',0)->where('status','pending')->count(),
