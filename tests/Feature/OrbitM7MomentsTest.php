@@ -335,6 +335,44 @@ final class OrbitM7MomentsTest extends TestCase
         $this->assertDatabaseCount('moment_people_tags',0);
     }
 
+    public function test_encrypted_comment_cursor_does_not_skip_same_second_replies():void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $media=$this->readyPrivateMedia($owner,$device);
+        $moment=$this->withToken($token)
+            ->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments',[
+                'client_id'=>(string)Str::uuid(),'media_id'=>$media,
+                'audience_kind'=>'only_me','target_ids'=>[],
+            ])->assertCreated()->json('data.moment_id');
+        for($i=0;$i<3;$i++){
+            $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+                ->postJson('/api/v1/moments/'.$moment.'/comments',[
+                    'context_id'=>'self','body_ciphertext'=>str_repeat((string)($i+1),64),
+                    'key_version'=>'v1',
+                ])->assertCreated();
+        }
+        // Regression: multiple encrypted replies can share one timestamp.
+        $sameSecond=now()->startOfSecond();
+        DB::table('moment_comments')->where('moment_id',$moment)
+            ->update(['created_at'=>$sameSecond]);
+        $first=$this->withToken($token)->getJson(
+            '/api/v1/moments/'.$moment.'/comments?context_id=self&limit=2')
+            ->assertOk()->json('data');
+        $this->assertCount(2,$first['items']);
+        $this->assertNotNull($first['next_before_id']);
+        $second=$this->withToken($token)->getJson(
+            '/api/v1/moments/'.$moment.'/comments?' . http_build_query([
+                'context_id'=>'self','limit'=>2,
+                'before'=>$first['next_before'],
+                'before_id'=>$first['next_before_id'],
+            ]))->assertOk()->json('data');
+        $this->assertCount(1,$second['items']);
+        $ids=array_merge(array_column($first['items'],'id'),
+            array_column($second['items'],'id'));
+        $this->assertCount(3,array_unique($ids));
+    }
+
     public function test_owner_cannot_use_account_report_to_target_themself():void
     {
         [$owner,$device,$token]=$this->principal();
