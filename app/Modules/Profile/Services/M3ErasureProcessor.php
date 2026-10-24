@@ -105,20 +105,6 @@ final class M3ErasureProcessor
             if ($this->unregisteredUserTables() !== []) {
                 throw new DomainException('Unregistered user-owned tables block erasure; register their cleanup.');
             }
-            // M7 erasure is a separate cross-module storage and moderation
-            // contract. An M3-only erasure must NEVER leave moment authors,
-            // viewer receipts, encrypted comment metadata, or report rows orphaned.
-            if (\Illuminate\Support\Facades\Schema::hasTable('moments')) {
-                $m7UserTables=['moments'=>'creator_id','moment_recipients'=>'viewer_id',
-                    'moment_reactions'=>'user_id','moment_comments'=>'author_id',
-                    'moment_views'=>'viewer_id','moment_reports'=>'reporter_id',
-                    'moment_idempotency'=>'owner_id'];
-                foreach($m7UserTables as $table=>$column) {
-                    if(DB::table($table)->where($column,$user->id)->exists()) {
-                        throw new DomainException('M7 private Moment records require an authorized cross-module erasure and storage-purge review.');
-                    }
-                }
-            }
             if (!$user->deletion_requested_at) {
                 throw new DomainException('Account has no active deletion request.');
             }
@@ -133,9 +119,17 @@ final class M3ErasureProcessor
                         ->where('legal_hold_until','>',now())->exists()) {
                     throw new DomainException('M6 media requires verified ciphertext purge before account erasure.');
                 }
-                // Every owned blob is confirmed deleted. Remove metadata and
-                // envelope grants after storage cleanup, inside the erasure txn.
+                // Every owned blob is confirmed deleted. Remove M7 references,
+                // comments, receipts and reports while the account still exists.
+                $m7Summary=app(\App\Modules\Moments\Services\MomentErasureService::class)
+                    ->eraseUser($user->id);
+                // M6 metadata may be removed only after M7's FK references are gone.
                 $owned->delete();
+            }
+
+            if (!isset($m7Summary)) {
+                $m7Summary=app(\App\Modules\Moments\Services\MomentErasureService::class)
+                    ->eraseUser($user->id);
             }
 
             // Released holds can be removed, since they are user-linked and
@@ -148,6 +142,8 @@ final class M3ErasureProcessor
                 $user->id, $operator, 'M3 identity/profile erasure ticket '.$ticket,
                 null, $requestId,
             );
+
+            if(array_sum($m7Summary)>0) $summary['moments_m7']=$m7Summary;
 
             // The request record is removed by FK cascade. Receipt contains
             // a one-way hashed reference, scope and counts, never raw user PII.

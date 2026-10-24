@@ -155,4 +155,50 @@ final class OrbitM3ErasureTest extends TestCase
         $this->get('/admin/users/'.$user->id)->assertOk()
             ->assertDontSee('data-open-delete-user', false);
     }
+    public function test_m7_metadata_erasure_requires_verified_storage_cleanup_then_removes_private_references():void
+    {
+        config()->set('orbit_erasure.execution_enabled',true);
+        [$owner,$request]=$this->request();
+        $media=(string)Str::uuid7();$moment=(string)Str::uuid7();$report=(string)Str::uuid7();
+        DB::table('media_objects')->insert([
+            'id'=>$media,'owner_user_id'=>$owner->id,'purpose'=>'moment',
+            'kind'=>'image','declared_mime'=>'image/jpeg','cipher_suite'=>'aes256gcm-v1',
+            'object_key'=>'orbit-private/m7/'.Str::uuid(),'state'=>'ready',
+            'cipher_bytes'=>64,'cipher_sha256'=>str_repeat('a',64),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('moments')->insert([
+            'id'=>$moment,'creator_id'=>$owner->id,'client_id'=>(string)Str::uuid(),
+            'request_key_hash'=>str_repeat('1',64),'request_payload_hash'=>str_repeat('2',64),
+            'state'=>'published','audience_kind'=>'only_me','published_at'=>now(),
+            'rail_expires_at'=>now()->addDay(),'view_expires_at'=>now()->addDays(7),
+            'purge_due_at'=>now()->addDays(30),'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('moment_media')->insert(['moment_id'=>$moment,'media_id'=>$media,'role'=>'primary','position'=>0,'created_at'=>now()]);
+        DB::table('media_references')->insert([
+            'id'=>(string)Str::uuid7(),'media_id'=>$media,'owner_user_id'=>$owner->id,
+            'consumer_type'=>'moment','consumer_id'=>$moment,'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('moment_reports')->insert([
+            'id'=>$report,'moment_id'=>$moment,'reporter_id'=>$owner->id,'context_id'=>'self',
+            'reason'=>'privacy','status'=>'pending','evidence_consent'=>false,
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        try {
+            app(M3ErasureProcessor::class)->execute($request,$this->operator(),'ERASURE-CHANGE-789');
+            $this->fail('Storage-backed Moment erased without ciphertext purge');
+        }catch(DomainException $error){
+            $this->assertStringContainsString('ciphertext purge',$error->getMessage());
+        }
+        $this->assertDatabaseHas('moments',['id'=>$moment]);
+        DB::table('media_objects')->where('id',$media)->update(['state'=>'deleted','deleted_at'=>now()]);
+        $result=app(M3ErasureProcessor::class)->execute($request,$this->operator(),'ERASURE-CHANGE-789');
+        $this->assertSame('completed',$result['status']);
+        $this->assertDatabaseMissing('orbit_users',['id'=>$owner->id]);
+        $this->assertDatabaseMissing('moments',['id'=>$moment]);
+        $this->assertDatabaseMissing('media_references',['media_id'=>$media]);
+        $this->assertDatabaseMissing('moment_reports',['id'=>$report]);
+        $this->assertDatabaseMissing('media_objects',['id'=>$media]);
+    }
+
 }
