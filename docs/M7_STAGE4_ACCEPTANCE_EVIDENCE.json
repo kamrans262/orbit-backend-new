@@ -1,0 +1,1024 @@
+{
+  "schema_version": 1,
+  "milestone": "Orbit M7",
+  "baseline": {
+    "requirements": 201,
+    "acceptance_scenarios": 74,
+    "decisions": 26
+  },
+  "release_status": "BLOCKED",
+  "automation": {
+    "flutter": {
+      "status": "NOT_RUN",
+      "commit": "",
+      "run_url": "",
+      "evidence": ""
+    },
+    "backend": {
+      "status": "NOT_RUN",
+      "commit": "",
+      "run_url": "",
+      "evidence": ""
+    }
+  },
+  "acceptance": [
+    {
+      "id": "M7-AT-001",
+      "area": "Audience",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-002",
+      "area": "Audience",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-003",
+      "area": "Audience",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-004",
+      "area": "Audience",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-005",
+      "area": "Audience",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-006",
+      "area": "Audience",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-007",
+      "area": "Audience",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-008",
+      "area": "Audience",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-009",
+      "area": "Audience",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-010",
+      "area": "Audience",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-011",
+      "area": "Audience",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-012",
+      "area": "Audience",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-013",
+      "area": "Audience",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-014",
+      "area": "Audience",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-015",
+      "area": "Camera and composer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-016",
+      "area": "Camera and composer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-017",
+      "area": "Camera and composer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-018",
+      "area": "Camera and composer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-019",
+      "area": "Camera and composer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-020",
+      "area": "Camera and composer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-021",
+      "area": "Camera and composer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-022",
+      "area": "Camera and composer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-023",
+      "area": "Camera and composer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-024",
+      "area": "Camera and composer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-025",
+      "area": "Media security",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-026",
+      "area": "Media security",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-027",
+      "area": "Media security",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-028",
+      "area": "Media security",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-029",
+      "area": "Media security",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-030",
+      "area": "Media security",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-031",
+      "area": "Media security",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-032",
+      "area": "Media security",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-033",
+      "area": "Media security",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-034",
+      "area": "Media security",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-035",
+      "area": "Media security",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-036",
+      "area": "Media security",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-037",
+      "area": "Feed/viewer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-038",
+      "area": "Feed/viewer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-039",
+      "area": "Feed/viewer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-040",
+      "area": "Feed/viewer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-041",
+      "area": "Feed/viewer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-042",
+      "area": "Feed/viewer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-043",
+      "area": "Feed/viewer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-044",
+      "area": "Feed/viewer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-045",
+      "area": "Feed/viewer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-046",
+      "area": "Feed/viewer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-047",
+      "area": "Feed/viewer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-048",
+      "area": "Feed/viewer",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-049",
+      "area": "Interactions and moderation",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-050",
+      "area": "Interactions and moderation",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-051",
+      "area": "Interactions and moderation",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-052",
+      "area": "Interactions and moderation",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-053",
+      "area": "Interactions and moderation",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-054",
+      "area": "Interactions and moderation",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-055",
+      "area": "Interactions and moderation",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-056",
+      "area": "Interactions and moderation",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-057",
+      "area": "Interactions and moderation",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-058",
+      "area": "Interactions and moderation",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-059",
+      "area": "Admin",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-060",
+      "area": "Admin",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-061",
+      "area": "Admin",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-062",
+      "area": "Admin",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-063",
+      "area": "Admin",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-064",
+      "area": "Admin",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-065",
+      "area": "Admin",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-066",
+      "area": "Admin",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-067",
+      "area": "Performance/Release",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-068",
+      "area": "Performance/Release",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-069",
+      "area": "Performance/Release",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-070",
+      "area": "Performance/Release",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-071",
+      "area": "Performance/Release",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-072",
+      "area": "Performance/Release",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-073",
+      "area": "Performance/Release",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "M7-AT-074",
+      "area": "Performance/Release",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    }
+  ],
+  "decisions": [
+    {
+      "id": "D01",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D02",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D03",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D04",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D05",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D06",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D07",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D08",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D09",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D10",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D11",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D12",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D13",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D14",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D15",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D16",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D17",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D18",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D19",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D20",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D21",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D22",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D23",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D24",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D25",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    },
+    {
+      "id": "D26",
+      "status": "OPEN",
+      "approver": "",
+      "approved_at": "",
+      "decision_reference": ""
+    }
+  ],
+  "external": [
+    {
+      "id": "android_physical_device",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "ios_physical_device",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "hostinger_private_storage",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "retention_and_physical_purge",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "m3_to_m6_full_regression",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "approved_orbit_ui_accessibility",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "encryption_and_privacy_review",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    },
+    {
+      "id": "release_owner_approval",
+      "status": "NOT_RUN",
+      "environment": "",
+      "tester": "",
+      "tested_at": "",
+      "evidence_url": "",
+      "notes": ""
+    }
+  ]
+}
