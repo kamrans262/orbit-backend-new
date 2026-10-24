@@ -35,8 +35,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/circles', [CircleController::class, 'create'])->middleware('throttle:10,1');
         Route::get('/circles/archived', [CircleController::class, 'archived']);
         Route::get('/circles/invites/incoming', [CircleController::class, 'incoming']);
-        Route::post('/circles/invites/code/preview', [CircleController::class, 'previewCode'])->middleware('throttle:8,1');
-        Route::post('/circles/invites/code/redeem', [CircleController::class, 'redeemCode'])->middleware('throttle:6,1');
+        Route::post('/circles/invites/code/preview', [CircleController::class, 'previewCode'])->middleware('throttle:orbit-circle-code-preview');
+        Route::post('/circles/invites/code/redeem', [CircleController::class, 'redeemCode'])->middleware('throttle:orbit-circle-code-redeem');
         Route::post('/circles/invites/{invite}/accept', [CircleController::class, 'accept'])->whereUuid('invite')->middleware('throttle:20,1');
         Route::post('/circles/invites/{invite}/decline', [CircleController::class, 'decline'])->whereUuid('invite')->middleware('throttle:20,1');
         Route::get('/circles/{circle}', [CircleController::class, 'detail'])->whereUuid('circle');
