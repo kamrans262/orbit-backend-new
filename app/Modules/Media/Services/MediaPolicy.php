@@ -41,7 +41,7 @@ final class MediaPolicy
             ->where(fn($q)=>$q->whereNull('expires_at')->orWhere('expires_at','>',now()))
             ->get();
         foreach($grants as $g) {
-            if($media->purpose==='moment' && in_array($g->audience_kind,['accepted_friends','selected_friends'],true)) {
+            if($published!==null && in_array($g->audience_kind,['accepted_friends','selected_friends'],true)) {
                 $raw=DB::table('orbit_user_preferences')->where('user_id',$media->owner_user_id)->value('privacy');
                 $privacy=is_string($raw)?json_decode($raw,true):null;
                 if(!is_array($privacy) || ($privacy['moment_default_audience']??'Nobody')!=='Selected People')continue;

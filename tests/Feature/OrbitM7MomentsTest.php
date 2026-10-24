@@ -2,6 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\AdminRole;
+use App\Models\AdminUser;
+use App\Modules\Config\Services\Totp;
+use App\Modules\Moments\Services\MomentLifecycleWorker;
 use App\Models\OrbitDevice;
 use App\Models\OrbitUser;
 use App\Modules\Identity\Services\TokenService;
@@ -114,4 +118,105 @@ final class OrbitM7MomentsTest extends TestCase
             ])->assertStatus(422);
         $this->assertDatabaseCount('moments',0);
     }
+    public function test_m7_reads_expire_at_seven_days_from_publication_not_upload():void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $media=$this->readyPrivateMedia($owner,$device);
+        $res=$this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments',[
+                'client_id'=>(string)Str::uuid(),'media_id'=>$media,
+                'audience_kind'=>'only_me','target_ids'=>[],
+            ])->assertCreated();
+        $id=$res->json('data.moment_id');
+        $this->travel(6)->days();
+        $this->withToken($token)->getJson('/api/v1/moments/'.$id)->assertOk();
+        $this->travel(2)->days();
+        $this->withToken($token)->getJson('/api/v1/moments/'.$id)->assertNotFound();
+        $this->assertSame(1,app(MomentLifecycleWorker::class)->run()['expired']);
+        $this->assertDatabaseHas('moments',['id'=>$id,'state'=>'expired']);
+        $this->travel(23)->days();
+        $this->assertSame(1,app(MomentLifecycleWorker::class)->run()['queued_purges']);
+        $this->assertDatabaseHas('media_delete_jobs',['media_id'=>$media,'reason'=>'moment_retention']);
+    }
+
+    public function test_comment_replay_and_report_never_expose_plaintext():void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $media=$this->readyPrivateMedia($owner,$device);
+        $id=$this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments',[
+                'client_id'=>(string)Str::uuid(),'media_id'=>$media,
+                'audience_kind'=>'only_me','target_ids'=>[],
+            ])->assertCreated()->json('data.moment_id');
+        $key=(string)Str::uuid();
+        $payload=['body_ciphertext'=>str_repeat('C',80),'key_version'=>'v1'];
+        $first=$this->withToken($token)->withHeader('Idempotency-Key',$key)
+            ->postJson('/api/v1/moments/'.$id.'/comments',$payload)->assertCreated();
+        $cid=$first->json('data.comment_id');
+        $this->withToken($token)->withHeader('Idempotency-Key',$key)
+            ->postJson('/api/v1/moments/'.$id.'/comments',$payload)
+            ->assertOk()->assertJsonPath('data.comment_id',$cid);
+        $this->assertDatabaseCount('moment_comments',1);
+        $this->withToken($token)->getJson('/api/v1/moments/'.$id.'/comments')
+            ->assertOk()->assertJsonCount(1,'data.items');
+        $this->withToken($token)->postJson('/api/v1/moments/'.$id.'/reports',[
+            'reason'=>'privacy','evidence_consent'=>false,
+        ])->assertCreated();
+        $this->withToken($token)->postJson('/api/v1/moments/'.$id.'/reports',[
+            'reason'=>'privacy','evidence_consent'=>false,
+            'consent_evidence_ciphertext'=>str_repeat('X',64),
+        ])->assertUnprocessable();
+    }
+
+    public function test_global_nobody_setting_blocks_friend_publication_even_with_grants():void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $media=$this->readyPrivateMedia($owner,$device);
+        [$friend,$friendDevice,$friendToken]=$this->principal();
+        [$lo,$hi]=app(\\App\\Modules\\Social\\Services\\SocialGraphService::class)->canonical($owner->id,$friend->id);
+        DB::table('friendships')->insert(['user_low_id'=>$lo,'user_high_id'=>$hi,'created_at'=>now()]);
+        $grant=(string)Str::uuid7();
+        DB::table('media_audience_grants')->insert([
+            'id'=>$grant,'media_id'=>$media,'issuer_user_id'=>$owner->id,'recipient_user_id'=>$friend->id,
+            'audience_kind'=>'selected_friends','policy_version'=>2,'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        foreach(['original','thumbnail'] as $v)DB::table('media_device_key_envelopes')->insert([
+            'id'=>(string)Str::uuid7(),'media_id'=>$media,'grant_id'=>$grant,
+            'recipient_device_id'=>$friendDevice->id,'variant'=>$v,'key_version'=>'v1',
+            'algorithm'=>'x25519-hkdfsha256-aes256gcm-v1',
+            'wrapped_key_ciphertext'=>str_repeat('W',80),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $request=['client_id'=>(string)Str::uuid(),'media_id'=>$media,
+            'audience_kind'=>'selected_friends','target_ids'=>[$friend->id]];
+        $key=(string)Str::uuid();
+        $this->withToken($token)->withHeader('Idempotency-Key',$key)
+            ->postJson('/api/v1/moments',$request)->assertForbidden();
+        $this->withToken($token)->patchJson('/api/v1/me/preferences/privacy',[
+            'moment_default_audience'=>'Selected People',
+        ])->assertOk();
+        $id=$this->withToken($token)->withHeader('Idempotency-Key',$key)
+            ->postJson('/api/v1/moments',$request)->assertCreated()->json('data.moment_id');
+        $this->withToken($friendToken)->getJson('/api/v1/moments/'.$id)->assertOk();
+        $this->withToken($token)->patchJson('/api/v1/me/preferences/privacy',[
+            'moment_default_audience'=>'Nobody',
+        ])->assertOk();
+        $this->withToken($friendToken)->getJson('/api/v1/moments/'.$id)->assertNotFound();
+    }
+
+    public function test_admin_reuses_layout_and_is_permission_gated():void
+    {
+        $role=AdminRole::create(['name'=>'M7 auditor','permissions'=>['moments.read']]);
+        $admin=AdminUser::create([
+            'name'=>'M7 Auditor','email'=>'m7-auditor@example.test','status'=>'active',
+            'password'=>'Secure-Password!123','totp_secret'=>(new Totp())->generateSecret(),
+        ]);
+        $admin->roles()->attach($role->id);
+        $this->be($admin,'admin');
+        $this->get('/admin/moments')->assertOk()->assertSee('Moment Management')
+            ->assertDontSee('wrapped_key_ciphertext')->assertDontSee('body_ciphertext');
+        $role->update(['permissions'=>['users.read']]);
+        $this->get('/admin/moments')->assertForbidden();
+    }
+
 }
