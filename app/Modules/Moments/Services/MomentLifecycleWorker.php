@@ -69,7 +69,7 @@ final class MomentLifecycleWorker
         $orphanGrants=DB::table('media_audience_grants as g')
             ->join('media_objects as media','media.id','=','g.media_id')
             ->where('media.purpose','moment')
-            ->where('media.created_at','<',now()->subHours(2))
+            ->where('g.created_at','<',now()->subHours(2))
             ->where('g.audience_kind','!=','only_me')
             ->whereNull('g.revoked_at')
             ->whereNotExists(function($q){
