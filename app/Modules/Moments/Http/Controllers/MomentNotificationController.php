@@ -45,7 +45,7 @@ final class MomentNotificationController extends Controller
         if($d['muted']){
             DB::table('moment_notification_muted_circles')->updateOrInsert(
                 ['circle_id'=>$circle,'user_id'=>$user],
-                ['updated_at'=>now()]);
+                ['created_at'=>now(),'updated_at'=>now()]);
             DB::table('moment_notification_inbox')->where('recipient_user_id',$user)
                 ->where('context_id','circle:'.$circle)->delete();
         }else{
