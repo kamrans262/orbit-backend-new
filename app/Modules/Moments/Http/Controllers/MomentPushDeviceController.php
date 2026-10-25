@@ -31,6 +31,30 @@ final class MomentPushDeviceController extends Controller
             && ($pref['moments_notifications_enabled']??false)===true;
     }
 
+    public function bootstrap(Request $request):JsonResponse
+    {
+        [$user]=$this->device($request);
+        $fcm=config('orbit_moments.fcm',[]);
+        $ready=config('orbit_moments.fcm.enabled')===true
+            && $this->optedIn($user)
+            && is_array($fcm)
+            && collect(['project_id','api_key','sender_id',
+                'android_app_id','ios_app_id','ios_bundle_id'])
+                ->every(fn($k)=>is_string($fcm[$k]??null)
+                    && trim($fcm[$k])!=='');
+        return response()->json(['data'=>$ready?[
+            'enabled'=>true,
+            'options'=>[
+                'project_id'=>$fcm['project_id'],
+                'api_key'=>$fcm['api_key'],
+                'sender_id'=>$fcm['sender_id'],
+                'android_app_id'=>$fcm['android_app_id'],
+                'ios_app_id'=>$fcm['ios_app_id'],
+                'ios_bundle_id'=>$fcm['ios_bundle_id'],
+            ],
+        ]:['enabled'=>false]])->header('Cache-Control','private, no-store');
+    }
+
     public function register(Request $request):JsonResponse
     {
         [$user,$device]=$this->device($request);
