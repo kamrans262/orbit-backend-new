@@ -1,0 +1,28 @@
+name: Orbit M6 locked AWS SDK dependency
+on:
+  push:
+    branches: [feature/m6-media-backend-admin]
+    paths: [docs/M6_DEPENDENCY_LOCK_REQUEST.md]
+permissions:
+  contents: write
+jobs:
+  lock-r2-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, fileinfo, pdo_mysql, openssl
+          tools: composer:v2
+      - name: Resolve vetted AWS SDK and update composer.lock on this branch
+        run: composer require 'aws/aws-sdk-php:^3.0' --no-interaction --no-progress --no-scripts
+      - name: Commit only dependency manifest and lock, without creating a branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add composer.json composer.lock
+          if ! git diff --cached --quiet; then
+            git commit -m "M6: lock supported AWS PHP SDK for R2 multipart transport"
+            git push origin HEAD:feature/m6-media-backend-admin
+          fi

@@ -52,3 +52,15 @@ Artisan::command('orbit:circles:retention-purge-due', function () {
 
 Schedule::command('orbit:circles:retention-purge-due')->dailyAt('03:15')
     ->withoutOverlapping();
+
+
+/**
+ * M6 private media worker. Runs locally without Firebase.
+ * Retention purges remove ciphertext objects only after verified policy deadlines.
+ */
+Artisan::command('orbit:media:process', function () {
+    $result = app(\App\Modules\Media\Services\MediaLifecycleWorker::class)->run(15);
+    $this->info('M6 media lifecycle: '.json_encode($result));
+})->purpose('Verify ciphertext uploads, expire sessions and safely purge deleted/expired media');
+
+Schedule::command('orbit:media:process')->everyFiveMinutes()->withoutOverlapping();
