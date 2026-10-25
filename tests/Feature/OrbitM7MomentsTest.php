@@ -172,6 +172,22 @@ final class OrbitM7MomentsTest extends TestCase
             ->assertOk()->assertJsonPath('data.enabled',true);
     }
 
+    public function test_account_erasure_purges_encrypted_fcm_tokens_before_identity_deletion():void
+    {
+        [$owner,$device]=$this->principal();
+        DB::table('moment_push_devices')->insert([
+            'device_id'=>$device->id,'user_id'=>$owner->id,
+            'token_ciphertext'=>\Illuminate\\Support\\Facades\\Crypt::encryptString(
+                str_repeat('t',50)),
+            'token_digest'=>hash('sha256',str_repeat('t',50)),
+            'platform'=>'android','created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->assertDatabaseCount('moment_push_devices',1);
+        app(\App\\Modules\\Moments\\Services\\MomentErasureService::class)
+            ->eraseUser($owner->id);
+        $this->assertDatabaseCount('moment_push_devices',0);
+    }
+
     public function test_flag_closed_denies_moments_even_with_valid_token():void
     {
         [$user,$device,$token]=$this->principal();
