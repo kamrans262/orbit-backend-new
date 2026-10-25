@@ -28,6 +28,8 @@ final class M3ErasureProcessor
         'moments','moment_recipients','moment_reactions','moment_comments',
         'moment_views','moment_reports','moment_idempotency',
         'moment_people_tags',
+        'moment_push_devices','moment_notification_inbox',
+        'moment_notification_muted_circles',
     ];
 
     public function preview(string $requestId): array
