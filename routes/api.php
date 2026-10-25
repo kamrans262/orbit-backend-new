@@ -14,6 +14,7 @@ use App\Modules\Media\Http\Controllers\MediaController;
 use App\Modules\Moments\Http\Controllers\MomentController;
 use App\Modules\Moments\Http\Controllers\MomentInteractionController;
 use App\Modules\Moments\Http\Controllers\MomentLifecycleController;
+use App\Modules\Moments\Http\Controllers\MomentNotificationController;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -81,6 +82,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/moments', [MomentController::class,'feed'])->middleware('throttle:45,1');
         Route::get('/moments/rail', [MomentController::class,'rail'])->middleware('throttle:45,1');
         Route::get('/moments/revisions', [MomentController::class,'revisions'])->middleware('throttle:40,1');
+        Route::get('/me/moments/notifications', [MomentNotificationController::class,'index'])->middleware('throttle:20,1');
+        Route::post('/me/moments/notifications/{notice}/read', [MomentNotificationController::class,'markRead'])->whereUuid('notice')->middleware('throttle:30,1');
         Route::get('/circles/{circle}/moments', [MomentController::class,'circleFeed'])->whereUuid('circle')->middleware('throttle:45,1');
         Route::get('/users/{user}/moments', [MomentController::class,'profileFeed'])->whereUuid('user')->middleware('throttle:45,1');
         Route::get('/moments/receipt/{client}', [MomentController::class,'receipt'])
