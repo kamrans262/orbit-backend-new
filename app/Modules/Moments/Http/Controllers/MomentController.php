@@ -267,6 +267,29 @@ final class MomentController extends Controller
         $context=$p->requireContext($m,$viewer,$r->query('context_id'));
         return $this->reply($this->brief($m,$context,$viewer));
     }
+    /**
+     * Small signed-in read-cache lease. An offline preview is never a new
+     * authorization grant: expires no later than the server's viewing TTL.
+     * A fresh HTTPS authorization is required to renew it.
+     */
+    public function cacheLease(Request $r,string $moment,MomentPolicy $p):JsonResponse
+    {
+        [$viewer]=$this->actor($r);$m=$this->moment($moment);
+        $context=$p->requireContext($m,$viewer,$r->query('context_id'));
+        $issued=now()->utc();
+        $end=$issued->copy()->addMinutes(5);
+        $viewEnd=\\Illuminate\\Support\\Carbon::parse($m->view_expires_at)->utc();
+        if($end->gt($viewEnd))$end=$viewEnd;
+        abort_if($end->lte($issued),404,'Moment unavailable.');
+        return $this->reply([
+            'moment_id'=>$m->id,'context_id'=>$context,
+            'audience_revision'=>(int)$m->audience_revision,
+            'issued_at'=>$issued->toIso8601String(),
+            'expires_at'=>$end->toIso8601String(),
+            'view_expires_at'=>$viewEnd->toIso8601String(),
+        ]);
+    }
+
     public function manifest(Request $r,string $moment,MomentPolicy $p):JsonResponse
     {
         [$viewer]=$this->actor($r);$m=$this->moment($moment);
