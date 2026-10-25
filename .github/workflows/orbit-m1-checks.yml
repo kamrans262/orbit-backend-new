@@ -1,9 +1,9 @@
 name: Orbit Laravel validation (M1 + M2 + M3 + Admin UI)
 on:
   pull_request:
-    branches: [main, feature/m1-foundation-config, feature/m2-auth-identity, feature/m3-profiles-settings, feature/m3-admin-console, feature/admin-ui-layout-polish, feature/m3-completion-erasure, feature/device-recovery, feature/m5-circles-backend-admin, feature/m6-media-backend-admin]
+    branches: [main, feature/m1-foundation-config, feature/m2-auth-identity, feature/m3-profiles-settings, feature/m3-admin-console, feature/admin-ui-layout-polish, feature/m3-completion-erasure, feature/device-recovery, feature/m5-circles-backend-admin, feature/m6-media-backend-admin, feature/m7-moments-backend-admin]
   push:
-    branches: [feature/m1-foundation-config, feature/m2-auth-identity, feature/m3-profiles-settings, feature/m3-admin-console, feature/admin-ui-layout-polish, feature/device-recovery, release/m4-hostinger-preserve-m3-2026-10-21, feature/m5-circles-backend-admin, feature/m6-media-backend-admin]
+    branches: [feature/m1-foundation-config, feature/m2-auth-identity, feature/m3-profiles-settings, feature/m3-admin-console, feature/admin-ui-layout-polish, feature/device-recovery, release/m4-hostinger-preserve-m3-2026-10-21, feature/m5-circles-backend-admin, feature/m6-media-backend-admin, feature/m7-moments-backend-admin]
 jobs:
   php-tests:
     runs-on: ubuntu-latest
@@ -62,3 +62,12 @@ jobs:
             exit 1
           fi
 
+
+      - name: M7 Stage 4 acceptance evidence is complete and release remains fail-closed
+        run: |
+          python3 -m py_compile scripts/m7_release_gate.py
+          python3 scripts/m7_release_gate.py docs/M7_STAGE4_ACCEPTANCE_EVIDENCE.json --lint
+          if python3 scripts/m7_release_gate.py docs/M7_STAGE4_ACCEPTANCE_EVIDENCE.json --release; then
+            echo "ERROR: M7 blocked acceptance was erroneously approved"
+            exit 1
+          fi

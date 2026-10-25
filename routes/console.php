@@ -64,3 +64,28 @@ Artisan::command('orbit:media:process', function () {
 })->purpose('Verify ciphertext uploads, expire sessions and safely purge deleted/expired media');
 
 Schedule::command('orbit:media:process')->everyFiveMinutes()->withoutOverlapping();
+
+/** M7: local-only expiry + retention staging; no Firebase or push delivery. */
+Artisan::command('orbit:moments:process', function () {
+    $result=app(\App\Modules\Moments\Services\MomentLifecycleWorker::class)->run(30);
+    $this->info('M7 Moment lifecycle: '.json_encode($result));
+})->purpose('Expire private Moment views and queue legally unheld encrypted retention purges');
+Schedule::command('orbit:moments:process')->hourly()->withoutOverlapping();
+
+
+/**
+ * M7 in-app HTTPS notification projection. Never transmits a push or marks a
+ * mobile device delivered. Scope is reevaluated when its owner next polls.
+ */
+Artisan::command('orbit:moments:notifications', function () {
+    $result=app(\App\Modules\Moments\Services\MomentNotificationOutboxWorker::class)->run(30);
+    $this->info('M7 private notification inbox: '.json_encode($result));
+})->purpose('Project opted-in, authorized Moment events into private HTTPS notices');
+Schedule::command('orbit:moments:notifications')->everyFiveMinutes()->withoutOverlapping();
+
+/** Prepared FCM sender; OFF by default. No Firebase call before client setup. */
+Artisan::command('orbit:moments:push-send', function () {
+    $stats=app(\App\Modules\Moments\Services\MomentPushDeliveryWorker::class)->run(30);
+    $this->info('M7 FCM dispatch: '.json_encode($stats));
+})->purpose('Deliver generic opted-in Moment notices only when FCM is configured');
+Schedule::command('orbit:moments:push-send')->everyFiveMinutes()->withoutOverlapping();

@@ -11,6 +11,11 @@ use App\Modules\Social\Http\Controllers\SocialInviteController;
 use App\Modules\Circle\Http\Controllers\CircleController;
 use App\Modules\Circle\Http\Middleware\EnsureCircleM5Enabled;
 use App\Modules\Media\Http\Controllers\MediaController;
+use App\Modules\Moments\Http\Controllers\MomentController;
+use App\Modules\Moments\Http\Controllers\MomentInteractionController;
+use App\Modules\Moments\Http\Controllers\MomentLifecycleController;
+use App\Modules\Moments\Http\Controllers\MomentNotificationController;
+use App\Modules\Moments\Http\Controllers\MomentPushDeviceController;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -71,6 +76,41 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/media/{media}/grants', [MediaController::class,'grant'])->whereUuid('media')->middleware('throttle:20,1');
         Route::delete('/media/{media}/grants/{grant}', [MediaController::class,'revoke'])->whereUuid('media')->whereUuid('grant')->middleware('throttle:20,1');
         Route::delete('/media/{media}', [MediaController::class,'delete'])->whereUuid('media')->middleware('throttle:10,1');
+
+        // M7 private Moments: every route inherits verified Orbit device auth.
+        // Fixed paths precede dynamic UUID routes. No public Moment discovery.
+        Route::post('/moments', [MomentController::class,'publish'])->middleware('throttle:10,1');
+        Route::get('/moments', [MomentController::class,'feed'])->middleware('throttle:45,1');
+        Route::get('/moments/rail', [MomentController::class,'rail'])->middleware('throttle:45,1');
+        Route::get('/moments/revisions', [MomentController::class,'revisions'])->middleware('throttle:40,1');
+        Route::get('/moments/report-evidence-policy', [MomentInteractionController::class,'evidencePolicy'])->middleware('throttle:20,1');
+        Route::get('/me/moments/notifications', [MomentNotificationController::class,'index'])->middleware('throttle:20,1');
+        Route::get('/me/moments/notifications/muted-circles', [MomentNotificationController::class,'mutedCircles'])->middleware('throttle:20,1');
+        Route::put('/me/moments/notifications/mute-circle/{circle}', [MomentNotificationController::class,'muteCircle'])->whereUuid('circle')->middleware('throttle:15,1');
+        Route::get('/me/moments/push-bootstrap', [MomentPushDeviceController::class,'bootstrap'])->middleware('throttle:10,1');
+        Route::post('/me/moments/push-token', [MomentPushDeviceController::class,'register'])->middleware('throttle:8,1');
+        Route::delete('/me/moments/push-token', [MomentPushDeviceController::class,'unregister'])->middleware('throttle:8,1');
+        Route::post('/me/moments/notifications/{notice}/read', [MomentNotificationController::class,'markRead'])->whereUuid('notice')->middleware('throttle:30,1');
+        Route::get('/circles/{circle}/moments', [MomentController::class,'circleFeed'])->whereUuid('circle')->middleware('throttle:45,1');
+        Route::get('/users/{user}/moments', [MomentController::class,'profileFeed'])->whereUuid('user')->middleware('throttle:45,1');
+        Route::get('/moments/receipt/{client}', [MomentController::class,'receipt'])
+            ->whereUuid('client')->middleware('throttle:20,1');
+        Route::get('/moments/{moment}', [MomentController::class,'detail'])->whereUuid('moment');
+        Route::get('/moments/{moment}/cache-lease', [MomentController::class,'cacheLease'])->whereUuid('moment')->middleware('throttle:40,1');
+        Route::get('/moments/{moment}/media-manifest', [MomentController::class,'manifest'])->whereUuid('moment');
+        Route::patch('/moments/{moment}', [MomentController::class,'edit'])->whereUuid('moment')->middleware('throttle:15,1');
+        Route::delete('/moments/{moment}', [MomentLifecycleController::class,'delete'])->whereUuid('moment')->middleware('throttle:12,1');
+        Route::post('/moments/{moment}/audience', [MomentLifecycleController::class,'audience'])->whereUuid('moment')->middleware('throttle:12,1');
+        Route::get('/moments/{moment}/viewers', [MomentInteractionController::class,'viewers'])->whereUuid('moment');
+        Route::post('/moments/{moment}/views', [MomentInteractionController::class,'view'])->whereUuid('moment')->middleware('throttle:90,1');
+        Route::put('/moments/{moment}/reaction', [MomentInteractionController::class,'react'])->whereUuid('moment')->middleware('throttle:40,1');
+        Route::delete('/moments/{moment}/reaction', [MomentInteractionController::class,'unreact'])->whereUuid('moment')->middleware('throttle:40,1');
+        Route::get('/moments/{moment}/comments', [MomentInteractionController::class,'comments'])->whereUuid('moment');
+        Route::post('/moments/{moment}/comments', [MomentInteractionController::class,'comment'])->whereUuid('moment')->middleware('throttle:30,1');
+        Route::delete('/moments/{moment}/comments/{comment}', [MomentInteractionController::class,'deleteComment'])->whereUuid('moment')->whereUuid('comment')->middleware('throttle:20,1');
+        Route::post('/moments/{moment}/reports', [MomentInteractionController::class,'report'])->whereUuid('moment')->middleware('throttle:8,1');
+        Route::post('/moments/{moment}/comments/{comment}/reports', [MomentInteractionController::class,'report'])
+            ->whereUuid('moment')->whereUuid('comment')->middleware('throttle:8,1');
         // M4 social graph: trusted-device auth, per-IP throttles, per-account quotas,
         // server-side block checks and no-store responses.
         Route::get('/people/search', [SocialGraphController::class, 'search'])->middleware('throttle:30,1');

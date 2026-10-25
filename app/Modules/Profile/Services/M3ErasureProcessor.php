@@ -25,6 +25,11 @@ final class M3ErasureProcessor
         'circles', 'circle_members', 'circle_invites', 'circle_permissions',
         'circle_primary_selections',
         'media_objects','media_upload_sessions','media_audience_grants','media_references',
+        'moments','moment_recipients','moment_reactions','moment_comments',
+        'moment_views','moment_reports','moment_idempotency',
+        'moment_people_tags',
+        'moment_push_devices','moment_notification_inbox',
+        'moment_notification_muted_circles',
     ];
 
     public function preview(string $requestId): array
@@ -117,9 +122,17 @@ final class M3ErasureProcessor
                         ->where('legal_hold_until','>',now())->exists()) {
                     throw new DomainException('M6 media requires verified ciphertext purge before account erasure.');
                 }
-                // Every owned blob is confirmed deleted. Remove metadata and
-                // envelope grants after storage cleanup, inside the erasure txn.
+                // Every owned blob is confirmed deleted. Remove M7 references,
+                // comments, receipts and reports while the account still exists.
+                $m7Summary=app(\App\Modules\Moments\Services\MomentErasureService::class)
+                    ->eraseUser($user->id);
+                // M6 metadata may be removed only after M7's FK references are gone.
                 $owned->delete();
+            }
+
+            if (!isset($m7Summary)) {
+                $m7Summary=app(\App\Modules\Moments\Services\MomentErasureService::class)
+                    ->eraseUser($user->id);
             }
 
             // Released holds can be removed, since they are user-linked and
@@ -132,6 +145,8 @@ final class M3ErasureProcessor
                 $user->id, $operator, 'M3 identity/profile erasure ticket '.$ticket,
                 null, $requestId,
             );
+
+            if(array_sum($m7Summary)>0) $summary['moments_m7']=$m7Summary;
 
             // The request record is removed by FK cascade. Receipt contains
             // a one-way hashed reference, scope and counts, never raw user PII.

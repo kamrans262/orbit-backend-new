@@ -35,10 +35,13 @@
   if (config('orbit_media.enabled') === true && $navUser?->canPerform('media.read')) {
     $accountChildren[] = ['title'=>'Encrypted Media Operations','route'=>'orbit.admin.media.index','patterns'=>['orbit.admin.media.*']];
   }
+  if (config('orbit_moments.enabled') === true && $navUser?->canPerform('moments.read')) {
+    $accountChildren[] = ['title'=>'Moment Management','route'=>'orbit.admin.moments.index','patterns'=>['orbit.admin.moments.*']];
+  }
   if ($accountChildren !== []) {
     $navGroups[] = [
       'title'=>'Accounts', 'icon'=>'users',
-      'patterns'=>['orbit.admin.users.*','orbit.admin.deletions.*','orbit.admin.settings.*','orbit.admin.social.*','orbit.admin.circles.*','orbit.admin.media.*'],
+      'patterns'=>['orbit.admin.users.*','orbit.admin.deletions.*','orbit.admin.settings.*','orbit.admin.social.*','orbit.admin.circles.*','orbit.admin.media.*','orbit.admin.moments.*'],
       'children'=>$accountChildren,
     ];
   }
