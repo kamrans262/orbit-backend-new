@@ -6,6 +6,7 @@ use App\Models\AdminRole;
 use App\Models\AdminUser;
 use App\Modules\Config\Services\Totp;
 use App\Modules\Moments\Services\MomentLifecycleWorker;
+use App\Modules\Moments\Services\MomentNotificationOutboxWorker;
 use App\Models\OrbitDevice;
 use App\Models\OrbitUser;
 use App\Modules\Identity\Services\TokenService;
@@ -139,6 +140,30 @@ final class OrbitM7MomentsTest extends TestCase
         $this->withToken($token)->getJson('/api/v1/moments/'.$id)
             ->assertOk()->assertJsonPath('data.audience_kind','only_me')
             ->assertJsonPath('data.publish_version',2);
+    }
+
+    public function test_private_moment_notices_are_opt_in_and_do_not_consume_transport_outbox():void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $media=$this->readyPrivateMedia($owner,$device);
+        $moment=$this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments',[
+                'client_id'=>(string)Str::uuid(),'media_id'=>$media,
+                'audience_kind'=>'only_me','target_ids'=>[],
+            ])->assertCreated()->json('data.moment_id');
+        $this->withToken($token)->getJson('/api/v1/me/moments/notifications')
+            ->assertOk()->assertJsonPath('data.items',[]);
+        $stats=app(MomentNotificationOutboxWorker::class)->run(10);
+        $this->assertSame(1,$stats['processed']);
+        $this->assertDatabaseCount('moment_notification_inbox',0);
+        $this->assertDatabaseCount('moment_notification_projected_events',1);
+        $this->assertDatabaseHas('moment_events_outbox',[
+            'moment_id'=>$moment,'status'=>'pending',
+        ]);
+        $this->assertSame(0,app(MomentNotificationOutboxWorker::class)->run(10)['processed']);
+        $this->withToken($token)->postJson(
+            '/api/v1/me/moments/notifications/'.(string)Str::uuid().'/read')
+            ->assertNotFound();
     }
 
     public function test_unauthorized_grants_never_create_a_moment():void
