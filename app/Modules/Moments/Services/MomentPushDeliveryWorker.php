@@ -45,6 +45,15 @@ final class MomentPushDeliveryWorker
                 || ($record->next_attempt_at && now()->lt($record->next_attempt_at)))){
                 $stats['skipped']++;continue;
             }
+            // A trusted device without an active authenticated session
+            // must not continue to receive another account's notifications.
+            if(!DB::table('orbit_sessions')
+                ->where('user_id',$notice->recipient_user_id)
+                ->where('device_id',$notice->device_id)
+                ->whereNull('revoked_at')->where('expires_at','>',now())
+                ->exists()){
+                $stats['skipped']++;continue;
+            }
             $raw=DB::table('orbit_user_preferences')->where('user_id',$notice->recipient_user_id)
                 ->value('notifications');
             $p=is_string($raw)?json_decode($raw,true):null;
