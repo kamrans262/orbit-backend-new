@@ -21,6 +21,8 @@ final class AdminMomentController extends Controller
             'created_24h'=>DB::table('moments')->where('created_at','>=',now()->subDay())->count(),
             'pending_reports'=>DB::table('moment_reports')->where('status','pending')->count(),
             'queued_cleanup'=>DB::table('moment_lifecycle_jobs')->where('state','pending')->where('job_type','purge')->count(),
+            'lifecycle_failures'=>DB::table('moment_lifecycle_jobs')->where('attempts','>',0)->where('state','pending')->count(),
+            'undelivered_transport_events'=>DB::table('moment_events_outbox')->where('status','pending')->count(),
         ];
         $moment=null;
         if(!empty($d['moment_id']))$moment=DB::table('moments')->where('id',$d['moment_id'])
@@ -28,7 +30,13 @@ final class AdminMomentController extends Controller
         // No reporter identity, plaintext, encrypted bytes, key, filename, viewer or audience roster.
         $reports=DB::table('moment_reports')->where('status','pending')
             ->orderBy('created_at')->limit(25)->get(['id','reason','status','created_at']);
-        return response()->view('orbit-admin.moments',compact('metrics','moment','reports'))
+        // Metadata only: debugging without identities or E2EE ciphertext.
+        $failures=DB::table('moment_lifecycle_jobs')
+            ->where('state','pending')->where('attempts','>',0)
+            ->orderByDesc('attempts')->limit(10)
+            ->get(['job_type','attempts','last_error_code','updated_at']);
+        return response()->view('orbit-admin.moments',
+            compact('metrics','moment','reports','failures'))
             ->header('Cache-Control','private, no-store');
     }
 
