@@ -23,7 +23,7 @@ return new class extends Migration {
             $t->string('state',16)->default('pending');
             $t->unsignedInteger('attempts')->default(0);
             $t->timestamp('next_attempt_at')->nullable();
-            $t->timestamp('delivered_at')->nullable();
+            $t->timestamp('accepted_at')->nullable();
             $t->string('last_error_code',60)->nullable();
             $t->timestamps();
             $t->primary(['notice_id','device_id']);
