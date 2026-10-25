@@ -137,9 +137,13 @@ final class OrbitM7MomentsTest extends TestCase
             $payload)->assertOk()->assertJsonPath('data.audience_revision',2);
         $this->withToken($token)->postJson('/api/v1/moments/'.$id.'/audience',
             $payload)->assertOk()->assertJsonPath('data.replayed',true);
+        $this->withToken($token)->patchJson('/api/v1/moments/'.$id,[
+            'revision'=>2,'tagged_user_ids'=>[],
+        ])->assertOk()->assertJsonPath('data.publish_version',3);
         $this->withToken($token)->getJson('/api/v1/moments/'.$id)
             ->assertOk()->assertJsonPath('data.audience_kind','only_me')
-            ->assertJsonPath('data.publish_version',2);
+            ->assertJsonPath('data.publish_version',3)
+            ->assertJsonPath('data.caption_ciphertext',str_repeat('C',64));
     }
 
     public function test_private_moment_notices_are_opt_in_and_do_not_consume_transport_outbox():void
