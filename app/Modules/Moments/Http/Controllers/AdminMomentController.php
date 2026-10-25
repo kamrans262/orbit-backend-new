@@ -61,8 +61,8 @@ final class AdminMomentController extends Controller
             $bytes=base64_decode($encoded,true);
         }catch(\Throwable){abort(404,'Volunteered preview unavailable.');}
         abort_unless($bytes!==false && strlen($bytes)>=4 && strlen($bytes)<=40960
-            && str_starts_with($bytes,"\\xFF\\xD8")
-            && str_ends_with($bytes,"\\xFF\\xD9"),404);
+            && str_starts_with($bytes,"\xFF\xD8")
+            && str_ends_with($bytes,"\xFF\xD9"),404);
         DB::table('moment_evidence_access_logs')->insert([
             'id'=>(string)Str::uuid7(),'report_id'=>$report,
             'operator_id'=>$admin->id,'ticket_digest'=>hash('sha256',$d['ticket']),
