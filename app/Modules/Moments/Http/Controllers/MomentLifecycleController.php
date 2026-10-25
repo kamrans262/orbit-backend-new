@@ -65,6 +65,10 @@ final class MomentLifecycleController extends Controller
             $newKeys=array_flip(array_map(fn($p)=>$p['recipient'].'|'.$p['context'].'|'.$p['grant_id'],$pairs));
             $stale=[];
             foreach($old as $row){
+                // Preserve the publisher's original device-bound Only-Me
+                // envelope across edits. Without it, a later audience edit
+                // or owner playback cannot unwrap the existing ciphertext.
+                if($row->viewer_id===$m->creator_id)continue;
                 if(!isset($newKeys[$row->viewer_id.'|'.$row->context_id.'|'.$row->authorizing_grant_id]))
                     $stale[]=$row->authorizing_grant_id;
             }
