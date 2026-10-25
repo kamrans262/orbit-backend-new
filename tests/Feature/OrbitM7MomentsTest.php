@@ -72,6 +72,38 @@ final class OrbitM7MomentsTest extends TestCase
         return $media;
     }
 
+    public function test_moderation_evidence_stays_off_until_approved_and_requires_explicit_consent():void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $media=$this->readyPrivateMedia($owner,$device);
+        $moment=$this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments',[
+                'client_id'=>(string)Str::uuid(),'media_id'=>$media,
+                'audience_kind'=>'only_me','target_ids'=>[],
+            ])->assertCreated()->json('data.moment_id');
+        config()->set('orbit_moments.moderation_evidence_enabled',false);
+        $this->withToken($token)->getJson('/api/v1/moments/report-evidence-policy')
+            ->assertOk()->assertJsonPath('data.voluntary_preview_enabled',false);
+        $data=['reason'=>'spam','evidence_consent'=>true,
+            'evidence_preview_base64'=>base64_encode("\\xFF\\xD8".str_repeat('A',30)."\\xFF\\xD9")];
+        $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments/'.$moment.'/reports',$data)->assertForbidden();
+        $this->assertDatabaseCount('moment_reports',0);
+        config()->set('orbit_moments.moderation_evidence_enabled',true);
+        $this->withToken($token)->getJson('/api/v1/moments/report-evidence-policy')
+            ->assertOk()->assertJsonPath('data.voluntary_preview_enabled',true);
+        $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments/'.$moment.'/reports',array_replace($data,[
+                'evidence_consent'=>false,
+            ]))->assertForbidden();
+        $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments/'.$moment.'/reports',$data)
+            ->assertCreated()->assertJsonPath('data.received',true);
+        $row=DB::table('moment_reports')->first();
+        $this->assertTrue((bool)$row->evidence_consent);
+        $this->assertNotSame($data['evidence_preview_base64'],$row->consent_evidence_ciphertext);
+    }
+
     public function test_future_firebase_transport_is_off_and_cannot_register_tokens():void
     {
         [$user,$device,$token]=$this->principal();
