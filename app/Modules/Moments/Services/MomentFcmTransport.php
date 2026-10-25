@@ -12,8 +12,22 @@ final class MomentFcmTransport
 {
     public function enabled():bool
     {
-        return config('orbit_moments.enabled')===true
-            && config('orbit_moments.fcm.enabled')===true;
+        if(config('orbit_moments.enabled')!==true ||
+            config('orbit_moments.fcm.enabled')!==true)return false;
+        $options=config('orbit_moments.fcm',[]);
+        if(!is_array($options))return false;
+        foreach(['project_id','api_key','sender_id','android_app_id',
+            'ios_app_id','ios_bundle_id'] as $field){
+            if(!is_string($options[$field]??null) ||
+                trim($options[$field])==='')return false;
+        }
+        // Enabling the flag alone cannot prompt Flutter for a Firebase token.
+        // A readable service account outside public_html matching the same
+        // Firebase project, with valid signing material, is required first.
+        try{
+            $credentials=$this->credentials();
+            return openssl_pkey_get_private($credentials['private_key'])!==false;
+        }catch(\Throwable){return false;}
     }
 
     private function credentials():array
