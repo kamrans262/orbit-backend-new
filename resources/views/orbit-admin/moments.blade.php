@@ -15,7 +15,23 @@
  <article class="stat-card"><span class="stat-label">Created last 24 Hours</span><strong>{{ $metrics['created_24h'] }}</strong></article>
  <article class="stat-card"><span class="stat-label">Pending Reports</span><strong>{{ $metrics['pending_reports'] }}</strong></article>
  <article class="stat-card"><span class="stat-label">Pending Retention Jobs</span><strong>{{ $metrics['queued_cleanup'] }}</strong></article>
+ <article class="stat-card"><span class="stat-label">Lifecycle Retry Errors</span><strong>{{ $metrics['lifecycle_failures'] }}</strong></article>
+ <article class="stat-card"><span class="stat-label">Transport Events Awaiting Delivery</span><strong>{{ $metrics['undelivered_transport_events'] }}</strong></article>
 </div>
+<section class="panel" style="margin-top:18px">
+ <div class="panel-head"><div><p class="eyebrow">RETENTION HEALTH / METADATA ONLY</p>
+ <h2>Lifecycle processing errors</h2>
+ <p>Retry counts and machine-readable failure codes only. No content, recipient identity, media filenames or keys.</p></div></div>
+ @forelse($failures as $failure)
+ <div class="admin-kv" role="group" style="margin-bottom:12px" aria-label="Moment processing failure">
+  <div class="kv"><small>Job type</small><strong>{{ $failure->job_type }}</strong></div>
+  <div class="kv"><small>Attempts</small><strong>{{ $failure->attempts }}</strong></div>
+  <div class="kv"><small>Error code</small><strong>{{ $failure->last_error_code ?? 'Not classified' }}</strong></div>
+  <div class="kv"><small>Last attempted UTC</small><strong>{{ $failure->updated_at }}</strong></div>
+ </div>
+ @empty<div class="admin-guidance" role="status">No outstanding lifecycle retry errors.</div>
+ @endforelse
+</section>
 <section class="panel">
  <div class="panel-head"><div><p class="eyebrow">AUTHORIZED TECHNICAL LOOKUP</p><h2>Exact Moment UUID</h2>
  <p>Technical state and UTC deadlines only. No content, recipients, attachments, user identities or access URLs.</p></div></div>
