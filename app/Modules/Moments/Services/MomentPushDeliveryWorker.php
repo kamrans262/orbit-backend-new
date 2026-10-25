@@ -81,7 +81,7 @@ final class MomentPushDeliveryWorker
             DB::table('moment_push_deliveries')->updateOrInsert($where,[
                 'state'=>$state,'attempts'=>$attempt,
                 'next_attempt_at'=>$accepted||$attempt>=8?null:now()->addSeconds($delay),
-                'delivered_at'=>$accepted?now():null,
+                'accepted_at'=>$accepted?now():null,
                 'last_error_code'=>$accepted?null:'fcm_unavailable_or_rejected',
                 'updated_at'=>now(),
             ]);
