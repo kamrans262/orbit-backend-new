@@ -95,6 +95,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/moments/receipt/{client}', [MomentController::class,'receipt'])
             ->whereUuid('client')->middleware('throttle:20,1');
         Route::get('/moments/{moment}', [MomentController::class,'detail'])->whereUuid('moment');
+        Route::get('/moments/{moment}/cache-lease', [MomentController::class,'cacheLease'])->whereUuid('moment')->middleware('throttle:40,1');
         Route::get('/moments/{moment}/media-manifest', [MomentController::class,'manifest'])->whereUuid('moment');
         Route::patch('/moments/{moment}', [MomentController::class,'edit'])->whereUuid('moment')->middleware('throttle:15,1');
         Route::delete('/moments/{moment}', [MomentLifecycleController::class,'delete'])->whereUuid('moment')->middleware('throttle:12,1');
