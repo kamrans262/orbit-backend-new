@@ -76,7 +76,7 @@ final class MomentPushDeviceController extends Controller
                 ['device_id'=>$device],
                 ['user_id'=>$user,'token_ciphertext'=>Crypt::encryptString($d['token']),
                  'token_digest'=>$hash,'platform'=>$d['platform'],
-                 'disabled_at'=>null,'updated_at'=>now()]);
+                 'disabled_at'=>null,'created_at'=>now(),'updated_at'=>now()]);
         });
         // Never echo an FCM token in logs or response.
         return response()->json(['data'=>['registered'=>true]])
