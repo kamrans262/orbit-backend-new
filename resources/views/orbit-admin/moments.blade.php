@@ -60,6 +60,16 @@
  <div class="kv"><small>Reason</small><strong>{{ $report->reason }}</strong></div>
  <div class="kv"><small>Received UTC</small><strong>{{ $report->created_at }}</strong></div>
  </div>
+ @if(config('orbit_moments.moderation_evidence_enabled') && $report->evidence_consent && $report->consent_evidence_ciphertext
+     && auth()->guard('admin')->user()?->canPerform('moments.moderate'))
+ <form class="admin-filters" action="{{ route('orbit.admin.moments.reports.evidence',['report'=>$report->id]) }}"
+   method="post" target="_blank" style="margin-bottom:12px">
+  @csrf
+  <label>Evidence review ticket <input name="ticket" type="text" required minlength="10" maxlength="80"
+    placeholder="Authorized investigation ticket"></label>
+  <button class="btn secondary" type="submit">Review consented evidence</button>
+ </form>
+ @endif
  @if(auth()->guard('admin')->user()?->canPerform('moments.moderate'))
  <form class="admin-filters" action="{{ route('orbit.admin.moments.reports.action',['report'=>$report->id]) }}" method="post" style="margin-bottom:20px">
  @csrf
