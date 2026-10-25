@@ -168,8 +168,30 @@ final class OrbitM7MomentsTest extends TestCase
         $this->withToken($token)->patchJson('/api/v1/me/preferences/notifications',[
             'push_notifications_enabled'=>true,
         ])->assertOk();
+        // Client settings alone must NOT initialize Firebase before the
+        // service-account file has been supplied outside the web root.
         $this->withToken($token)->getJson('/api/v1/me/moments/push-bootstrap')
-            ->assertOk()->assertJsonPath('data.enabled',true);
+            ->assertOk()->assertJsonPath('data.enabled',false);
+
+        $key=openssl_pkey_new([
+            'private_key_type'=>OPENSSL_KEYTYPE_RSA,'private_key_bits'=>2048,
+        ]);
+        $this->assertNotFalse($key);
+        $this->assertTrue(openssl_pkey_export($key,$privateKey));
+        $file=tempnam(sys_get_temp_dir(),'orbit-m7-test-fcm-');
+        $this->assertNotFalse($file);
+        file_put_contents($file,json_encode([
+            'type'=>'service_account','project_id'=>'orbit-development',
+            'client_email'=>'test-fcm@orbit-development.iam.gserviceaccount.com',
+            'private_key'=>$privateKey,
+        ],JSON_THROW_ON_ERROR));
+        config()->set('orbit_moments.fcm.service_account_path',$file);
+        try {
+            $this->withToken($token)->getJson('/api/v1/me/moments/push-bootstrap')
+                ->assertOk()->assertJsonPath('data.enabled',true);
+        } finally {
+            @unlink($file);
+        }
     }
 
     public function test_account_erasure_purges_encrypted_fcm_tokens_before_identity_deletion():void
@@ -177,13 +199,13 @@ final class OrbitM7MomentsTest extends TestCase
         [$owner,$device]=$this->principal();
         DB::table('moment_push_devices')->insert([
             'device_id'=>$device->id,'user_id'=>$owner->id,
-            'token_ciphertext'=>\Illuminate\\Support\\Facades\\Crypt::encryptString(
+            'token_ciphertext'=>\Illuminate\Support\Facades\Crypt::encryptString(
                 str_repeat('t',50)),
             'token_digest'=>hash('sha256',str_repeat('t',50)),
             'platform'=>'android','created_at'=>now(),'updated_at'=>now(),
         ]);
         $this->assertDatabaseCount('moment_push_devices',1);
-        app(\App\\Modules\\Moments\\Services\\MomentErasureService::class)
+        app(\App\Modules\Moments\Services\MomentErasureService::class)
             ->eraseUser($owner->id);
         $this->assertDatabaseCount('moment_push_devices',0);
     }
