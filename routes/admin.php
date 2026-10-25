@@ -53,6 +53,9 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
             ->middleware(RequireAdminPermission::class.':media.read')->name('media.index');
         Route::get('/moments', [AdminMomentController::class,'index'])
             ->middleware(RequireAdminPermission::class.':moments.read')->name('moments.index');
+        Route::post('/moments/reports/{report}/evidence', [AdminMomentController::class,'evidence'])
+            ->whereUuid('report')->middleware([RequireAdminPermission::class.':moments.moderate','throttle:6,1'])
+            ->name('moments.reports.evidence');
         Route::post('/moments/reports/{report}/action', [AdminMomentController::class,'action'])
             ->whereUuid('report')->middleware([RequireAdminPermission::class.':moments.moderate','throttle:6,1'])
             ->name('moments.reports.action');
