@@ -301,15 +301,42 @@ final class MomentController extends Controller
         $v=(int)$r->header('If-Match',$r->input('revision',0));
         abort_unless($v===(int)$m->publish_version,409,'Version conflict.');
         $d=$r->validate(['caption_ciphertext'=>['nullable','string','max:8192'],
-            'caption_key_version'=>['nullable','string','max:40']]);
+            'caption_key_version'=>['nullable','string','max:40'],
+            'tagged_user_ids'=>['sometimes','array','max:20'],
+            'tagged_user_ids.*'=>['required','uuid','distinct']]);
+        abort_if(!array_key_exists('caption_ciphertext',$d) &&
+            !array_key_exists('tagged_user_ids',$d),422,'No Moment edits supplied.');
         abort_if(!empty($d['caption_ciphertext'])&&empty($d['caption_key_version']),422);
         $new=$v+1;DB::transaction(function()use($moment,$owner,$v,$d,$new,$m):void{
+            $changes=['publish_version'=>$new,'updated_at'=>now()];
+            if(array_key_exists('caption_ciphertext',$d)){
+                $changes['caption_ciphertext']=$d['caption_ciphertext'];
+                $changes['caption_key_version']=$d['caption_key_version']??null;
+            }
             $count=DB::table('moments')->where('id',$moment)->where('creator_id',$owner)
-                ->where('publish_version',$v)->update([
-                'caption_ciphertext'=>$d['caption_ciphertext']??null,
-                'caption_key_version'=>$d['caption_key_version']??null,
-                'publish_version'=>$new,'updated_at'=>now()]);
+                ->where('state','published')->where('publish_version',$v)
+                ->update($changes);
             abort_unless($count===1,409);
+            if(array_key_exists('tagged_user_ids',$d)){
+                $social=app(SocialGraphService::class);
+                foreach($d['tagged_user_ids'] as $tag){
+                    abort_unless($tag!==$owner
+                        && $social->isFriend($owner,$tag)
+                        && !$social->isBlockedEitherWay($owner,$tag)
+                        && DB::table('moment_recipients')->where('moment_id',$moment)
+                            ->where('viewer_id',$tag)->where('version',$m->audience_revision)
+                            ->whereNull('revoked_at')->exists(),422,
+                        'Tagged person is no longer eligible.');
+                }
+                DB::table('moment_people_tags')->where('moment_id',$moment)
+                    ->whereNotIn('tagged_user_id',$d['tagged_user_ids'])
+                    ->whereNull('revoked_at')->update(['revoked_at'=>now()]);
+                foreach($d['tagged_user_ids'] as $tag){
+                    DB::table('moment_people_tags')->updateOrInsert(
+                        ['moment_id'=>$moment,'tagged_user_id'=>$tag],
+                        ['revoked_at'=>null,'created_at'=>now()]);
+                }
+            }
             $this->emit($moment,'moment.edited.v1',(int)$m->audience_revision);
         },3);
         return $this->reply(['publish_version'=>$new]);
