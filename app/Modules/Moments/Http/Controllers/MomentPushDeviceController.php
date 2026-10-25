@@ -35,13 +35,8 @@ final class MomentPushDeviceController extends Controller
     {
         [$user]=$this->device($request);
         $fcm=config('orbit_moments.fcm',[]);
-        $ready=config('orbit_moments.fcm.enabled')===true
-            && $this->optedIn($user)
-            && is_array($fcm)
-            && collect(['project_id','api_key','sender_id',
-                'android_app_id','ios_app_id','ios_bundle_id'])
-                ->every(fn($k)=>is_string($fcm[$k]??null)
-                    && trim($fcm[$k])!=='');
+        $ready=$this->optedIn($user)
+            && app(\App\Modules\Moments\Services\MomentFcmTransport::class)->enabled();
         return response()->json(['data'=>$ready?[
             'enabled'=>true,
             'options'=>[
@@ -60,7 +55,7 @@ final class MomentPushDeviceController extends Controller
         [$user,$device]=$this->device($request);
         // Never collect a push token until Firebase exists and the user
         // explicitly enabled BOTH platform push and Moment notifications.
-        abort_unless(config('orbit_moments.fcm.enabled')===true,404);
+        abort_unless(app(\App\Modules\Moments\Services\MomentFcmTransport::class)->enabled(),404);
         abort_unless($this->optedIn($user),403,'Push consent required.');
         $d=$request->validate([
             'token'=>['required','string','min:20','max:4096',
