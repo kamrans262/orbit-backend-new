@@ -82,3 +82,10 @@ Artisan::command('orbit:moments:notifications', function () {
     $this->info('M7 private notification inbox: '.json_encode($result));
 })->purpose('Project opted-in, authorized Moment events into private HTTPS notices');
 Schedule::command('orbit:moments:notifications')->everyFiveMinutes()->withoutOverlapping();
+
+/** Prepared FCM sender; OFF by default. No Firebase call before client setup. */
+Artisan::command('orbit:moments:push-send', function () {
+    $stats=app(\App\Modules\Moments\Services\MomentPushDeliveryWorker::class)->run(30);
+    $this->info('M7 FCM dispatch: '.json_encode($stats));
+})->purpose('Deliver generic opted-in Moment notices only when FCM is configured');
+Schedule::command('orbit:moments:push-send')->everyFiveMinutes()->withoutOverlapping();
