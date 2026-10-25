@@ -71,3 +71,14 @@ Artisan::command('orbit:moments:process', function () {
     $this->info('M7 Moment lifecycle: '.json_encode($result));
 })->purpose('Expire private Moment views and queue legally unheld encrypted retention purges');
 Schedule::command('orbit:moments:process')->hourly()->withoutOverlapping();
+
+
+/**
+ * M7 in-app HTTPS notification projection. Never transmits a push or marks a
+ * mobile device delivered. Scope is reevaluated when its owner next polls.
+ */
+Artisan::command('orbit:moments:notifications', function () {
+    $result=app(\App\Modules\Moments\Services\MomentNotificationOutboxWorker::class)->run(30);
+    $this->info('M7 private notification inbox: '.json_encode($result));
+})->purpose('Project opted-in, authorized Moment events into private HTTPS notices');
+Schedule::command('orbit:moments:notifications')->everyFiveMinutes()->withoutOverlapping();
