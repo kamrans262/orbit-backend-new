@@ -46,7 +46,7 @@ final class AdminMomentController extends Controller
      * encrypted Moments. Every read requires CSRF, moderation permission,
      * explicit ticket, consent, approved policy and durable audit record.
      */
-    public function evidence(Request $r,string $report):\\Illuminate\\Http\\Response
+    public function evidence(Request $r,string $report):\Illuminate\Http\Response
     {
         abort_unless(config('orbit_moments.enabled')===true &&
             config('orbit_moments.moderation_evidence_enabled')===true,404);
@@ -59,7 +59,7 @@ final class AdminMomentController extends Controller
         try{
             $encoded=Crypt::decryptString((string)$row->consent_evidence_ciphertext);
             $bytes=base64_decode($encoded,true);
-        }catch(\\Throwable){abort(404,'Volunteered preview unavailable.');}
+        }catch(\Throwable){abort(404,'Volunteered preview unavailable.');}
         abort_unless($bytes!==false && strlen($bytes)>=4 && strlen($bytes)<=40960
             && str_starts_with($bytes,"\\xFF\\xD8")
             && str_ends_with($bytes,"\\xFF\\xD9"),404);
