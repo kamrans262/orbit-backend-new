@@ -18,6 +18,17 @@ final class MomentPushDeliveryWorker
         $notices=DB::table('moment_notification_inbox as n')
             ->join('moment_push_devices as t','t.user_id','=','n.recipient_user_id')
             ->join('devices as d','d.id','=','t.device_id')
+            ->leftJoin('moment_push_deliveries as receipt',function($join):void{
+                $join->on('receipt.notice_id','=','n.id')
+                    ->on('receipt.device_id','=','t.device_id');
+            })
+            ->where(function($q):void{
+                $q->whereNull('receipt.state')
+                    ->orWhere(function($retry):void{
+                        $retry->where('receipt.state','retry')
+                            ->where('receipt.next_attempt_at','<=',now());
+                    });
+            })
             ->whereNull('t.disabled_at')->whereNull('d.revoked_at')
             ->where('d.trust_state','trusted')->whereNotNull('d.approved_at')
             ->where('n.created_at','>',now()->subDays(7))
