@@ -16,14 +16,24 @@ final class MomentNotificationOutboxWorker
         if(config('orbit_moments.enabled')!==true || config('orbit_media.enabled')!==true)
             return $stats;
         $policy=app(MomentPolicy::class);
-        $events=DB::table('moment_events_outbox')->where('status','pending')
-            ->orderBy('created_at')->limit(max(1,min(100,$limit)))->get();
+        $events=DB::table('moment_events_outbox as events')
+            ->where('events.created_at','>=',now()->subDays(7))
+            ->whereNotExists(function($q):void{
+                $q->selectRaw('1')->from('moment_notification_projected_events as seen')
+                    ->whereColumn('seen.event_id','events.id');
+            })
+            ->orderBy('events.created_at')->limit(max(1,min(100,$limit)))->get(['events.*']);
         foreach($events as $event){
             try {
                 DB::transaction(function()use($event,$policy,&$stats):void{
                     $locked=DB::table('moment_events_outbox')->where('id',$event->id)
                         ->lockForUpdate()->first();
-                    if(!$locked || $locked->status!=='pending')return;
+                    if(!$locked)return;
+                    // Dedicated projection cursor: leave event status untouched
+                    // so a future transport can acknowledge push independently.
+                    if(DB::table('moment_notification_projected_events')
+                        ->insertOrIgnore(['event_id'=>$locked->id,
+                            'processed_at'=>now()])!==1)return;
                     $moment=DB::table('moments')->where('id',$locked->moment_id)->first();
                     if(in_array($locked->event_type,[
                         'moment.deleted.v1','moment.expired.v1','moment.restricted.v1',
@@ -64,8 +74,6 @@ final class MomentNotificationOutboxWorker
                             $stats['notices_created']++;
                         }
                     }else{$stats['skipped']++;}
-                    DB::table('moment_events_outbox')->where('id',$locked->id)
-                        ->update(['status'=>'processed','processed_at'=>now()]);
                     $stats['processed']++;
                 },3);
             }catch(\Throwable){$stats['errors']++;}
