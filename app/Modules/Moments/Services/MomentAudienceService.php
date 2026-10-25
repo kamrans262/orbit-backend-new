@@ -75,27 +75,39 @@ final class MomentAudienceService
                 ->where(fn($q)=>$q->whereNull('expires_at')->orWhere('expires_at','>',now()));
             if($pair['circle']!==null)$query->where('circle_id',$pair['circle']);
             else $query->whereNull('circle_id');
-            $grant=$query->first();
-            abort_unless($grant,409,'Recipient media grants are incomplete.');
+            // Editing a Moment creates a fresh, versioned grant. The old
+            // active grant can lack newly trusted devices, and must not be
+            // chosen just because the database returned it first.
+            $grants=$query->orderByDesc('policy_version')
+                ->orderByDesc('created_at')->get();
+            abort_if($grants->isEmpty(),409,'Recipient media grants are incomplete.');
             // Do not publish with a device missing either its original or derivative key.
             $devices=DB::table('devices')->where('user_id',$pair['recipient'])
                 ->whereNotNull('approved_at')->whereNull('revoked_at')->where('trust_state','trusted')
                 ->whereNotNull('public_key')->get(['id','public_key']);
             abort_if($devices->isEmpty(),409,'Recipient has no trusted device.');
-            $validKeys=0;
-            foreach($devices as $device){
+            $validDevices=$devices->filter(function($device){
                 $pub=base64_decode((string)$device->public_key,true);
-                if($pub===false||strlen($pub)!==32)continue;
-                $validKeys++;
-                foreach(['original',$variant] as $v) {
-                    abort_unless(DB::table('media_device_key_envelopes')
-                        ->where('grant_id',$grant->id)->where('recipient_device_id',$device->id)
-                        ->where('variant',$v)->whereNull('revoked_at')->exists(),409,
-                        'The encrypted device envelope manifest is incomplete.');
+                return $pub!==false && strlen($pub)===32;
+            });
+            abort_if($validDevices->isEmpty(),409,'Recipient has no valid trusted device key.');
+            $chosen=null;
+            foreach($grants as $candidate){
+                $complete=true;
+                foreach($validDevices as $device){
+                    foreach(['original',$variant] as $v){
+                        if(!DB::table('media_device_key_envelopes')
+                            ->where('grant_id',$candidate->id)
+                            ->where('recipient_device_id',$device->id)
+                            ->where('variant',$v)->whereNull('revoked_at')->exists()){
+                            $complete=false;break 2;
+                        }
+                    }
                 }
+                if($complete){$chosen=$candidate;break;}
             }
-            abort_if($validKeys===0,409,'Recipient has no valid trusted device key.');
-            $pair['grant_id']=$grant->id;
+            abort_unless($chosen,409,'The encrypted device envelope manifest is incomplete.');
+            $pair['grant_id']=$chosen->id;
         }
         unset($pair);
         return $pairs;
