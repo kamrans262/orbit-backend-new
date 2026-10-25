@@ -5,6 +5,14 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
     public function up():void {
+        // Independent cursor: a private inbox projection must NEVER consume
+        // the main durable Moment outbox needed by other approved transports.
+        Schema::create('moment_notification_projected_events',function(Blueprint $t):void{
+            $t->uuid('event_id')->primary();
+            $t->timestamp('processed_at')->useCurrent();
+            $t->foreign('event_id')->references('id')
+                ->on('moment_events_outbox')->cascadeOnDelete();
+        });
         Schema::create('moment_notification_inbox',function(Blueprint $t):void {
             $t->uuid('id')->primary();
             $t->uuid('moment_id');
@@ -22,5 +30,6 @@ return new class extends Migration {
     }
     public function down():void {
         Schema::dropIfExists('moment_notification_inbox');
+        Schema::dropIfExists('moment_notification_projected_events');
     }
 };
