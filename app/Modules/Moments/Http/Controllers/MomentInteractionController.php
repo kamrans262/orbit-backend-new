@@ -150,9 +150,9 @@ final class MomentInteractionController extends Controller
             abort_if(isset($d['consent_evidence_ciphertext']),422,'Choose one evidence type.');
             $bytes=base64_decode($d['evidence_preview_base64'],true);
             abort_unless($bytes!==false && strlen($bytes)>=4 && strlen($bytes)<=40960
-                && str_starts_with($bytes,"\\xFF\\xD8")
-                && str_ends_with($bytes,"\\xFF\\xD9")
-                && !str_contains($bytes,"Exif\\0\\0"),422,
+                && str_starts_with($bytes,"\xFF\xD8")
+                && str_ends_with($bytes,"\xFF\xD9")
+                && !str_contains($bytes,"Exif\0\0"),422,
                 'An already sanitized JPEG preview is required.');
             $volunteeredEvidence=Crypt::encryptString(base64_encode($bytes));
         }
