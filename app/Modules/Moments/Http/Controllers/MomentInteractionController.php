@@ -6,6 +6,7 @@ use App\Modules\Moments\Services\MomentPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Str;
 
 final class MomentInteractionController extends Controller
@@ -130,9 +131,24 @@ final class MomentInteractionController extends Controller
             'report_target'=>['sometimes','in:moment,comment,account'],
             'details_ciphertext'=>['nullable','string','max:8192'],
             'consent_evidence_ciphertext'=>['nullable','string','max:65535'],
+            'evidence_preview_base64'=>['nullable','string','max:65535'],
             'evidence_consent'=>['required','boolean'],
         ]);
         abort_if(!empty($d['consent_evidence_ciphertext'])&&!$d['evidence_consent'],422,'Explicit evidence consent required.');
+        $volunteeredEvidence=null;
+        if(isset($d['evidence_preview_base64'])){
+            abort_unless(config('orbit_moments.moderation_evidence_enabled')===true
+                && $d['evidence_consent']===true,403,
+                'Voluntary evidence review is not enabled.');
+            abort_if(isset($d['consent_evidence_ciphertext']),422,'Choose one evidence type.');
+            $bytes=base64_decode($d['evidence_preview_base64'],true);
+            abort_unless($bytes!==false && strlen($bytes)>=4 && strlen($bytes)<=40960
+                && str_starts_with($bytes,"\\xFF\\xD8")
+                && str_ends_with($bytes,"\\xFF\\xD9")
+                && !str_contains($bytes,"Exif\\0\\0"),422,
+                'An already sanitized JPEG preview is required.');
+            $volunteeredEvidence=Crypt::encryptString(base64_encode($bytes));
+        }
         $target=$d['report_target']??($comment?'comment':'moment');
         if($comment && $target!=='comment')abort(422,'Report target mismatch.');
         if($target==='comment' && !$comment)abort(422,'Comment required.');
@@ -144,7 +160,7 @@ final class MomentInteractionController extends Controller
         $digest=hash('sha256',json_encode(['moment_id'=>$moment,'comment_id'=>$comment,
             'report_target'=>$target,
             'context_id'=>$context,'payload'=>$d],JSON_THROW_ON_ERROR));
-        return DB::transaction(function()use($user,$moment,$comment,$context,$d,$key,$digest,$target,$m):JsonResponse{
+        return DB::transaction(function()use($user,$moment,$comment,$context,$d,$key,$digest,$target,$m,$volunteeredEvidence):JsonResponse{
             // Serialize same actor's concurrent retries to avoid duplicate user reports.
             DB::table('orbit_users')->where('id',$user)->lockForUpdate()->first();
             $old=DB::table('moment_reports')->where('reporter_id',$user)
@@ -159,7 +175,7 @@ final class MomentInteractionController extends Controller
                 'report_target'=>$target,
                 'reported_user_id'=>$target==='account'?$m->creator_id:null,
                 'details_ciphertext'=>$d['details_ciphertext']??null,
-                'consent_evidence_ciphertext'=>$d['consent_evidence_ciphertext']??null,
+                'consent_evidence_ciphertext'=>$volunteeredEvidence??($d['consent_evidence_ciphertext']??null),
                 'evidence_consent'=>$d['evidence_consent'],'request_key_hash'=>$key,
                 'request_payload_hash'=>$digest,'status'=>'pending','created_at'=>now(),'updated_at'=>now()]);
             return $this->reply(['report_id'=>$id,'received'=>true],201);
