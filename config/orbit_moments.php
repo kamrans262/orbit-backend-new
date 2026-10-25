@@ -9,6 +9,7 @@ return [
     'max_comment_cipher_bytes' => 8192,
     'max_feed_page' => 30,
     'moderation_restrict_enabled' => (bool) env('ORBIT_M7_MODERATION_RESTRICT_ENABLED', false),
+    'moderation_evidence_enabled' => (bool) env('ORBIT_M7_MODERATION_EVIDENCE_ENABLED', false),
     // Disabled until the client's Firebase project, service-account file,
     // native app configuration and explicit push opt-in are provided.
     'fcm' => [
