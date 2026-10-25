@@ -37,6 +37,31 @@ final class MomentErasureService
             })->exists();
         if($reviewed)throw new DomainException(
             'M7 moderation audit requires independent legal retention review before account erasure.');
+        if(Schema::hasTable('moment_evidence_access_logs')){
+            $accessed=DB::table('moment_evidence_access_logs as access')
+                ->join('moment_reports as r','r.id','=','access.report_id')
+                ->where(function($q)use($user,$owned):void{
+                    $q->where('r.reporter_id',$user);
+                    if($owned)$q->orWhereIn('r.moment_id',$owned);
+                })->exists();
+            if($accessed)throw new DomainException(
+                'M7 reviewed voluntary evidence requires independent legal retention review.');
+        }
+
+        // Explicitly erase M7 notification projection and encrypted Firebase
+        // tokens before M3 deletes identity and trusted device rows.
+        // Shared notification event cursor is not owned by one recipient.
+        if(Schema::hasTable('moment_notification_inbox')){
+            DB::table('moment_notification_inbox')
+                ->where('recipient_user_id',$user)->delete();
+        }
+        if(Schema::hasTable('moment_push_devices')){
+            DB::table('moment_push_devices')->where('user_id',$user)->delete();
+        }
+        if(Schema::hasTable('moment_notification_muted_circles')){
+            DB::table('moment_notification_muted_circles')
+                ->where('user_id',$user)->delete();
+        }
 
         $reports=DB::table('moment_reports')->where('reporter_id',$user);
         if($owned)$reports->orWhereIn('moment_id',$owned);
