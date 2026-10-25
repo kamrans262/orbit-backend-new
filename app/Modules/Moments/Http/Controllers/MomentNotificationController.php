@@ -27,6 +27,35 @@ final class MomentNotificationController extends Controller
             && ($prefs['moments_notifications_enabled']??false)===true;
     }
 
+    public function mutedCircles(Request $r):JsonResponse
+    {
+        $user=$this->actor($r);
+        $ids=DB::table('moment_notification_muted_circles')
+            ->where('user_id',$user)->pluck('circle_id')->all();
+        return response()->json(['data'=>['circle_ids'=>$ids]])
+            ->header('Cache-Control','private, no-store');
+    }
+
+    public function muteCircle(Request $r,string $circle):JsonResponse
+    {
+        $user=$this->actor($r);
+        abort_unless(DB::table('circle_members')->where('circle_id',$circle)
+            ->where('user_id',$user)->whereNull('removed_at')->exists(),404);
+        $d=$r->validate(['muted'=>['required','boolean']]);
+        if($d['muted']){
+            DB::table('moment_notification_muted_circles')->updateOrInsert(
+                ['circle_id'=>$circle,'user_id'=>$user],
+                ['updated_at'=>now()]);
+            DB::table('moment_notification_inbox')->where('recipient_user_id',$user)
+                ->where('context_id','circle:'.$circle)->delete();
+        }else{
+            DB::table('moment_notification_muted_circles')
+                ->where('circle_id',$circle)->where('user_id',$user)->delete();
+        }
+        return response()->json(['data'=>['muted'=>(bool)$d['muted']]])
+            ->header('Cache-Control','private, no-store');
+    }
+
     public function index(Request $r,MomentPolicy $policy):JsonResponse
     {
         $viewer=$this->actor($r);
@@ -40,6 +69,9 @@ final class MomentNotificationController extends Controller
         $out=[];
         foreach($rows as $row){
             $moment=DB::table('moments')->where('id',$row->moment_id)->first();
+            if(str_starts_with($row->context_id,'circle:') &&
+                DB::table('moment_notification_muted_circles')->where('user_id',$viewer)
+                    ->where('circle_id',substr($row->context_id,7))->exists())continue;
             if(!$moment || $policy->context($moment,$viewer,$row->context_id)
                 !==$row->context_id)continue;
             $out[]=['id'=>$row->id,'moment_id'=>$row->moment_id,
