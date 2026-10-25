@@ -17,7 +17,10 @@ final class MomentPushDeliveryWorker
         $policy=app(MomentPolicy::class);
         $notices=DB::table('moment_notification_inbox as n')
             ->join('moment_push_devices as t','t.user_id','=','n.recipient_user_id')
-            ->join('devices as d','d.id','=','t.device_id')
+            ->join('devices as d',function($join):void{
+                $join->on('d.id','=','t.device_id')
+                    ->on('d.user_id','=','t.user_id');
+            })
             ->leftJoin('moment_push_deliveries as receipt',function($join):void{
                 $join->on('receipt.notice_id','=','n.id')
                     ->on('receipt.device_id','=','t.device_id');
