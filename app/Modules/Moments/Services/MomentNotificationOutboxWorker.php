@@ -62,6 +62,13 @@ final class MomentNotificationOutboxWorker
                                 $recipient->context_id)!==$recipient->context_id){
                                 $stats['skipped']++;continue;
                             }
+                            if(str_starts_with($recipient->context_id,'circle:') &&
+                                DB::table('moment_notification_muted_circles')
+                                    ->where('user_id',$recipient->viewer_id)
+                                    ->where('circle_id',substr($recipient->context_id,7))
+                                    ->exists()){
+                                $stats['skipped']++;continue;
+                            }
                             // Only a generic private reference. No captions, geo,
                             // Circle rosters, usernames or recipient counts.
                             DB::table('moment_notification_inbox')->insertOrIgnore([
