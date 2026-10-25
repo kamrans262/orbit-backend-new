@@ -83,6 +83,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/moments', [MomentController::class,'feed'])->middleware('throttle:45,1');
         Route::get('/moments/rail', [MomentController::class,'rail'])->middleware('throttle:45,1');
         Route::get('/moments/revisions', [MomentController::class,'revisions'])->middleware('throttle:40,1');
+        Route::get('/moments/report-evidence-policy', [MomentInteractionController::class,'evidencePolicy'])->middleware('throttle:20,1');
         Route::get('/me/moments/notifications', [MomentNotificationController::class,'index'])->middleware('throttle:20,1');
         Route::get('/me/moments/notifications/muted-circles', [MomentNotificationController::class,'mutedCircles'])->middleware('throttle:20,1');
         Route::put('/me/moments/notifications/mute-circle/{circle}', [MomentNotificationController::class,'muteCircle'])->whereUuid('circle')->middleware('throttle:15,1');
