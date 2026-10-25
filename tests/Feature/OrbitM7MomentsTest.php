@@ -85,7 +85,7 @@ final class OrbitM7MomentsTest extends TestCase
         $this->withToken($token)->getJson('/api/v1/moments/report-evidence-policy')
             ->assertOk()->assertJsonPath('data.voluntary_preview_enabled',false);
         $data=['reason'=>'spam','evidence_consent'=>true,
-            'evidence_preview_base64'=>base64_encode("\\xFF\\xD8".str_repeat('A',30)."\\xFF\\xD9")];
+            'evidence_preview_base64'=>base64_encode("\xFF\xD8".str_repeat('A',30)."\xFF\xD9")];
         $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
             ->postJson('/api/v1/moments/'.$moment.'/reports',$data)->assertForbidden();
         $this->assertDatabaseCount('moment_reports',0);
