@@ -83,7 +83,7 @@ final class MomentPushDeliveryWorker
                 'next_attempt_at'=>$accepted||$attempt>=8?null:now()->addSeconds($delay),
                 'accepted_at'=>$accepted?now():null,
                 'last_error_code'=>$accepted?null:'fcm_unavailable_or_rejected',
-                'updated_at'=>now(),
+                'created_at'=>now(),'updated_at'=>now(),
             ]);
             if($accepted)$stats['accepted_by_fcm']++;else $stats['failed']++;
         }
