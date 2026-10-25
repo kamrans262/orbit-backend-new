@@ -72,6 +72,47 @@ final class OrbitM7MomentsTest extends TestCase
         return $media;
     }
 
+    public function test_future_firebase_transport_is_off_and_cannot_register_tokens():void
+    {
+        [$user,$device,$token]=$this->principal();
+        config()->set('orbit_moments.fcm.enabled',false);
+        \Illuminate\Support\Facades\Http::fake();
+        $this->withToken($token)->getJson('/api/v1/me/moments/push-bootstrap')
+            ->assertOk()->assertJsonPath('data.enabled',false);
+        $this->withToken($token)->postJson('/api/v1/me/moments/push-token',[
+            'token'=>str_repeat('T',50),'platform'=>'android',
+        ])->assertNotFound();
+        $this->assertDatabaseCount('moment_push_devices',0);
+        $this->assertFalse(app(\App\Modules\Moments\Services\MomentFcmTransport::class)->enabled());
+        $stats=app(\App\Modules\Moments\Services\MomentPushDeliveryWorker::class)->run(5);
+        $this->assertSame(0,$stats['attempted']);
+        \Illuminate\Support\Facades\Http::assertNothingSent();
+    }
+
+    public function test_future_fcm_bootstrap_requires_both_push_preferences():void
+    {
+        [$user,$device,$token]=$this->principal();
+        config()->set('orbit_moments.fcm.enabled',true);
+        config()->set('orbit_moments.fcm.project_id','orbit-development');
+        config()->set('orbit_moments.fcm.api_key','test-not-secret');
+        config()->set('orbit_moments.fcm.sender_id','1234567890');
+        config()->set('orbit_moments.fcm.android_app_id','android-app');
+        config()->set('orbit_moments.fcm.ios_app_id','ios-app');
+        config()->set('orbit_moments.fcm.ios_bundle_id','com.example.orbit');
+        $this->withToken($token)->getJson('/api/v1/me/moments/push-bootstrap')
+            ->assertOk()->assertJsonPath('data.enabled',false);
+        $this->withToken($token)->patchJson('/api/v1/me/preferences/notifications',[
+            'moments_notifications_enabled'=>true,
+        ])->assertOk();
+        $this->withToken($token)->getJson('/api/v1/me/moments/push-bootstrap')
+            ->assertOk()->assertJsonPath('data.enabled',false);
+        $this->withToken($token)->patchJson('/api/v1/me/preferences/notifications',[
+            'push_notifications_enabled'=>true,
+        ])->assertOk();
+        $this->withToken($token)->getJson('/api/v1/me/moments/push-bootstrap')
+            ->assertOk()->assertJsonPath('data.enabled',true);
+    }
+
     public function test_flag_closed_denies_moments_even_with_valid_token():void
     {
         [$user,$device,$token]=$this->principal();
