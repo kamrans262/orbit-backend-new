@@ -14,6 +14,11 @@ return [
     'fcm' => [
         'enabled' => (bool) env('ORBIT_M7_FCM_ENABLED', false),
         'project_id' => env('ORBIT_M7_FCM_PROJECT_ID', ''),
+        'api_key' => env('ORBIT_M7_FCM_API_KEY', ''),
+        'sender_id' => env('ORBIT_M7_FCM_SENDER_ID', ''),
+        'android_app_id' => env('ORBIT_M7_FCM_ANDROID_APP_ID', ''),
+        'ios_app_id' => env('ORBIT_M7_FCM_IOS_APP_ID', ''),
+        'ios_bundle_id' => env('ORBIT_M7_FCM_IOS_BUNDLE_ID', ''),
         'service_account_path' => env('ORBIT_M7_FCM_SERVICE_ACCOUNT_PATH', ''),
     ],
 ];
