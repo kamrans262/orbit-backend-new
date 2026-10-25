@@ -125,6 +125,13 @@ final class MomentInteractionController extends Controller
         DB::table('moment_comments')->where('id',$comment)->update(['deleted_at'=>now(),'updated_at'=>now()]);
         return response()->noContent();
     }
+    public function evidencePolicy(Request $r):JsonResponse
+    {
+        $this->actor($r);
+        return $this->reply(['voluntary_preview_enabled'=>
+            config('orbit_moments.moderation_evidence_enabled')===true]);
+    }
+
     public function report(Request $r,string $moment,MomentPolicy $p,?string $comment=null):JsonResponse {
         [$user,$m,$context]=$this->scope($r,$moment,$p);$d=$r->validate([
             'reason'=>['required','in:spam,harassment,threat,scam,impersonation,nudity,violence,safety_concern,privacy,other'],
