@@ -86,6 +86,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/me/moments/notifications', [MomentNotificationController::class,'index'])->middleware('throttle:20,1');
         Route::get('/me/moments/notifications/muted-circles', [MomentNotificationController::class,'mutedCircles'])->middleware('throttle:20,1');
         Route::put('/me/moments/notifications/mute-circle/{circle}', [MomentNotificationController::class,'muteCircle'])->whereUuid('circle')->middleware('throttle:15,1');
+        Route::get('/me/moments/push-bootstrap', [MomentPushDeviceController::class,'bootstrap'])->middleware('throttle:10,1');
         Route::post('/me/moments/push-token', [MomentPushDeviceController::class,'register'])->middleware('throttle:8,1');
         Route::delete('/me/moments/push-token', [MomentPushDeviceController::class,'unregister'])->middleware('throttle:8,1');
         Route::post('/me/moments/notifications/{notice}/read', [MomentNotificationController::class,'markRead'])->whereUuid('notice')->middleware('throttle:30,1');
