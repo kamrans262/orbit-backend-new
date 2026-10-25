@@ -104,6 +104,33 @@ final class OrbitM7MomentsTest extends TestCase
         $this->assertNotSame($data['evidence_preview_base64'],$row->consent_evidence_ciphertext);
     }
 
+    public function test_offline_preview_lease_requires_current_authorization_and_expires_early():void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $media=$this->readyPrivateMedia($owner,$device);
+        $id=$this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments',[
+                'client_id'=>(string)Str::uuid(),'media_id'=>$media,
+                'audience_kind'=>'only_me','target_ids'=>[],
+            ])->assertCreated()->json('data.moment_id');
+        $lease=$this->withToken($token)
+            ->getJson('/api/v1/moments/'.$id.'/cache-lease?context_id=self')
+            ->assertOk()->assertJsonPath('data.moment_id',$id)
+            ->assertJsonPath('data.context_id','self');
+        $this->assertLessThanOrEqual(301,\Illuminate\Support\Carbon::parse(
+            $lease->json('data.expires_at'))->diffInSeconds(
+                \Illuminate\Support\Carbon::parse($lease->json('data.issued_at'))));
+        [$stranger,$otherDevice,$otherToken]=$this->principal();
+        $this->withToken($otherToken)
+            ->getJson('/api/v1/moments/'.$id.'/cache-lease?context_id=self')
+            ->assertNotFound();
+        DB::table('moments')->where('id',$id)->update([
+            'state'=>'deleted','deleted_at'=>now()]);
+        $this->withToken($token)
+            ->getJson('/api/v1/moments/'.$id.'/cache-lease?context_id=self')
+            ->assertNotFound();
+    }
+
     public function test_future_firebase_transport_is_off_and_cannot_register_tokens():void
     {
         [$user,$device,$token]=$this->principal();
