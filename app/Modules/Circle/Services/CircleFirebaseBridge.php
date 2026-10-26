@@ -180,6 +180,15 @@ final class CircleFirebaseBridge
      */
     public function afterCommit(string $circleId): void
     {
+        // Independent M9 revocation path: M5's Firebase setting may be OFF.
+        // Empty Circle cache events disclose no subjects or individual status.
+        if (config('orbit_presence.enabled') === true
+            && config('orbit_presence.realtime_enabled') === true) {
+            DB::afterCommit(static function () use ($circleId): void {
+                app(\App\Modules\Presence\Services\PresenceRealtimePublisher::class)
+                    ->safelyClearCircle($circleId);
+            });
+        }
         if (!$this->enabled()) return;
         DB::afterCommit(function () use ($circleId): void {
             try {
