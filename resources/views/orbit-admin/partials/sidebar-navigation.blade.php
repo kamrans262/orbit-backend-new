@@ -7,7 +7,7 @@
   if ($navUser?->canPerform('config.manage')) {
     $navGroups[] = [
       'title' => 'Configurations', 'icon' => 'settings',
-      'patterns' => ['orbit.admin.dashboard','orbit.admin.flags.*','orbit.admin.config.*','orbit.admin.rollback','orbit.admin.home-dashboard.*'],
+      'patterns' => ['orbit.admin.dashboard','orbit.admin.flags.*','orbit.admin.config.*','orbit.admin.rollback','orbit.admin.home-dashboard.*','orbit.admin.presence.*'],
       'children' => [
         ['title'=>'Overview','route'=>'orbit.admin.dashboard','patterns'=>['orbit.admin.dashboard']],
         ['title'=>'Feature Flags','route'=>'orbit.admin.flags.index','patterns'=>['orbit.admin.flags.*']],
@@ -15,6 +15,10 @@
         ... (config('orbit_dashboard.enabled') === true ? [[
           'title'=>'Home Dashboard','route'=>'orbit.admin.home-dashboard.index',
           'patterns'=>['orbit.admin.home-dashboard.*'],
+        ]] : []),
+        ... (config('orbit_presence.enabled') === true ? [[
+          'title'=>'Presence','route'=>'orbit.admin.presence.index',
+          'patterns'=>['orbit.admin.presence.*'],
         ]] : []),
       ],
     ];
