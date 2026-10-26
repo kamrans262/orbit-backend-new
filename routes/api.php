@@ -16,6 +16,7 @@ use App\Modules\Moments\Http\Controllers\MomentInteractionController;
 use App\Modules\Moments\Http\Controllers\MomentLifecycleController;
 use App\Modules\Moments\Http\Controllers\MomentNotificationController;
 use App\Modules\Moments\Http\Controllers\MomentPushDeviceController;
+use App\Modules\Dashboard\Http\Controllers\DashboardSummaryController;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -30,6 +31,13 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/auth/refresh', [IdentityController::class, 'refresh'])->middleware('throttle:30,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        // M8: private viewer-scoped Home aggregation. Never public/cacheable.
+        Route::get('/dashboard/summary', [DashboardSummaryController::class,'summary'])
+            ->middleware('throttle:45,1');
+        Route::post('/me/dashboard/cards/{key}/dismiss', [DashboardSummaryController::class,'dismiss'])
+            ->where('key','[a-z_]{1,64}')->middleware('throttle:20,1');
+        Route::put('/me/dashboard/preferences', [DashboardSummaryController::class,'preferences'])
+            ->middleware('throttle:15,1');
         Route::middleware(EnsureCircleM5Enabled::class)->group(function (): void {
         // M5 private Circles: no public directory, no passive membership consent.
         Route::get('/me/circles/primary', [CircleController::class, 'primary']);
