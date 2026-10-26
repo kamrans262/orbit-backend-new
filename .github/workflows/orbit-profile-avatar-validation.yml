@@ -4,6 +4,9 @@ on:
     branches: [release/m5-backend-admin-gated-2026-10-21]
     paths:
       - 'app/Modules/Profile/Http/Controllers/ProfileSettingsController.php'
+      - 'app/Modules/Media/Http/Controllers/MediaController.php'
+      - 'app/Modules/Media/Services/MediaLifecycleWorker.php'
+      - 'tests/Feature/OrbitM6HostingerMediaTest.php'
       - 'database/migrations/2026_10_26_000002_add_m6_avatar_to_orbit_users.php'
       - 'tests/Feature/OrbitProfileSettingsTest.php'
       - '.github/workflows/orbit-profile-avatar-validation.yml'
@@ -59,6 +62,9 @@ jobs:
       - name: Validate avatar PHP and migration syntax
         run: |
           php -l app/Modules/Profile/Http/Controllers/ProfileSettingsController.php
+          php -l app/Modules/Media/Http/Controllers/MediaController.php
+          php -l app/Modules/Media/Services/MediaLifecycleWorker.php
+          php -l tests/Feature/OrbitM6HostingerMediaTest.php
           php -l database/migrations/2026_10_26_000002_add_m6_avatar_to_orbit_users.php
           php -l tests/Feature/OrbitProfileSettingsTest.php
       - name: Check migrations on disposable MariaDB
