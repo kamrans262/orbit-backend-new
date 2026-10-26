@@ -87,7 +87,7 @@ final class OrbitM9PresenceTest extends TestCase
         $this->withToken($bobToken)->getJson("/api/v1/circles/$circle/presence")
             ->assertOk()->assertJsonPath('data.members.0.user_id',$alice->id)
             ->assertJsonPath('data.members.0.state','active_now')
-            ->assertHeader('Cache-Control','private, no-store, max-age=0');
+            ->assertHeader('Cache-Control','max-age=0, no-store, private');
         $this->withToken($strangerToken)->getJson("/api/v1/circles/$circle/presence")->assertNotFound();
         DB::table('orbit_user_preferences')->where('user_id',$alice->id)->update([
             'privacy'=>json_encode(['ghost_mode_enabled'=>true,'presence_visibility'=>'My Circle']),
@@ -108,7 +108,7 @@ final class OrbitM9PresenceTest extends TestCase
         $this->withToken($aliceToken)->postJson('/api/v1/presence/heartbeat',['state'=>'active'])->assertOk();
         $this->withToken($bobToken)->getJson("/api/v1/circles/$circle/presence")
             ->assertJsonCount(1,'data.members');
-        $this->withToken($bobToken)->postJson('/api/v1/me/blocks',['user_id'=>$alice->id])->assertOk();
+        $this->withToken($bobToken)->postJson('/api/v1/me/blocks',['user_id'=>$alice->id])->assertCreated();
         // A block by the viewer against Circle owner also revokes Circle access.
         $this->withToken($bobToken)->getJson("/api/v1/circles/$circle/presence")
             ->assertNotFound();
