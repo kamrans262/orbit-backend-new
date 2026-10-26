@@ -1,7 +1,7 @@
 name: Orbit M3-M6 secure avatar integration
 on:
   push:
-    branches: [release/m5-backend-admin-gated-2026-10-21]
+    branches: [release/m5-backend-admin-gated-2026-10-21, feature/m9-presence-backend-admin]
     paths:
       - 'app/Modules/Profile/Http/Controllers/ProfileSettingsController.php'
       - 'app/Modules/Media/Http/Controllers/MediaController.php'
