@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/orbit-m8-backend-validation.yml'
       - 'app/Modules/Dashboard/**'
+      - 'app/Modules/Moments/Http/Controllers/MomentController.php'
       - 'config/orbit_dashboard.php'
       - 'routes/api.php'
       - 'routes/admin.php'
@@ -63,6 +64,7 @@ jobs:
           php artisan key:generate
       - name: Verify M8 PHP syntax and registered routes
         run: |
+          php -l app/Modules/Moments/Http/Controllers/MomentController.php
           php -l app/Modules/Dashboard/Services/DashboardSummaryService.php
           php -l app/Modules/Dashboard/Http/Controllers/DashboardSummaryController.php
           php -l app/Modules/Dashboard/Http/Controllers/AdminDashboardController.php
