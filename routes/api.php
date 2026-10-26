@@ -34,6 +34,8 @@ Route::prefix('v1')->group(function (): void {
     // Internal gateway: secret-authenticated, session ticket revalidation per event.
     Route::post('/presence/realtime/introspect', [PresenceGatewayController::class,'introspect'])
         ->middleware('throttle:240,1');
+    Route::post('/presence/realtime/inbound', [PresenceGatewayController::class,'inbound'])
+        ->middleware('throttle:120,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
         // M9: trusted-device ephemeral presence. No realtime/polling shortcut.
