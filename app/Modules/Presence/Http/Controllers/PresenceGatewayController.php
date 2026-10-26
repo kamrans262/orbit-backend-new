@@ -23,6 +23,27 @@ final class PresenceGatewayController extends Controller
      * Backend-to-gateway authorization only. Never call directly from Flutter.
      * Validate the event again BEFORE forwarding it to a websocket recipient.
      */
+    public function inbound(Request $request, PresenceRealtimeTicketService $tickets,
+        \App\Modules\Presence\Services\PresenceService $presence,
+        \App\Modules\Presence\Services\PresenceTypingService $typing): JsonResponse
+    {
+        $data=$request->validate([
+            'ticket'=>['required','string','min:40','max:100'],
+            'kind'=>['required','in:presence.update,typing.update'],
+            'state'=>['required_if:kind,presence.update','nullable','in:active,idle'],
+            'circle_id'=>['required_if:kind,typing.update','nullable','uuid'],
+            'typing'=>['required_if:kind,typing.update','nullable','boolean'],
+        ]);
+        $session=$tickets->introspect(
+            (string)$request->header('X-Orbit-Presence-Gateway',''),
+            $data['ticket'],[]);
+        $viewer=$session['viewer_id'];
+        if ($data['kind']==='presence.update') {
+            return $this->respond($presence->heartbeat($viewer,$session['device_id'],$data['state']));
+        }
+        return $this->respond($typing->update($viewer,$data['circle_id'],(bool)$data['typing']));
+    }
+
     public function introspect(Request $request, PresenceRealtimeTicketService $service): JsonResponse
     {
         $payload=$request->validate([
