@@ -54,3 +54,6 @@ php -l app/Modules/Presence/Http/Controllers/AdminPresenceController.php
 php artisan test --filter=OrbitM9PresenceTest
 php artisan test --filter=OrbitM8DashboardTest
 Use isolated staging Redis with secure TLS/auth for actual lease and websocket tests.
+
+## Parallel M8 release movement (verified after M9 Stage 2 CI)
+The independently managed backend release branch advanced from f5b86f9 to b16ea90 while M9 was in progress. Those five later M8 commits include an M8 validation workflow, Moments controller change, Stage 4 evidence/release gate and updated M8 test. They were NOT automatically merged into M9; the M9 branch still contains the earlier verified M8 Stage 2 baseline. Resolve any overlap, especially OrbitM8DashboardTest.php, in the later coordinated consolidation. M9 did not write to the M8 or release branches.
