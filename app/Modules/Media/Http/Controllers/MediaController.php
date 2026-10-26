@@ -3,6 +3,7 @@ namespace App\Modules\Media\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Media\Services\MediaObjectStore;
+use App\Modules\Media\Services\MediaLifecycleWorker;
 use App\Modules\Media\Services\MediaPolicy;
 use App\Modules\Social\Services\SocialGraphService;
 use App\Modules\Circle\Services\CircleAccessPolicy;
@@ -474,7 +475,14 @@ final class MediaController extends Controller
                 ]);
             }
         });
-        // Verification worker streams private ciphertext; never mark ready before hash proof.
+        // Small Hostinger-only avatars can be verified promptly for a
+        // responsive Save Changes flow. Never skip the full SHA-256 proof.
+        if($object->purpose==='avatar' && !$u->variant_id
+            && (int)$u->declared_bytes<=1048576 && $store->mode()==='local_chunked'
+            && app(MediaLifecycleWorker::class)->verifySmallAvatar($u->id)) {
+            return $this->response(['media_id'=>$u->media_id,'state'=>'ready']);
+        }
+        // Larger uploads still require the existing background worker.
         return $this->response(['media_id'=>$u->media_id,'state'=>'verifying'],202);
     }
     public function abort(Request $r,string $upload,MediaObjectStore $store)

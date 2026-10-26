@@ -73,6 +73,76 @@ final class OrbitProfileSettingsTest extends TestCase
         $this->assertNotSame('exposed', OrbitUser::findOrFail($session['user']['id'])->password_hash);
     }
 
+    public function test_avatar_requires_private_ready_owner_media_and_an_active_device_envelope(): void
+    {
+        $session=$this->signIn('avatar-owner@example.test');
+        $id=$session['user']['id'];
+        $device=$session['device']['id'];
+        $token=$session['access_token'];
+        config()->set('orbit_media.enabled',true);
+        $name=['display_name'=>'Avatar Owner','username'=>'avatar.owner'];
+        $random=(string)Str::uuid();
+        $this->withToken($token)->patchJson('/api/v1/me/profile',
+            [...$name,'avatar_media_id'=>$random])->assertNotFound();
+        $this->assertNull(DB::table('orbit_users')->where('id',$id)->value('avatar_media_id'));
+
+        $avatar=(string)Str::uuid();
+        DB::table('media_objects')->insert([
+            'id'=>$avatar,'owner_user_id'=>$id,'purpose'=>'avatar',
+            'kind'=>'image','declared_mime'=>'image/jpeg',
+            'cipher_suite'=>'aes256gcm-v1',
+            'object_key'=>'orbit-private/v1/'.$avatar,
+            'state'=>'ready','ready_at'=>now(),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->patchJson('/api/v1/me/profile',
+            [...$name,'avatar_media_id'=>$avatar])->assertNotFound();
+        $grant=(string)Str::uuid();
+        DB::table('media_audience_grants')->insert([
+            'id'=>$grant,'media_id'=>$avatar,'issuer_user_id'=>$id,
+            'recipient_user_id'=>$id,'audience_kind'=>'only_me',
+            'policy_version'=>1,'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('media_device_key_envelopes')->insert([
+            'id'=>(string)Str::uuid(),'media_id'=>$avatar,'grant_id'=>$grant,
+            'recipient_device_id'=>$device,'variant'=>'original',
+            'key_version'=>'v1','algorithm'=>'x25519-hkdfsha256-aes256gcm-v1',
+            'wrapped_key_ciphertext'=>str_repeat('x',80),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->patchJson('/api/v1/me/profile',
+            [...$name,'avatar_media_id'=>$avatar])->assertOk()
+            ->assertJsonPath('data.avatar_media_id',$avatar);
+        $this->getJson('/api/v1/me/profile')->assertJsonPath('data.avatar_media_id',$avatar);
+        $this->assertDatabaseHas('media_references',[
+            'media_id'=>$avatar,'owner_user_id'=>$id,'consumer_type'=>'avatar',
+            'consumer_id'=>$id,'released_at'=>null,
+        ]);
+        $this->patchJson('/api/v1/me/profile',$name)->assertOk()
+            ->assertJsonPath('data.avatar_media_id',$avatar);
+        $this->patchJson('/api/v1/me/profile',
+            [...$name,'avatar_media_id'=>null])->assertOk()
+            ->assertJsonPath('data.avatar_media_id',null);
+        $this->assertDatabaseHas('media_references',['media_id'=>$avatar,
+            'consumer_type'=>'avatar','consumer_id'=>$id]);
+        $this->assertNotNull(DB::table('media_references')
+            ->where('media_id',$avatar)->value('released_at'));
+    }
+
+    public function test_profile_avatar_rejects_unenabled_media_and_external_urls(): void
+    {
+        $session=$this->signIn('avatar-disabled@example.test');
+        $name=['display_name'=>'Avatar Owner','username'=>'avatar.owner'];
+        $this->withToken($session['access_token'])->patchJson('/api/v1/me/profile',
+            [...$name,'avatar_media_id'=>'https://example.com/a.jpg'])
+            ->assertUnprocessable()->assertJsonValidationErrors('avatar_media_id');
+        config()->set('orbit_media.enabled',false);
+        $this->patchJson('/api/v1/me/profile',
+            [...$name,'avatar_media_id'=>(string)Str::uuid()])->assertStatus(503);
+        $this->patchJson('/api/v1/me/profile',$name)->assertOk()
+            ->assertJsonPath('data.avatar_media_id',null);
+    }
+
     public function test_username_unique_per_account_and_current_name_may_be_reused(): void
     {
         $first = $this->signIn('first@example.test');

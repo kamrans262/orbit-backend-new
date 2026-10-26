@@ -41,6 +41,47 @@ final class OrbitM6HostingerMediaTest extends TestCase
         ],$body);
     }
 
+    public function test_small_encrypted_avatar_is_hash_verified_before_complete_responds_ready(): void
+    {
+        $user=OrbitUser::create([
+            'username'=>'avatar_'.Str::random(8),
+            'display_name'=>'Avatar Owner','status'=>'active',
+        ]);
+        $device=OrbitDevice::create([
+            'user_id'=>$user->id,'device_public_id'=>(string)Str::uuid(),
+            'name'=>'Avatar test phone','platform'=>'android',
+            'public_key'=>base64_encode(random_bytes(32)),
+            'trust_state'=>'trusted','attestation_state'=>'verified',
+            'approved_at'=>now(),
+        ]);
+        $token=app(TokenService::class)->issue($user,$device,null)['access_token'];
+        $cipher=random_bytes(30_016); // Bounded small encrypted avatar.
+        $init=$this->withToken($token)
+            ->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/media/uploads',[
+                'purpose'=>'avatar','kind'=>'image','declared_mime'=>'image/jpeg',
+                'declared_bytes'=>strlen($cipher),'cipher_suite'=>'aes256gcm-v1',
+            ])->assertCreated()->json('data');
+        $upload=$init['upload_id'];$media=$init['media_id'];
+        $etag=$this->uploadChunk($token,
+            '/api/v1/media/uploads/'.$upload.'/chunks/1',$cipher,
+            hash('sha256',$cipher))->assertCreated()->json('data.etag');
+        $this->withToken($token)
+            ->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/media/uploads/'.$upload.'/complete',[
+                'total_cipher_bytes'=>strlen($cipher),
+                'cipher_sha256'=>hash('sha256',$cipher),
+                'parts'=>[['part_number'=>1,'etag'=>$etag]],
+            ])->assertOk()->assertJsonPath('data.state','ready');
+        $this->assertDatabaseHas('media_objects',[
+            'id'=>$media,'purpose'=>'avatar','state'=>'ready',
+        ]);
+        // A second cron pass cannot double-verify or emit another ready event.
+        $this->assertSame(0,app(MediaLifecycleWorker::class)->run()['verified']);
+        $this->assertSame(1,DB::table('media_event_outbox')
+            ->where('media_id',$media)->where('event_type','media.upload.ready.v1')->count());
+    }
+
     public function test_hostinger_private_chunk_replay_integrity_lifecycle_and_download(): void
     {
         $user=OrbitUser::create([

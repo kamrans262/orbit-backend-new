@@ -1,0 +1,75 @@
+name: Orbit M3-M6 secure avatar integration
+on:
+  push:
+    branches: [release/m5-backend-admin-gated-2026-10-21]
+    paths:
+      - 'app/Modules/Profile/Http/Controllers/ProfileSettingsController.php'
+      - 'app/Modules/Media/Http/Controllers/MediaController.php'
+      - 'app/Modules/Media/Services/MediaLifecycleWorker.php'
+      - 'tests/Feature/OrbitM6HostingerMediaTest.php'
+      - 'database/migrations/2026_10_26_000002_add_m6_avatar_to_orbit_users.php'
+      - 'tests/Feature/OrbitProfileSettingsTest.php'
+      - '.github/workflows/orbit-profile-avatar-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  profile-avatar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: rootpass
+          MARIADB_DATABASE: orbit_ci
+          MARIADB_USER: orbit_ci
+          MARIADB_PASSWORD: orbit_ci_pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: testing
+      APP_DEBUG: true
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: orbit_ci
+      DB_USERNAME: orbit_ci
+      DB_PASSWORD: orbit_ci_pass
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, fileinfo, pdo_mysql, openssl, sodium
+          tools: composer:v2
+          coverage: none
+      - name: Install locked dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Generate disposable test key
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+      - name: Validate avatar PHP and migration syntax
+        run: |
+          php -l app/Modules/Profile/Http/Controllers/ProfileSettingsController.php
+          php -l app/Modules/Media/Http/Controllers/MediaController.php
+          php -l app/Modules/Media/Services/MediaLifecycleWorker.php
+          php -l tests/Feature/OrbitM6HostingerMediaTest.php
+          php -l database/migrations/2026_10_26_000002_add_m6_avatar_to_orbit_users.php
+          php -l tests/Feature/OrbitProfileSettingsTest.php
+      - name: Check migrations on disposable MariaDB
+        run: php artisan migrate --force
+      - name: Profile avatar security, persistence and M3 regressions
+        run: php artisan test --filter=OrbitProfileSettingsTest
+      - name: Existing encrypted Hostinger media regressions
+        run: php artisan test --filter=OrbitM6HostingerMediaTest

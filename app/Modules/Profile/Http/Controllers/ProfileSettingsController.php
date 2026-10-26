@@ -5,9 +5,11 @@ namespace App\Modules\Profile\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\OrbitUser;
 use App\Modules\Identity\Services\TokenService;
+use App\Modules\Media\Services\MediaReferenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 final class ProfileSettingsController extends Controller
@@ -40,11 +42,17 @@ final class ProfileSettingsController extends Controller
     public function show(Request $request): JsonResponse
     {
         $user = $this->user($request);
+        // Return only an opaque identifier. Never expose a public image URL,
+        // plaintext thumbnail, or key envelope in the M3 profile response.
+        $avatar = config('orbit_media.enabled') === true
+            && Schema::hasColumn('orbit_users', 'avatar_media_id')
+                ? $user->avatar_media_id : null;
         return $this->respond(['id' => $user->id, 'display_name' => $user->display_name,
-            'username' => $user->username, 'bio' => $user->bio]);
+            'username' => $user->username, 'bio' => $user->bio,
+            'avatar_media_id' => $avatar]);
     }
 
-    public function update(Request $request): JsonResponse
+    public function update(Request $request, MediaReferenceService $references): JsonResponse
     {
         $user = $this->user($request);
         $data = $request->validate([
@@ -53,19 +61,61 @@ final class ProfileSettingsController extends Controller
                 'regex:/^[A-Za-z0-9._]+$/D',
                 Rule::unique('orbit_users', 'username')->ignore($user->id)],
             'bio' => ['sometimes', 'nullable', 'string', 'max:280'],
+            // Opaque M6 media UUID only; never accept a path, base64 body or URL.
+            'avatar_media_id' => ['sometimes', 'nullable', 'uuid'],
         ]);
-        // Uploads are not part of M3; never treat arbitrary client paths as URLs.
+        $hasAvatar = array_key_exists('avatar_media_id', $data);
+        $avatar = $hasAvatar ? $data['avatar_media_id'] : null;
+        unset($data['avatar_media_id']);
+        if ($hasAvatar) {
+            abort_unless(config('orbit_media.enabled') === true
+                && Schema::hasColumn('orbit_users','avatar_media_id'),503,
+                'Private profile media is not enabled.');
+            if ($avatar !== null) {
+                // Even the owner cannot attach ciphertext without a verified
+                // original-key envelope for the current trusted device.
+                $device = $request->attributes->get('orbit_session')->device_id;
+                $allowed = DB::table('media_objects as m')
+                    ->join('media_device_key_envelopes as e','e.media_id','=','m.id')
+                    ->join('media_audience_grants as g','g.id','=','e.grant_id')
+                    ->where('m.id',$avatar)->where('m.owner_user_id',$user->id)
+                    ->where('m.purpose','avatar')->where('m.kind','image')
+                    ->where('m.state','ready')->whereNull('m.deleted_at')
+                    ->where('e.recipient_device_id',$device)
+                    ->where('e.variant','original')->whereNull('e.revoked_at')
+                    ->where('g.recipient_user_id',$user->id)
+                    ->where('g.audience_kind','only_me')->whereNull('g.revoked_at')
+                    ->where(fn($q)=>$q->whereNull('g.expires_at')
+                        ->orWhere('g.expires_at','>',now()))
+                    ->exists();
+                abort_unless($allowed,404,'Private avatar is unavailable.');
+            }
+        }
         $data['username'] = strtolower($data['username']);
-        $user->fill($data);
-        $changedFields = array_intersect(array_keys($user->getDirty()),
-            ['display_name', 'username', 'bio']);
         $session = $request->attributes->get('orbit_session');
-        DB::transaction(function () use ($user, $session, $changedFields): void {
-            $user->save();
+        DB::transaction(function () use ($user,$session,$data,$hasAvatar,$avatar,$references): void {
+            $locked = OrbitUser::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $locked->fill($data);
+            $changedFields = array_intersect(array_keys($locked->getDirty()),
+                ['display_name','username','bio']);
+            $oldAvatar = $hasAvatar ? $locked->avatar_media_id : null;
+            if ($hasAvatar && $avatar !== $oldAvatar) {
+                if ($avatar !== null) {
+                    $references->attach($avatar,$locked->id,'avatar',$locked->id);
+                }
+                $locked->avatar_media_id = $avatar;
+            }
+            $locked->save();
+            if ($hasAvatar && $avatar !== $oldAvatar) {
+                if ($oldAvatar !== null) {
+                    $references->release($oldAvatar,$locked->id,'avatar',$locked->id);
+                }
+                $changedFields[]='avatar_media_id';
+            }
             foreach ($changedFields as $field) {
-                // Field name only. Never log the new/old bio or contact details.
-                app(TokenService::class)->event($user->id, $session->device_id,
-                    'settings.profile_updated', $field);
+                // Only names of changed fields in logs, never media IDs.
+                app(TokenService::class)->event($locked->id,$session->device_id,
+                    'settings.profile_updated',$field);
             }
         });
         return $this->show($request);
