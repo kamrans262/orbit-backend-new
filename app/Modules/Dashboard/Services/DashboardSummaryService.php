@@ -135,24 +135,11 @@ final class DashboardSummaryService
         return $items;
     }
 
+    /** Future M9/M10/M15 contextual providers are not implemented yet.
+     * Never generate unsolicited or inferred private-state recommendations.
+     */
     private function smartCardItems(string $viewer): array
     {
-        if (config('orbit_dashboard.smart_cards_enabled') !== true) return [];
-        $suppressed=DB::table('dashboard_card_dismissals')
-            ->where('user_id',$viewer)->where('card_key','friend_requests')
-            ->where('dismissed_until','>',now())->exists();
-        if ($suppressed) return [];
-        $requests=DB::table('friend_requests')
-            ->where('recipient_id',$viewer)->where('status','pending')
-            ->orderByDesc('created_at')->limit(20)->pluck('sender_id');
-        foreach ($requests as $sender) {
-            if (!$this->social->isBlockedEitherWay($viewer,(string)$sender)
-                && OrbitUser::query()->whereKey($sender)->where('status','active')
-                    ->whereNull('deletion_requested_at')->exists()) {
-                return [['key'=>'friend_requests','kind'=>'friend_requests',
-                    'destination'=>'friends_requests']];
-            }
-        }
         return [];
     }
 
@@ -167,8 +154,7 @@ final class DashboardSummaryService
                 ? $this->safely(fn()=> $this->momentsItems($viewer)) : $this->section('disabled'),
             'plans' => $this->section('disabled'),
             'activity' => $this->section('disabled'),
-            'smart_cards' => config('orbit_dashboard.smart_cards_enabled') === true
-                ? $this->safely(fn()=> $this->smartCardItems($viewer)) : $this->section('disabled'),
+            'smart_cards' => $this->section('disabled'),
         ];
         $graphRevision=$this->social->currentRevision($viewer);
         $circleRevisions=array_map(static fn($r)=>[$r['id'],$r['revision']],$sections['circles']['items']);
@@ -192,7 +178,7 @@ final class DashboardSummaryService
                 'moments'=>config('orbit_moments.enabled')===true && config('orbit_media.enabled')===true,
                 'plans'=>false, 'presence'=>false, 'ping'=>false, 'sos'=>false,
                 'location'=>false, 'activity'=>false,
-                'smart_cards'=>config('orbit_dashboard.smart_cards_enabled')===true,
+                'smart_cards'=>false,
             ],
             'greeting'=>['display_name'=>$user->display_name],
             'sections'=>$sections,
@@ -201,8 +187,15 @@ final class DashboardSummaryService
 
     public function dismiss(string $viewer,string $key): array
     {
-        abort_unless($key === 'friend_requests'
+        // Reserve only the documented contextual card keys. No triggers will
+        // render until the real upstream services and explicit consent exist.
+        abort_unless(in_array($key,['low_battery','arrival','trip','shared_event'],true)
             && config('orbit_dashboard.smart_cards_enabled')===true, 404);
+        $old=DB::table('dashboard_card_dismissals')->where('user_id',$viewer)
+            ->where('card_key',$key)->value('dismissed_until');
+        if ($old && now()->lt($old)) {
+            return ['key'=>$key,'dismissed_until'=>\Illuminate\Support\Carbon::parse($old)->toIso8601String()];
+        }
         $until=now()->addHours((int) config('orbit_dashboard.dismiss_hours',24));
         DB::table('dashboard_card_dismissals')->updateOrInsert(
             ['user_id'=>$viewer,'card_key'=>$key],

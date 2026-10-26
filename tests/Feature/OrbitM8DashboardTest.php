@@ -117,14 +117,14 @@ final class OrbitM8DashboardTest extends TestCase
     {
         [$a,$ta]=$this->person('alpha');
         [$b,$tb]=$this->person('bravo');
-        $path='/api/v1/me/dashboard/cards/friend_requests/dismiss';
+        $path='/api/v1/me/dashboard/cards/shared_event/dismiss';
         $this->withToken($ta)->postJson($path)->assertOk()
-            ->assertJsonPath('data.key','friend_requests');
+            ->assertJsonPath('data.key','shared_event');
         $this->assertDatabaseHas('dashboard_card_dismissals',[
-            'user_id'=>$a->id,'card_key'=>'friend_requests',
+            'user_id'=>$a->id,'card_key'=>'shared_event',
         ]);
         $this->assertDatabaseMissing('dashboard_card_dismissals',[
-            'user_id'=>$b->id,'card_key'=>'friend_requests',
+            'user_id'=>$b->id,'card_key'=>'shared_event',
         ]);
         $this->withToken($ta)->postJson('/api/v1/me/dashboard/cards/private_data/dismiss')
             ->assertNotFound();

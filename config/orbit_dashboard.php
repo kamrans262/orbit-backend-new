@@ -6,7 +6,7 @@ return [
     'circle_limit' => 8,
     'people_limit' => 12,
     'moment_limit' => 3,
-    'smart_cards_enabled' => (bool) env('ORBIT_M8_SMART_CARDS_ENABLED', true),
+    'smart_cards_enabled' => (bool) env('ORBIT_M8_SMART_CARDS_ENABLED', false),
     'dismiss_hours' => 24,
     'max_circle_order' => 20,
     // Plans, presence, SOS, Ping, location and activity have no authorized M8 provider yet.
