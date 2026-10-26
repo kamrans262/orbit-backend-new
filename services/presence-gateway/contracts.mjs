@@ -41,7 +41,8 @@ export function normalizedEvent(json, now = Date.now()) {
         || Date.parse(value.expires_at) <= now)) return null;
   }
   return { type: value.type, circle_id: value.circle_id,
-    ...(value.subject_id ? { subject_id: value.subject_id } : {}),
+    ...(value.type !== 'presence.circle_clear' && value.subject_id
+      ? { subject_id: value.subject_id } : {}),
     ...(value.type === 'presence.changed' ? { snapshot: value.snapshot } : {}),
     ...(value.type === 'presence.typing'
       ? { typing: value.typing, expires_at: value.expires_at ?? null } : {}) };
