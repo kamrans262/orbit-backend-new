@@ -135,23 +135,34 @@ async function deliver(channel,raw) {
   if (!entries) return;
   for (const ctx of [...entries]) {
     if (ctx.closed || ctx.socket.readyState !== WebSocket.OPEN) continue;
-    // Critical: re-check the LIVE trusted session, audience, M3 Ghost, M4
-    // blocks, M5 consent and membership for every recipient/event. Fail closed.
-    const active = await validate(ctx,event);
-    if (!active) {
-      // A clear contains no member/roster and prevents client cached indicators.
-      if (ctx.socket.readyState === WebSocket.OPEN) {
-        try {
-          ctx.socket.send(JSON.stringify({event:{
-            type:'presence.circle_clear',circle_id:event.circle_id,
-          }}));
-        } catch {}
-      }
+    // Bound stale queued work and backpressure per recipient. Other recipients
+    // must never wait for a slow/expired session in this Circle.
+    ctx.pending=(ctx.pending ?? 0)+1;
+    if (ctx.pending > 20 || ctx.socket.bufferedAmount > 65536) {
       terminate(ctx);
       continue;
     }
-    if (ctx.socket.readyState !== WebSocket.OPEN || ctx.closed) continue;
-    ctx.socket.send(JSON.stringify({event}));
+    const one = async () => {
+      if (ctx.closed) return;
+      // Every event is reauthorized in delivery order for THIS socket. Laravel
+      // remains authority for current membership, consent, Ghost and blocks.
+      const active = await validate(ctx,event);
+      if (!active) {
+        if (ctx.socket.readyState === WebSocket.OPEN) {
+          try { ctx.socket.send(JSON.stringify({event:{
+            type:'presence.circle_clear',circle_id:event.circle_id,
+          }})); } catch {}
+        }
+        terminate(ctx);
+        return;
+      }
+      if (ctx.socket.readyState !== WebSocket.OPEN || ctx.closed) return;
+      ctx.socket.send(JSON.stringify({event}));
+    };
+    // Different clients are authorized concurrently, but messages for a
+    // single client are never delivered out of order.
+    ctx.queue=(ctx.queue ?? Promise.resolve()).then(one).catch(() => terminate(ctx))
+      .finally(() => { ctx.pending=Math.max(0,(ctx.pending ?? 1)-1); });
   }
 }
 
