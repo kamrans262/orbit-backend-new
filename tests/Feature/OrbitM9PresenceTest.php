@@ -235,6 +235,21 @@ final class OrbitM9PresenceTest extends TestCase
             ['typing'=>true])->assertForbidden();
     }
 
+    public function test_realtime_gateway_inbound_requires_ticket_and_gateway_secret(): void
+    {
+        config()->set('orbit_presence.realtime_enabled',true);
+        config()->set('orbit_presence.gateway_secret',str_repeat('k',48));
+        [$alice,$token]=$this->person('alice');
+        $ticket=$this->withToken($token)->postJson('/api/v1/presence/realtime/ticket')
+            ->assertOk()->json('data.ticket');
+        $payload=['ticket'=>$ticket,'kind'=>'presence.update','state'=>'active'];
+        $this->postJson('/api/v1/presence/realtime/inbound',$payload,
+            ['X-Orbit-Presence-Gateway'=>'wrong'])->assertForbidden();
+        $this->postJson('/api/v1/presence/realtime/inbound',$payload,
+            ['X-Orbit-Presence-Gateway'=>str_repeat('k',48)])
+            ->assertOk()->assertJsonPath('data.state','active');
+    }
+
     public function test_admin_presence_view_requires_a_secure_admin_session(): void
     {
         $this->get('/admin/presence')->assertRedirect(route('orbit.admin.login'));
