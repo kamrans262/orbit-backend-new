@@ -1,6 +1,7 @@
 <?php
 namespace App\Modules\Presence\Services;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Log;
 
@@ -18,9 +19,16 @@ final class PresenceRealtimePublisher
         Redis::connection((string)config('orbit_presence.redis_connection','default'))
             ->publish($channel,json_encode(['v'=>1,'event'=>$event,'issued_at'=>now()->toIso8601String()],JSON_THROW_ON_ERROR));
     }
-    public function changed(string $subject): void
+    public function changed(string $subject, bool $urgent = false): void
     {
         if (!$this->enabled()) return;
+        if (!$urgent) {
+            // Source coalescing target: <=1 ordinary state broadcast / 5s.
+            // Redis add is atomic across Laravel workers and expires automatically.
+            $gate='orbit:m9:fanout:'.hash_hmac('sha256',$subject,(string)config('app.key'));
+            if (!Cache::store((string)config('orbit_presence.store','redis'))
+                ->add($gate,true,(int)config('orbit_presence.broadcast_throttle_seconds',5))) return;
+        }
         $circleIds=DB::table('circle_members')->where('user_id',$subject)->whereNull('removed_at')
             ->limit(100)->pluck('circle_id')->all();
         $state=$this->leases->snapshot($subject);
