@@ -130,6 +130,15 @@ final class TokenService
         ], true)) {
             app(\App\Modules\Circle\Services\CircleLifecycleIntegrity::class)
                 ->identityAccessChanged($uid);
+            // M9 must invalidate cached online states immediately after logout,
+            // recovery, session revocation and account deletion, not just TTL.
+            if (config('orbit_presence.enabled') === true
+                && config('orbit_presence.realtime_enabled') === true) {
+                DB::afterCommit(static function () use ($uid): void {
+                    app(\App\Modules\Presence\Services\PresenceRealtimePublisher::class)
+                        ->safelyClearUser($uid);
+                });
+            }
         }
     }
     private function response(OrbitSession $session, string $refresh): array
