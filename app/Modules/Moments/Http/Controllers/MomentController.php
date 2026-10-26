@@ -278,7 +278,7 @@ final class MomentController extends Controller
         $context=$p->requireContext($m,$viewer,$r->query('context_id'));
         $issued=now()->utc();
         $end=$issued->copy()->addMinutes(5);
-        $viewEnd=\\Illuminate\\Support\\Carbon::parse($m->view_expires_at)->utc();
+        $viewEnd=\Illuminate\Support\Carbon::parse($m->view_expires_at)->utc();
         if($end->gt($viewEnd))$end=$viewEnd;
         abort_if($end->lte($issued),404,'Moment unavailable.');
         return $this->reply([
