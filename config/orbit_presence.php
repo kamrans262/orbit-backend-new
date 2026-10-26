@@ -10,6 +10,7 @@ return [
     'max_circle_members' => 50,
     'typing_ttl_seconds' => 5,
     'typing_throttle_seconds' => 3,
+    'broadcast_throttle_seconds' => 5,
     'realtime_enabled' => (bool) env('ORBIT_M9_REALTIME_ENABLED', false),
     'redis_connection' => env('ORBIT_M9_REDIS_CONNECTION','default'),
     // Secure gateway-only introspection; never place this value in Flutter.
