@@ -35,7 +35,7 @@ test('unknown, stale, oversized and expired protected events are never forwarded
 });
 test('circle_clear contains no protected user payload; typing requires a 5s deadline', () => {
   assert.deepEqual(normalizedEvent(frame({type:'presence.circle_clear',circle_id:cid,subject_id:sid}),now),
-    {type:'presence.circle_clear',circle_id:cid,subject_id:sid});
+    {type:'presence.circle_clear',circle_id:cid});
   assert.equal(normalizedEvent(frame({type:'presence.typing',circle_id:cid,subject_id:sid,
     typing:true,expires_at:'2026-10-26T13:59:59Z'}),now),null);
   assert.equal(normalizedEvent(frame({type:'presence.typing',circle_id:cid,subject_id:sid,
