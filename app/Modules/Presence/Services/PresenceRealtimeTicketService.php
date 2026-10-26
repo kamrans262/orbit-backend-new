@@ -76,7 +76,7 @@ final class PresenceRealtimeTicketService
                 }
             }
         }
-        return ['viewer_id'=>$viewer,'channel'=>'orbit:m9:viewer:'.hash_hmac('sha256',$viewer,(string)config('app.key')),
+        return ['viewer_id'=>$viewer,'device_id'=>$session->device_id,'channel'=>'orbit:m9:viewer:'.hash_hmac('sha256',$viewer,(string)config('app.key')),
             'authorized'=>true,'ticket_expires_in_max'=>60];
     }
 }
