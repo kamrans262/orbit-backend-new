@@ -16,6 +16,7 @@ on:
       - 'tests/Feature/OrbitM8DashboardTest.php'
       - 'scripts/m9_release_gate.py'
       - 'docs/M9_STAGE4_ACCEPTANCE_EVIDENCE.json'
+      - 'services/presence-gateway/**'
   workflow_dispatch:
 
 permissions:
@@ -81,5 +82,10 @@ jobs:
             echo "M9 release gate approved without real-device and gateway evidence"
             exit 1
           fi
+      - name: Check standalone M9 gateway protocol
+        run: |
+          node --check services/presence-gateway/server.mjs
+          node --check services/presence-gateway/contracts.mjs
+          node --test services/presence-gateway/test/*.test.mjs
       - name: Focused M9 and M8 regression tests
         run: php artisan test --compact --filter='OrbitM9PresenceTest|OrbitM8DashboardTest'
