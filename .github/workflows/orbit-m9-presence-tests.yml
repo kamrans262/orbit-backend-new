@@ -14,6 +14,11 @@ on:
       - 'routes/admin.php'
       - 'tests/Feature/OrbitM9PresenceTest.php'
       - 'tests/Feature/OrbitM8DashboardTest.php'
+      - 'tests/Feature/OrbitM8M9AdminVisibilityTest.php'
+      - 'tests/Feature/OrbitAdminM3Test.php'
+      - 'app/Modules/Dashboard/Http/Controllers/AdminDashboardController.php'
+      - 'app/Modules/Presence/Http/Controllers/AdminPresenceController.php'
+      - 'resources/views/orbit-admin/**'
       - 'scripts/m9_release_gate.py'
       - 'docs/M9_STAGE4_ACCEPTANCE_EVIDENCE.json'
       - 'services/presence-gateway/**'
@@ -75,6 +80,9 @@ jobs:
           php -l app/Modules/Identity/Services/TokenService.php
           php -l app/Modules/Circle/Services/CircleFirebaseBridge.php
           php -l tests/Feature/OrbitM9PresenceTest.php
+          php -l tests/Feature/OrbitM8M9AdminVisibilityTest.php
+          php -l app/Modules/Dashboard/Http/Controllers/AdminDashboardController.php
+          php -l app/Modules/Presence/Http/Controllers/AdminPresenceController.php
       - name: Evidence valid but release safely rejected
         run: |
           python3 scripts/m9_release_gate.py docs/M9_STAGE4_ACCEPTANCE_EVIDENCE.json --lint
@@ -94,4 +102,4 @@ jobs:
         working-directory: services/presence-gateway
         run: node --input-type=module -e "await import('ws'); await import('redis'); console.log('Gateway runtime imports available')"
       - name: Focused M9 and M8 regression tests
-        run: php artisan test --compact --filter='OrbitM9PresenceTest|OrbitM8DashboardTest'
+        run: php artisan test --compact --filter='OrbitM9PresenceTest|OrbitM8DashboardTest|OrbitM8M9AdminVisibilityTest|OrbitAdminM3Test'
