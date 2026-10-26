@@ -25,6 +25,7 @@ final class PresenceTypingService
             ->where('permission_key','message')->first();
         abort_unless($row && app(CircleConsentPolicy::class)->consentCurrentlyValid($row,'message'),403);
         $key='orbit:m9:typing:'.hash_hmac('sha256',$circle.'|'.$user,(string)config('app.key'));
+        abort_unless(config('orbit_presence.store') === 'redis' || app()->environment('testing'),503);
         try {
             $cache=Cache::store((string)config('orbit_presence.store','redis'));
             if (!$active) {
