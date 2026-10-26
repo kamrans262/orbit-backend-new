@@ -9,6 +9,7 @@ use App\Modules\Social\Http\Controllers\AdminSocialGraphController;
 use App\Modules\Circle\Http\Controllers\AdminCircleController;
 use App\Modules\Media\Http\Controllers\AdminMediaController;
 use App\Modules\Moments\Http\Controllers\AdminMomentController;
+use App\Modules\Dashboard\Http\Controllers\AdminDashboardController;
 use App\Modules\Config\Http\Middleware\EnsureAdmin;
 use App\Modules\Config\Http\Middleware\RequireAdminPermission;
 
@@ -48,6 +49,8 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
             abort(403);
         })->name('landing');
 
+        Route::get('/home-dashboard', [AdminDashboardController::class,'index'])
+            ->middleware(RequireAdminPermission::class.':config.manage')->name('home-dashboard.index');
         Route::post('/media/jobs/retry', [AdminMediaController::class,'retry'])->middleware([RequireAdminPermission::class.':media.jobs.retry','throttle:4,1'])->name('media.jobs.retry');
         Route::get('/media', [AdminMediaController::class,'index'])
             ->middleware(RequireAdminPermission::class.':media.read')->name('media.index');
