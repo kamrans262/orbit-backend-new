@@ -18,6 +18,7 @@ use App\Modules\Moments\Http\Controllers\MomentNotificationController;
 use App\Modules\Moments\Http\Controllers\MomentPushDeviceController;
 use App\Modules\Dashboard\Http\Controllers\DashboardSummaryController;
 use App\Modules\Presence\Http\Controllers\PresenceController;
+use App\Modules\Presence\Http\Controllers\PresenceGatewayController;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -30,10 +31,15 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/auth/password/reset/confirm', [IdentityController::class, 'confirmPasswordReset'])->middleware('throttle:10,1');
     Route::post('/auth/otp/verify', [IdentityController::class, 'verifyOtp'])->middleware('throttle:25,1');
     Route::post('/auth/refresh', [IdentityController::class, 'refresh'])->middleware('throttle:30,1');
+    // Internal gateway: secret-authenticated, session ticket revalidation per event.
+    Route::post('/presence/realtime/introspect', [PresenceGatewayController::class,'introspect'])
+        ->middleware('throttle:240,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
         // M9: trusted-device ephemeral presence. No realtime/polling shortcut.
         Route::post('/presence/heartbeat', [PresenceController::class,'heartbeat'])->middleware('throttle:30,1');
+        Route::post('/presence/realtime/ticket', [PresenceGatewayController::class,'ticket'])
+            ->middleware('throttle:20,1');
         Route::post('/presence/disconnect', [PresenceController::class,'disconnect'])->middleware('throttle:20,1');
         Route::post('/circles/{circle}/typing', [PresenceController::class,'typing'])
             ->whereUuid('circle')->middleware('throttle:25,1');
