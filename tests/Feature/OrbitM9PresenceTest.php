@@ -109,10 +109,26 @@ final class OrbitM9PresenceTest extends TestCase
         $this->withToken($bobToken)->getJson("/api/v1/circles/$circle/presence")
             ->assertJsonCount(1,'data.members');
         $this->withToken($bobToken)->postJson('/api/v1/me/blocks',['user_id'=>$alice->id])->assertOk();
+        // A block by the viewer against Circle owner also revokes Circle access.
+        $this->withToken($bobToken)->getJson("/api/v1/circles/$circle/presence")
+            ->assertNotFound();
+    }
+
+    public function test_expired_90_second_lease_does_not_leave_a_false_online_status(): void
+    {
+        [$alice,$aliceToken]=$this->person('alice');
+        [$bob,$bobToken]=$this->person('bob');
+        $circle=$this->circleWithMembers($aliceToken,$bob->id);
+        $this->allowGlobal($alice->id);
+        $this->withToken($aliceToken)->putJson("/api/v1/me/presence/circles/$circle",[
+            'enabled'=>true,'duration'=>'persistent',
+        ])->assertOk();
+        $this->withToken($aliceToken)->postJson('/api/v1/presence/heartbeat',['state'=>'active'])->assertOk();
+        $this->withToken($bobToken)->getJson("/api/v1/circles/$circle/presence")
+            ->assertOk()->assertJsonCount(1,'data.members');
+        $this->travel(91)->seconds();
         $this->withToken($bobToken)->getJson("/api/v1/circles/$circle/presence")
             ->assertOk()->assertJsonCount(0,'data.members');
-        $this->travel(91)->seconds();
-        $this->withToken($aliceToken)->getJson('/api/v1/me/presence/settings')->assertOk();
         $this->travelBack();
     }
 
