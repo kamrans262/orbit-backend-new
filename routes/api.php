@@ -35,6 +35,8 @@ Route::prefix('v1')->group(function (): void {
         // M9: trusted-device ephemeral presence. No realtime/polling shortcut.
         Route::post('/presence/heartbeat', [PresenceController::class,'heartbeat'])->middleware('throttle:30,1');
         Route::post('/presence/disconnect', [PresenceController::class,'disconnect'])->middleware('throttle:20,1');
+        Route::post('/circles/{circle}/typing', [PresenceController::class,'typing'])
+            ->whereUuid('circle')->middleware('throttle:25,1');
         Route::get('/me/presence/settings', [PresenceController::class,'settings'])->middleware('throttle:20,1');
         Route::put('/me/presence/circles/{circle}', [PresenceController::class,'circleSettings'])
             ->whereUuid('circle')->middleware('throttle:12,1');
