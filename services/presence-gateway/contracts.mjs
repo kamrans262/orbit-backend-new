@@ -40,10 +40,14 @@ export function normalizedEvent(json, now = Date.now()) {
     if (value.typing && (!Number.isFinite(Date.parse(value.expires_at))
         || Date.parse(value.expires_at) <= now)) return null;
   }
+  const cleanSnapshot = value.type === 'presence.changed'
+    ? { state: value.snapshot.state,
+        observed_at: value.snapshot.observed_at ?? null,
+        expires_at: value.snapshot.expires_at } : undefined;
   return { type: value.type, circle_id: value.circle_id,
     ...(value.type !== 'presence.circle_clear' && value.subject_id
       ? { subject_id: value.subject_id } : {}),
-    ...(value.type === 'presence.changed' ? { snapshot: value.snapshot } : {}),
+    ...(value.type === 'presence.changed' ? { snapshot: cleanSnapshot } : {}),
     ...(value.type === 'presence.typing'
       ? { typing: value.typing, expires_at: value.expires_at ?? null } : {}) };
 }
