@@ -1,3 +1,22 @@
+# Orbit M9 — Stage 2 Backend and Admin VERIFICATION (2026-10-26)
+
+Status: Laravel backend implementation committed; focused automated tests PASS. Production WebSocket gateway and external infrastructure NOT verified.
+
+**CI:** https://github.com/kamrans262/orbit-backend-new/actions/runs/40350861897 — successful: 17 tests, 109 assertions, M9 PHP lint passed.
+**Tested commit:** f066ccbb833f6695932f061f1e08e09c845fe967
+**Branch:** feature/m9-presence-backend-admin. M8 baseline f5b86f9 was preserved on both its existing release and feature branches and incorporated into M9; no M8/release write.
+
+Implemented: OFF-by-default M9/M5 consumer gates; Redis 90s multi-device presence leases; authenticated heartbeat/disconnect; read-scoped M5 consent/block checks and M3 Ghost; current self settings; Circle-scoped presence read; per-Circle consent with expiry; no durable activity history; per-viewer Redis fanout with 5s coalescing; 5s typing with 3s rate limit and separate message gate; 60s gateway tickets with per-event session/device/privacy introspection; gateway-only socket event inbound; privacy-change, Circle-lifecycle and session-revocation invalidation; RBAC-gated Admin status page and matching Orbit sidebar.
+
+**External release gates:** Managed isolated Redis and always-running TLS WebSocket gateway are not verified on Hostinger shared hosting. Flutter M9 subscription UI is Stage 3, physical-device latency and security tests are Stage 4. The standalone client API/Realtime appendix, global Ghost marker policy and exact bounded Recently Active display rule remain unresolved. Do not enable live M9 rollout based only on this CI pass.
+
+**Flutter handoff:** Authenticated POST /api/v1/presence/heartbeat, POST /presence/disconnect, GET /me/presence/settings, PUT /me/presence/circles/{circle}, GET /circles/{circle}/presence, POST /circles/{circle}/typing and POST /presence/realtime/ticket. Realtime introspect and inbound endpoints are gateway-only and require a secret never shipped in Flutter. Cache-control is private/no-store. Do not render expired presence as online.
+
+**No production migration/deployment/feature enablement occurred.**
+
+
+---
+
 # Orbit M9 — Stage 2 backend implementation progress
 Date: 2026-10-26
 Branch: feature/m9-presence-backend-admin (no changes to M8 branches or Hostinger).
