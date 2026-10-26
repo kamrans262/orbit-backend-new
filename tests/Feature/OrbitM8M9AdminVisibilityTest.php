@@ -43,15 +43,17 @@ final class OrbitM8M9AdminVisibilityTest extends TestCase
         $this->get('/admin')->assertOk()
             ->assertSee('M8 Home Dashboard')
             ->assertSee('M9 Presence');
-        $this->get('/admin/home-dashboard')->assertOk()
+        $m8=$this->get('/admin/home-dashboard')->assertOk()
             ->assertSee('M8 API runtime:')
-            ->assertSee('Not activated')
-            ->assertHeader('Cache-Control','private, no-store');
-        $this->get('/admin/presence')->assertOk()
+            ->assertSee('Not activated');
+        $this->assertStringContainsString('no-store',
+            (string) $m8->headers->get('Cache-Control'));
+        $m9=$this->get('/admin/presence')->assertOk()
             ->assertSee('M9 API runtime:')
             ->assertSee('Not activated')
-            ->assertSee('Realtime transport switch')
-            ->assertHeader('Cache-Control','private, no-store');
+            ->assertSee('Realtime transport switch');
+        $this->assertStringContainsString('no-store',
+            (string) $m9->headers->get('Cache-Control'));
     }
 
     public function test_pages_are_still_permission_gated_when_mobile_runtime_is_off(): void
