@@ -61,6 +61,16 @@ final class PresenceController extends Controller
             $circle,(bool)$d['enabled'],$d['duration']??null,$d['expires_at']??null));
     }
 
+    /** M13-compatible typing event, gated by both Presence and message consent. */
+    public function typing(Request $r,
+        \App\Modules\Presence\Services\PresenceTypingService $typing,
+        PresenceService $presence,string $circle): JsonResponse
+    {
+        $session=$this->session($r,$presence);
+        $data=$r->validate(['typing'=>['required','boolean']]);
+        return $this->result($typing->update((string)$session->user_id,$circle,(bool)$data['typing']));
+    }
+
     public function circle(Request $r, PresenceService $presence,string $circle): JsonResponse
     {
         $s=$this->session($r,$presence);
