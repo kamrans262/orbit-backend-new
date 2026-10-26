@@ -16,6 +16,7 @@ final class PresenceService
     public function __construct(
         private readonly PresenceAccessPolicy $policy,
         private readonly PresenceLeaseStore $leases,
+        private readonly PresenceRealtimePublisher $realtime,
     ) {}
 
     public function ensureAvailable(string $user): void
@@ -27,13 +28,16 @@ final class PresenceService
     public function heartbeat(string $user,string $device,string $state): array
     {
         $this->ensureAvailable($user);
-        return $this->leases->touch($user,$device,$state);
+        $lease=$this->leases->touch($user,$device,$state);
+        if ($this->realtime->enabled()) $this->realtime->changed($user);
+        return $lease;
     }
 
     public function disconnect(string $user,string $device): array
     {
         $this->ensureAvailable($user);
         $this->leases->clear($user,$device);
+        if ($this->realtime->enabled()) $this->realtime->changed($user);
         return ['disconnected'=>true];
     }
 
@@ -91,6 +95,7 @@ final class PresenceService
                 'event_type'=>'circle.presence_policy_changed','created_at'=>now(),
             ]);
         },3);
+        if ($this->realtime->enabled()) $this->realtime->safelyClearCircle($circle);
         return ['circle_id'=>$circle,'requested'=>$enabled,
             'global_allows_presence'=>$enabled &&
                 !$this->policy->globalPrivacy($user)['ghost_mode_enabled'] &&
