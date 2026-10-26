@@ -182,6 +182,13 @@ final class ProfileSettingsController extends Controller
                 // social views before any future realtime/cache consumer
                 // continues using stale relationship permissions.
                 if ($column === 'privacy') {
+                    if (config('orbit_presence.enabled') === true
+                        && config('orbit_presence.realtime_enabled') === true) {
+                        DB::afterCommit(static function () use ($id): void {
+                            app(\App\Modules\Presence\Services\PresenceRealtimePublisher::class)
+                                ->safelyClearUser($id);
+                        });
+                    }
                     DB::table('social_graph_revisions')->insertOrIgnore([
                         'user_id' => $id, 'revision' => 0, 'updated_at' => now(),
                     ]);
