@@ -20,7 +20,8 @@ final class AdminDashboardController extends Controller
                 'Circle summaries'=>config('orbit_circle.enabled') === true,
                 'Moment references'=>config('orbit_moments.enabled')===true
                     && config('orbit_media.enabled')===true,
-                'Smart cards'=>config('orbit_dashboard.smart_cards_enabled')===true,
+                // No authorized M10+/contextual provider; summary currently returns disabled.
+                'Smart cards'=>false,
                 'Plans / Presence / Ping / SOS'=>false,
             ],
         ])->header('Cache-Control','private, no-store');
