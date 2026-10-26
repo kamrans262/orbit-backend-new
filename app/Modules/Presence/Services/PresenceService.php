@@ -92,8 +92,9 @@ final class PresenceService
             ]);
         },3);
         return ['circle_id'=>$circle,'requested'=>$enabled,
-            'effective'=>$enabled && !$this->policy->globalPrivacy($user)['ghost_mode_enabled']
-                && $this->policy->globalPrivacy($user)['presence_visibility']==='My Circle',
+            'global_allows_presence'=>$enabled &&
+                !$this->policy->globalPrivacy($user)['ghost_mode_enabled'] &&
+                $this->policy->globalPrivacy($user)['presence_visibility']==='My Circle',
             'expires_at'=>$until?->toIso8601String()];
     }
 

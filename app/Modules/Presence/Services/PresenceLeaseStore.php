@@ -3,6 +3,7 @@
 namespace App\Modules\Presence\Services;
 
 use App\Models\OrbitDevice;
+use App\Models\OrbitSession;
 use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 
@@ -92,7 +93,12 @@ final class PresenceLeaseStore
             // Revoked, untrusted, deleted and cross-user devices never make someone online.
             $trusted = OrbitDevice::query()->whereIn('id',$deviceIds)->where('user_id',$user)
                 ->where('trust_state','trusted')->whereNull('revoked_at')->pluck('id')->all();
-            $valid = array_intersect_key($leases,array_flip($trusted));
+            // A trusted device alone is insufficient after logout, global
+            // session revocation or refresh-token replay: require live auth.
+            $sessions = OrbitSession::query()->where('user_id',$user)
+                ->whereIn('device_id',$trusted)->whereNull('revoked_at')
+                ->where('expires_at','>',now())->distinct()->pluck('device_id')->all();
+            $valid = array_intersect_key($leases,array_flip($sessions));
             if (!$valid) return null;
             $active = collect($valid)->contains(static fn ($lease): bool => $lease['state']==='active');
             $latest = max(array_column($valid,'at'));
