@@ -1,0 +1,75 @@
+name: Orbit M9 Presence focused backend tests
+on:
+  push:
+    branches: [feature/m9-presence-backend-admin]
+    paths:
+      - '.github/workflows/orbit-m9-presence-tests.yml'
+      - 'app/Modules/Presence/**'
+      - 'app/Modules/Circle/Services/CircleFirebaseBridge.php'
+      - 'app/Modules/Identity/Services/TokenService.php'
+      - 'app/Modules/Profile/Http/Controllers/ProfileSettingsController.php'
+      - 'config/orbit_presence.php'
+      - 'config/orbit_circle.php'
+      - 'routes/api.php'
+      - 'routes/admin.php'
+      - 'tests/Feature/OrbitM9PresenceTest.php'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  m9-focused-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: rootpass
+          MARIADB_DATABASE: orbit_ci
+          MARIADB_USER: orbit_ci
+          MARIADB_PASSWORD: orbit_ci_pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: testing
+      APP_DEBUG: true
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: orbit_ci
+      DB_USERNAME: orbit_ci
+      DB_PASSWORD: orbit_ci_pass
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, fileinfo, pdo_mysql, openssl, sodium
+          tools: composer:v2
+          coverage: none
+      - name: Install locked dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Generate disposable test application key
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+      - name: PHP syntax for M9 and changed integration points
+        run: |
+          find app/Modules/Presence -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l app/Modules/Profile/Http/Controllers/ProfileSettingsController.php
+          php -l app/Modules/Identity/Services/TokenService.php
+          php -l app/Modules/Circle/Services/CircleFirebaseBridge.php
+          php -l tests/Feature/OrbitM9PresenceTest.php
+      - name: Focused M9 and M8 regression tests
+        run: php artisan test --compact --filter='OrbitM9PresenceTest|OrbitM8DashboardTest'
