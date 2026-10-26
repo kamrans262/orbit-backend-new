@@ -135,7 +135,7 @@ final class OrbitM8DashboardTest extends TestCase
         $this->withToken($tb)->getJson('/api/v1/dashboard/summary')->assertOk();
     }
 
-    public function test_admin_page_is_rbac_and_module_gated_with_no_private_data(): void
+    public function test_admin_page_is_rbac_gated_but_remains_visible_when_runtime_is_off(): void
     {
         $this->get('/admin/home-dashboard')->assertRedirect(route('orbit.admin.login'));
         $this->be($this->admin(['users.read']),'admin');
@@ -146,6 +146,8 @@ final class OrbitM8DashboardTest extends TestCase
             ->assertSee('No user names')
             ->assertDontSee('Private Alpha');
         config()->set('orbit_dashboard.enabled',false);
-        $this->get('/admin/home-dashboard')->assertNotFound();
+        $this->get('/admin/home-dashboard')->assertOk()
+            ->assertSee('Not activated')
+            ->assertDontSee('Private Alpha');
     }
 }

@@ -10,7 +10,6 @@ final class AdminDashboardController extends Controller
     /** Feature health only; never expose viewer data, media, keys or location. */
     public function index(): Response
     {
-        abort_unless(config('orbit_dashboard.enabled') === true, 404);
         return response()->view('orbit-admin.home-dashboard', [
             'limits'=>[
                 'Circles'=>config('orbit_dashboard.circle_limit'),

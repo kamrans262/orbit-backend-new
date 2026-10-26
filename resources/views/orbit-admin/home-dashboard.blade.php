@@ -12,8 +12,9 @@
   <h2>Rollout status</h2>
   <p>All M8 requests require a trusted Orbit device and current per-resource authorization.</p></div></div>
   <div class="admin-guidance" role="status">
-    M8 summary: {{ config('orbit_dashboard.enabled') ? 'Enabled on this server' : 'Disabled' }}.
-    A separately configured m8.dashboard flag can apply further audience restrictions or disable service.
+    M8 API runtime: <strong>{{ config('orbit_dashboard.enabled') === true ? 'Enabled' : 'Not activated' }}</strong>.
+    This admin page remains available for inspection independently of the mobile feature switch.
+    A separately configured m8.dashboard audience flag may further restrict or disable rollout.
   </div>
   <div class="stat-grid">
     @foreach($limits as $label => $max)
@@ -30,6 +31,7 @@
     <div class="kv"><small>{{ $name }}</small><strong>{{ $enabled ? 'Source gated / available' : 'Disabled or not yet implemented' }}</strong></div>
     @endforeach
   </div>
+  <p>These are configuration indicators, not live endpoint checks. Future capabilities remain unavailable without their approved service providers.</p>
   <p><a href="{{ route('orbit.admin.flags.index') }}">Manage client-facing feature flags</a></p>
 </section>
 @endsection

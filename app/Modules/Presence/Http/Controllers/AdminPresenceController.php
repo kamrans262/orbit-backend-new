@@ -10,8 +10,8 @@ final class AdminPresenceController extends Controller
 {
     public function index(): Response
     {
-        abort_unless(config('orbit_presence.enabled') === true,404);
         return response()->view('orbit-admin.presence', [
+            'moduleEnabled'=>config('orbit_presence.enabled') === true,
             'lease'=>(int) config('orbit_presence.lease_seconds',90),
             'store'=>config('orbit_presence.store','redis') === 'redis' ? 'Redis configured' : 'Nonproduction adapter',
             'gateway'=>config('orbit_presence.realtime_enabled') === true,

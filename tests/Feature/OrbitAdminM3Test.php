@@ -89,6 +89,8 @@ final class OrbitAdminM3Test extends TestCase
         $response->assertSee('Configurations')
             ->assertSee('Feature Flags')
             ->assertSee('Remote Config')
+            ->assertSee('M8 Home Dashboard')
+            ->assertSee('M9 Presence')
             ->assertSee('Accounts')
             ->assertSee('Deletion Requests')
             ->assertSee('Settings Audit')
