@@ -55,7 +55,14 @@ final class PresenceLeaseStore
                 if (!is_array($leases)) $leases = [];
                 $leases = array_filter($leases, static fn ($lease): bool =>
                     is_array($lease) && ($lease['until'] ?? 0) > $now);
+                // A bounded, ephemeral activity hint. An idle heartbeat must
+                // NOT extend the time since the last actual active input.
+                // Discard the hint after 90s even while the device remains idle.
+                $previous = $leases[$device] ?? [];
+                $recent = $state === 'active' ? $now + 90
+                    : (int)($previous['recent_until'] ?? 0);
                 $leases[$device] = ['state'=>$state,'at'=>$now,'until'=>$now+$ttl];
+                if ($recent > $now) $leases[$device]['recent_until'] = $recent;
                 // Bound stale index growth without making long-term activity history.
                 if (count($leases) > (int) config('orbit_presence.max_devices',12)) {
                     uasort($leases, static fn ($a,$b): int => $b['at'] <=> $a['at']);
@@ -103,10 +110,17 @@ final class PresenceLeaseStore
             $active = collect($valid)->contains(static fn ($lease): bool => $lease['state']==='active');
             $latest = max(array_column($valid,'at'));
             $expiry = max(array_column($valid,'until'));
+            // Recently active is a live, short-lived state, not a historical
+            // last-seen record. No hint survives 90 seconds without activity.
+            $recent = max(array_map(static fn ($lease): int =>
+                (int)($lease['recent_until'] ?? 0), $valid));
             return [
                 'state'=>$active ? 'active_now' : 'idle',
                 'observed_at'=>\Illuminate\Support\Carbon::createFromTimestamp($latest,'UTC')->toIso8601String(),
                 'expires_at'=>\Illuminate\Support\Carbon::createFromTimestamp($expiry,'UTC')->toIso8601String(),
+                ...(!$active && $recent > $now ? [
+                    'recent_until'=>\Illuminate\Support\Carbon::createFromTimestamp($recent,'UTC')->toIso8601String(),
+                ] : []),
             ];
         });
     }

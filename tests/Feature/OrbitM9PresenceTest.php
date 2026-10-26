@@ -158,6 +158,38 @@ final class OrbitM9PresenceTest extends TestCase
             ->assertJsonCount(0,'data.members');
     }
 
+    public function test_recently_active_is_ephemeral_and_idle_heartbeats_never_extend_it(): void
+    {
+        [$alice,$aliceToken]=$this->person('alice');
+        [$bob,$bobToken]=$this->person('bob');
+        $circle=$this->circleWithMembers($aliceToken,$bob->id);
+        $this->allowGlobal($alice->id);
+        $this->withToken($aliceToken)->putJson("/api/v1/me/presence/circles/$circle",[
+            'enabled'=>true,'duration'=>'persistent',
+        ])->assertOk();
+
+        $this->withToken($aliceToken)->postJson('/api/v1/presence/heartbeat',[
+            'state'=>'active',
+        ])->assertOk();
+
+        $this->travel(61)->seconds();
+        $this->withToken($aliceToken)->postJson('/api/v1/presence/heartbeat',[
+            'state'=>'idle',
+        ])->assertOk();
+        $this->withToken($bobToken)->getJson("/api/v1/circles/$circle/presence")
+            ->assertOk()->assertJsonPath('data.members.0.state','idle')
+            ->assertJsonStructure(['data'=>['members'=>[['recent_until']]]]);
+
+        $this->travel(31)->seconds();
+        $this->withToken($aliceToken)->postJson('/api/v1/presence/heartbeat',[
+            'state'=>'idle',
+        ])->assertOk();
+        $this->withToken($bobToken)->getJson("/api/v1/circles/$circle/presence")
+            ->assertOk()->assertJsonPath('data.members.0.state','idle')
+            ->assertJsonMissingPath('data.members.0.recent_until');
+        $this->travelBack();
+    }
+
     public function test_consent_opt_out_and_invalid_expiry(): void
     {
         [$alice,$aliceToken]=$this->person('alice');

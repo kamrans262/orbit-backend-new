@@ -43,7 +43,12 @@ export function normalizedEvent(json, now = Date.now()) {
   const cleanSnapshot = value.type === 'presence.changed'
     ? { state: value.snapshot.state,
         observed_at: value.snapshot.observed_at ?? null,
-        expires_at: value.snapshot.expires_at } : undefined;
+        expires_at: value.snapshot.expires_at,
+        ...(value.snapshot.state === 'idle' && typeof value.snapshot.recent_until === 'string'
+          && Number.isFinite(Date.parse(value.snapshot.recent_until))
+          && Date.parse(value.snapshot.recent_until) > now
+          && Date.parse(value.snapshot.recent_until) <= now + 90000
+          ? { recent_until: value.snapshot.recent_until } : {}) } : undefined;
   return { type: value.type, circle_id: value.circle_id,
     ...(value.type !== 'presence.circle_clear' && value.subject_id
       ? { subject_id: value.subject_id } : {}),
