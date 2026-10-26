@@ -9,7 +9,8 @@ final class PresenceRealtimePublisher
     public function __construct(private readonly PresenceAccessPolicy $policy, private readonly PresenceLeaseStore $leases) {}
     public function enabled(): bool
     {
-        return $this->policy->enabled() && config('orbit_presence.realtime_enabled') === true;
+        return $this->policy->enabled() && config('orbit_presence.realtime_enabled') === true
+            && strlen((string)config('orbit_presence.gateway_secret','')) >= 32;
     }
     private function emit(string $viewer, array $event): void
     {
