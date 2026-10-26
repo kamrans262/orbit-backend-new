@@ -43,6 +43,57 @@ final class MediaLifecycleWorker
         });
     }
 
+    /**
+     * Bounded synchronous integrity check for small private owner avatars.
+     * Hostinger's five-minute scheduler is too slow for an interactive
+     * profile-save flow. Do not use this for Moments, large objects or S3.
+     * Cryptographic AEAD decryption remains exclusively on the device.
+     */
+    public function verifySmallAvatar(string $uploadId): bool
+    {
+        if(config('orbit_media.enabled') !== true
+            || $this->store->mode() !== 'local_chunked') return false;
+        $u=DB::table('media_upload_sessions')->where('id',$uploadId)
+            ->where('state','verifying')->whereNull('variant_id')->first();
+        if(!$u || (int)$u->actual_cipher_bytes <= 0
+            || (int)$u->actual_cipher_bytes > 1048576) return false;
+        $m=DB::table('media_objects')->where('id',$u->media_id)
+            ->where('state','verifying')->where('purpose','avatar')
+            ->where('kind','image')->whereNull('deleted_at')->first();
+        if(!$m || !is_string($u->final_cipher_sha256)
+            || !preg_match('/^[0-9a-f]{64}$/D',$u->final_cipher_sha256)) return false;
+        // Read/verify the entire private ciphertext before marking it ready.
+        try {
+            $valid=$this->store->verify($m->object_key,
+                (int)$u->actual_cipher_bytes,(string)$u->final_cipher_sha256);
+        } catch (\Throwable) {
+            // Existing scheduled worker will retry. Never trust a claim.
+            return false;
+        }
+        if(!$valid){
+            $this->stageDelete($m->id,'checksum_mismatch');
+            DB::table('media_upload_sessions')->where('id',$u->id)
+                ->where('state','verifying')->update([
+                    'state'=>'failed','updated_at'=>now(),
+                ]);
+            return false;
+        }
+        return DB::transaction(function()use($m,$u):bool{
+            $updated=DB::table('media_objects')->where('id',$m->id)
+                ->where('state','verifying')->update([
+                    'state'=>'ready','ready_at'=>now(),'retention_deadline'=>null,
+                    'updated_at'=>now(),
+                ]);
+            if($updated!==1)return false;
+            DB::table('media_upload_sessions')->where('id',$u->id)
+                ->where('state','verifying')->update([
+                    'state'=>'ready','updated_at'=>now(),
+                ]);
+            $this->emit($m->id,'media.upload.ready.v1');
+            return true;
+        });
+    }
+
     public function run(int $limit=15): array
     {
         $limit=max(1,min($limit,100));
