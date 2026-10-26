@@ -1,0 +1,222 @@
+{
+  "schema_version": 1,
+  "module": "M9",
+  "date": "2026-10-26",
+  "status": "RELEASE_BLOCKED",
+  "release_commit_sha": "",
+  "checks": [
+    {
+      "id": "P01",
+      "description": "Unauthenticated heartbeat and Circle read rejected",
+      "status": "partial",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-backend-new/actions/runs/40350861897"
+      ]
+    },
+    {
+      "id": "P02",
+      "description": "Disabled M9 or Circle Presence consumer returns no status",
+      "status": "partial",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-backend-new/actions/runs/40350861897"
+      ]
+    },
+    {
+      "id": "P03",
+      "description": "Explicit opt-in is necessary and is revocable",
+      "status": "partial",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-backend-new/actions/runs/40350861897"
+      ]
+    },
+    {
+      "id": "P04",
+      "description": "Global Ghost and Nobody always veto Circle permissions",
+      "status": "partial",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-backend-new/actions/runs/40350861897"
+      ]
+    },
+    {
+      "id": "P05",
+      "description": "Two-way block immediately revokes private status",
+      "status": "partial",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-backend-new/actions/runs/40350861897"
+      ]
+    },
+    {
+      "id": "P06",
+      "description": "Removed, restricted and expired Circle members denied",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "P07",
+      "description": "Temporary consent expiry prevents future sharing",
+      "status": "partial",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-backend-new/actions/runs/40350861897"
+      ]
+    },
+    {
+      "id": "P08",
+      "description": "90 second lease expiry never leaves a false online label",
+      "status": "partial",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-backend-new/actions/runs/40350861897"
+      ]
+    },
+    {
+      "id": "P09",
+      "description": "Multiple devices active/idle/logout aggregate correctly",
+      "status": "partial",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-backend-new/actions/runs/40350861897"
+      ]
+    },
+    {
+      "id": "P10",
+      "description": "Session and device revocation removes protected Presence",
+      "status": "partial",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-backend-new/actions/runs/40350861897"
+      ]
+    },
+    {
+      "id": "P11",
+      "description": "Typing permission separate from Presence and expires in five seconds",
+      "status": "partial",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-backend-new/actions/runs/40350861897"
+      ]
+    },
+    {
+      "id": "P12",
+      "description": "Typing is throttled and emits no user message contents",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "P13",
+      "description": "Gateway ticket binds user, device, session and expires",
+      "status": "partial",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-backend-new/actions/runs/40350861897"
+      ]
+    },
+    {
+      "id": "P14",
+      "description": "Every realtime event gets current viewer/subject authorization",
+      "status": "partial",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-backend-new/actions/runs/40350861897"
+      ]
+    },
+    {
+      "id": "P15",
+      "description": "Reconnect/airplane mode/background/OS kill fail closed",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "P16",
+      "description": "M8 Dashboard and M9 status do not leak cross-Circle presence",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "P17",
+      "description": "Live Redis pubsub to WSS delivery and revocation verification",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "P18",
+      "description": "Android physical phone lifecycle and background behavior",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "P19",
+      "description": "iOS physical phone lifecycle and background behavior",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "P20",
+      "description": "Hostinger/managed gateway staging with p95 and battery evidence",
+      "status": "pending",
+      "evidence": []
+    }
+  ],
+  "gates": {
+    "backend_ci": {
+      "status": "partial",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-backend-new/actions/runs/40350861897"
+      ]
+    },
+    "flutter_ci": {
+      "status": "partial",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-app-new/actions/runs/40354199909"
+      ]
+    },
+    "m8_integration": {
+      "status": "partial",
+      "evidence": []
+    },
+    "redis_ws_gateway": {
+      "status": "pending",
+      "evidence": []
+    },
+    "live_realtime_security": {
+      "status": "pending",
+      "evidence": []
+    },
+    "manual_privacy": {
+      "status": "pending",
+      "evidence": []
+    },
+    "android_native": {
+      "status": "pending",
+      "evidence": []
+    },
+    "ios_native": {
+      "status": "pending",
+      "evidence": []
+    },
+    "android_physical": {
+      "status": "pending",
+      "evidence": []
+    },
+    "ios_physical": {
+      "status": "pending",
+      "evidence": []
+    },
+    "hostinger_staging": {
+      "status": "pending",
+      "evidence": []
+    },
+    "latency_battery": {
+      "status": "pending",
+      "evidence": []
+    },
+    "product_approvals": {
+      "status": "pending",
+      "evidence": []
+    },
+    "rollback_rehearsal": {
+      "status": "pending",
+      "evidence": []
+    }
+  },
+  "notes": [
+    "Two-parent merges completed inside M9 branches only; final consolidated production branches unchanged.",
+    "Hostinger shared hosting has no verified long-lived Redis/WSS gateway.",
+    "Android/iOS real-device acceptance and latency security performance missing.",
+    "M8 Home live Presence integration and M13 typing UI require separate product/transport integration.",
+    "Physical device and infrastructure evidence cannot be inferred from code or green CI."
+  ]
+}
