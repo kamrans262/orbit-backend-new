@@ -37,7 +37,7 @@ final class PresenceService
     {
         $this->ensureAvailable($user);
         $this->leases->clear($user,$device);
-        if ($this->realtime->enabled()) $this->realtime->changed($user);
+        if ($this->realtime->enabled()) $this->realtime->changed($user,true);
         return ['disconnected'=>true];
     }
 
