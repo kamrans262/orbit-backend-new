@@ -55,10 +55,14 @@ final class OrbitM8DashboardTest extends TestCase
         config()->set('orbit_dashboard.enabled',false);
         $this->withToken($token)->getJson('/api/v1/dashboard/summary')->assertNotFound();
         config()->set('orbit_dashboard.enabled',true);
-        $this->withToken($token)->getJson('/api/v1/dashboard/summary')
+        $reply=$this->withToken($token)->getJson('/api/v1/dashboard/summary')
             ->assertOk()->assertJsonPath('data.schema_version',1)
-            ->assertJsonPath('data.greeting.display_name',$user->display_name)
-            ->assertHeader('Cache-Control','private, no-store, max-age=0');
+            ->assertJsonPath('data.greeting.display_name',$user->display_name);
+        // Symfony normalizes Cache-Control directive order.
+        $cache=(string)$reply->headers->get('Cache-Control');
+        $this->assertStringContainsString('private',$cache);
+        $this->assertStringContainsString('no-store',$cache);
+        $this->assertStringContainsString('max-age=0',$cache);
         $device->update(['trust_state'=>'pending']);
         $this->withToken($token)->getJson('/api/v1/dashboard/summary')->assertForbidden();
     }
@@ -89,7 +93,7 @@ final class OrbitM8DashboardTest extends TestCase
             ->assertJsonPath('data.sections.people.items.0.id',$b->id)
             ->assertJsonPath('data.sections.people.items.0.presence',null)
             ->assertJsonMissing(['id'=>$stranger->id]);
-        $this->withToken($ta)->postJson('/api/v1/me/blocks',['user_id'=>$b->id])->assertOk();
+        $this->withToken($ta)->postJson('/api/v1/me/blocks',['user_id'=>$b->id])->assertCreated();
         $this->withToken($ta)->getJson('/api/v1/dashboard/summary')
             ->assertOk()->assertJsonCount(0,'data.sections.people.items');
     }
