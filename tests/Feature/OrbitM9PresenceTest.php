@@ -174,6 +174,67 @@ final class OrbitM9PresenceTest extends TestCase
         ]);
     }
 
+    public function test_gateway_ticket_is_bound_to_live_session_and_secret(): void
+    {
+        config()->set('orbit_presence.realtime_enabled',true);
+        config()->set('orbit_presence.gateway_secret',str_repeat('k',48));
+        [$alice,$token,$device]=$this->person('alice');
+        $ticket=$this->withToken($token)->postJson('/api/v1/presence/realtime/ticket')
+            ->assertOk()->json('data.ticket');
+        $this->postJson('/api/v1/presence/realtime/introspect',
+            ['ticket'=>$ticket],['X-Orbit-Presence-Gateway'=>'wrong'])->assertForbidden();
+        $this->postJson('/api/v1/presence/realtime/introspect',
+            ['ticket'=>$ticket],['X-Orbit-Presence-Gateway'=>str_repeat('k',48)])
+            ->assertOk()->assertJsonPath('data.viewer_id',$alice->id);
+        OrbitSession::where('user_id',$alice->id)->update(['revoked_at'=>now()]);
+        $this->postJson('/api/v1/presence/realtime/introspect',
+            ['ticket'=>$ticket],['X-Orbit-Presence-Gateway'=>str_repeat('k',48)])
+            ->assertForbidden();
+    }
+
+    public function test_gateway_rechecks_current_circle_consent_for_every_event(): void
+    {
+        config()->set('orbit_presence.realtime_enabled',true);
+        config()->set('orbit_presence.gateway_secret',str_repeat('x',48));
+        [$alice,$token1]=$this->person('alice');
+        [$bob,$token2]=$this->person('bob');
+        $circle=$this->circleWithMembers($token1,$bob->id);
+        $ticket=$this->withToken($token2)->postJson('/api/v1/presence/realtime/ticket')
+            ->assertOk()->json('data.ticket');
+        $event=['type'=>'presence.changed','circle_id'=>$circle,'subject_id'=>$alice->id];
+        $this->postJson('/api/v1/presence/realtime/introspect',
+            ['ticket'=>$ticket,'event'=>$event],['X-Orbit-Presence-Gateway'=>str_repeat('x',48)])
+            ->assertForbidden();
+        $this->allowGlobal($alice->id);
+        $this->withToken($token1)->putJson("/api/v1/me/presence/circles/$circle",[
+            'enabled'=>true,'duration'=>'persistent',
+        ])->assertOk();
+        $this->postJson('/api/v1/presence/realtime/introspect',
+            ['ticket'=>$ticket,'event'=>$event],['X-Orbit-Presence-Gateway'=>str_repeat('x',48)])
+            ->assertOk()->assertJsonPath('data.viewer_id',$bob->id);
+        DB::table('orbit_user_preferences')->where('user_id',$alice->id)->update([
+            'privacy'=>json_encode(['ghost_mode_enabled'=>true,'presence_visibility'=>'My Circle']),
+        ]);
+        $this->postJson('/api/v1/presence/realtime/introspect',
+            ['ticket'=>$ticket,'event'=>$event],['X-Orbit-Presence-Gateway'=>str_repeat('x',48)])
+            ->assertForbidden();
+    }
+
+    public function test_typing_cannot_bypass_message_gate_or_consent(): void
+    {
+        config()->set('orbit_presence.realtime_enabled',true);
+        config()->set('orbit_presence.gateway_secret',str_repeat('x',48));
+        [$alice,$token]=$this->person('alice');
+        $circle=$this->withToken($token)->postJson('/api/v1/circles',['name'=>'M9 Family'])
+            ->assertCreated()->json('data.id');
+        $this->allowGlobal($alice->id);
+        $this->withToken($token)->postJson("/api/v1/circles/$circle/typing",
+            ['typing'=>true])->assertNotFound();
+        config()->set('orbit_circle.consumer_enabled.message',true);
+        $this->withToken($token)->postJson("/api/v1/circles/$circle/typing",
+            ['typing'=>true])->assertForbidden();
+    }
+
     public function test_admin_presence_view_requires_a_secure_admin_session(): void
     {
         $this->get('/admin/presence')->assertRedirect(route('orbit.admin.login'));
