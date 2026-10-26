@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "module": "M8",
+  "version_date": "2026-10-26",
+  "purpose": "Release verification only; no automatic production deploy",
+  "release_commit_sha": "",
+  "p0_required": 90,
+  "p0_evidenced": 0,
+  "status": "RELEASE_BLOCKED",
+  "checks": [
+    {
+      "id": "ACC-01",
+      "description": "Unauthenticated Dashboard request rejected",
+      "status": "passed",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-backend-new/actions/runs/40349565221"
+      ]
+    },
+    {
+      "id": "ACC-02",
+      "description": "No stale viewer A information after viewer B signs in",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-03",
+      "description": "Block revokes Home protected content",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-04",
+      "description": "Circle departure revokes Circle and Moment preview",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-05",
+      "description": "Ghost mode prevents coordinates or arrival state",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-06",
+      "description": "Offline after trusted-session Home load",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-07",
+      "description": "Moment failure isolated from healthy sections",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-08",
+      "description": "Disable M7 after Home rail previously loaded",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-09",
+      "description": "M8 rollout disabled uses safe fallback",
+      "status": "partial",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-app-new/actions/runs/40347955180"
+      ]
+    },
+    {
+      "id": "ACC-10",
+      "description": "Authorized photo/video/audio Moment previews",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-11",
+      "description": "Expired Moment does not remain unlocked",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-12",
+      "description": "Circle changes update real Home rail",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-13",
+      "description": "Friend accepted or revoked updates people rail",
+      "status": "partial",
+      "evidence": []
+    },
+    {
+      "id": "ACC-14",
+      "description": "Future M15 Plan updates reflected",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-15",
+      "description": "Missing Plans service shows honest disabled state",
+      "status": "partial",
+      "evidence": []
+    },
+    {
+      "id": "ACC-16",
+      "description": "SOS tap does not silently dispatch",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-17",
+      "description": "Ping disabled shows no false success",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-18",
+      "description": "Card dismissal survives relaunch and remains account-scoped",
+      "status": "partial",
+      "evidence": []
+    },
+    {
+      "id": "ACC-19",
+      "description": "Smart-card consent revoked without stale metadata",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-20",
+      "description": "Privacy-safe recent activity filtering",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-21",
+      "description": "No Home ad/sponsored banner",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-22",
+      "description": "Compact Android/iOS layout at 200% font",
+      "status": "partial",
+      "evidence": []
+    },
+    {
+      "id": "ACC-23",
+      "description": "Warm Home usable-startup performance target",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-24",
+      "description": "Dashboard p95 bounded queries and no N+1",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ACC-25",
+      "description": "Disabled upstream section conceals unauthorized data",
+      "status": "partial",
+      "evidence": []
+    },
+    {
+      "id": "ACC-26",
+      "description": "Hostinger staging migration, regressions and rollback",
+      "status": "pending",
+      "evidence": []
+    }
+  ],
+  "gates": {
+    "m8_laravel_ci": {
+      "status": "passed",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-backend-new/actions/runs/40349565221"
+      ]
+    },
+    "m8_flutter_ci": {
+      "status": "passed",
+      "evidence": [
+        "https://github.com/kamrans262/orbit-app-new/actions/runs/40347955180"
+      ]
+    },
+    "m4_m7_regressions": {
+      "status": "pending",
+      "evidence": []
+    },
+    "android_physical": {
+      "status": "pending",
+      "evidence": []
+    },
+    "ios_physical": {
+      "status": "pending",
+      "evidence": []
+    },
+    "hostinger_staging": {
+      "status": "pending",
+      "evidence": []
+    },
+    "privacy_revocation": {
+      "status": "pending",
+      "evidence": []
+    },
+    "warm_start_performance": {
+      "status": "pending",
+      "evidence": []
+    },
+    "api_p95_performance": {
+      "status": "pending",
+      "evidence": []
+    },
+    "rollback_rehearsal": {
+      "status": "pending",
+      "evidence": []
+    },
+    "security_review": {
+      "status": "pending",
+      "evidence": []
+    },
+    "product_decisions": {
+      "status": "pending",
+      "evidence": []
+    }
+  },
+  "unresolved_decisions": [
+    "D01 quick-action order",
+    "D02 M15 Plans/Create Plan ownership",
+    "D03 Home people/Circle label",
+    "D10 SOS floating control"
+  ],
+  "reminder": "Only manually verified evidence and signed upstream deferrals can unblock release."
+}

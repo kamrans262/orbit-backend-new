@@ -55,10 +55,14 @@ final class OrbitM8DashboardTest extends TestCase
         config()->set('orbit_dashboard.enabled',false);
         $this->withToken($token)->getJson('/api/v1/dashboard/summary')->assertNotFound();
         config()->set('orbit_dashboard.enabled',true);
-        $this->withToken($token)->getJson('/api/v1/dashboard/summary')
+        $reply=$this->withToken($token)->getJson('/api/v1/dashboard/summary')
             ->assertOk()->assertJsonPath('data.schema_version',1)
-            ->assertJsonPath('data.greeting.display_name',$user->display_name)
-            ->assertHeader('Cache-Control','max-age=0, no-store, private');
+            ->assertJsonPath('data.greeting.display_name',$user->display_name);
+        // Symfony normalizes Cache-Control directive order.
+        $cache=(string)$reply->headers->get('Cache-Control');
+        $this->assertStringContainsString('private',$cache);
+        $this->assertStringContainsString('no-store',$cache);
+        $this->assertStringContainsString('max-age=0',$cache);
         $device->update(['trust_state'=>'pending']);
         $this->withToken($token)->getJson('/api/v1/dashboard/summary')->assertForbidden();
     }

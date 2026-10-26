@@ -1,0 +1,84 @@
+name: Orbit M8 Laravel targeted release gate
+on:
+  push:
+    branches: [release/m5-backend-admin-gated-2026-10-21]
+    paths:
+      - '.github/workflows/orbit-m8-backend-validation.yml'
+      - 'app/Modules/Dashboard/**'
+      - 'app/Modules/Moments/Http/Controllers/MomentController.php'
+      - 'config/orbit_dashboard.php'
+      - 'routes/api.php'
+      - 'routes/admin.php'
+      - 'tests/Feature/OrbitM8DashboardTest.php'
+      - 'database/migrations/2026_10_26_000001_create_m8_dashboard_preferences.php'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  m8-laravel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: rootpass
+          MARIADB_DATABASE: orbit_ci
+          MARIADB_USER: orbit_ci
+          MARIADB_PASSWORD: orbit_ci_pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: testing
+      APP_DEBUG: true
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: orbit_ci
+      DB_USERNAME: orbit_ci
+      DB_PASSWORD: orbit_ci_pass
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+      ORBIT_M8_DASHBOARD_ENABLED: false
+      ORBIT_M8_SMART_CARDS_ENABLED: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, fileinfo, pdo_mysql, openssl, sodium
+          tools: composer:v2
+          coverage: none
+      - name: Install locked dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Generate disposable test application key
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+      - name: Verify M8 PHP syntax and registered routes
+        run: |
+          php -l app/Modules/Moments/Http/Controllers/MomentController.php
+          php -l app/Modules/Dashboard/Services/DashboardSummaryService.php
+          php -l app/Modules/Dashboard/Http/Controllers/DashboardSummaryController.php
+          php -l app/Modules/Dashboard/Http/Controllers/AdminDashboardController.php
+          php -l database/migrations/2026_10_26_000001_create_m8_dashboard_preferences.php
+          php -l tests/Feature/OrbitM8DashboardTest.php
+          php artisan route:list --path=api/v1/dashboard
+          php artisan route:list --path=admin/home-dashboard
+      - name: Validate migrations on disposable MariaDB only
+        run: |
+          php artisan migrate --force
+          php artisan migrate:status
+      - name: M8 authenticated API and RBAC integration
+        run: php artisan test --filter=OrbitM8DashboardTest
+      - name: Validate M8 release evidence structure (never release on CI)
+        run: python3 scripts/m8_release_gate.py docs/M8_STAGE4_ACCEPTANCE_EVIDENCE.json --lint
+      - name: M4/M5/M7 security-adjacent regressions
+        run: php artisan test --filter='OrbitM4SocialGraphTest|OrbitM5CirclesTest|OrbitM7MomentsTest'
