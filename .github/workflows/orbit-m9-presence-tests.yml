@@ -87,5 +87,11 @@ jobs:
           node --check services/presence-gateway/server.mjs
           node --check services/presence-gateway/contracts.mjs
           node --test services/presence-gateway/test/*.test.mjs
+      - name: Install isolated WSS gateway dependencies (compile smoke)
+        working-directory: services/presence-gateway
+        run: npm install --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Check Node gateway package imports
+        working-directory: services/presence-gateway
+        run: node --input-type=module -e "await import('ws'); await import('redis'); console.log('Gateway runtime imports available')"
       - name: Focused M9 and M8 regression tests
         run: php artisan test --compact --filter='OrbitM9PresenceTest|OrbitM8DashboardTest'
