@@ -20,7 +20,8 @@ final class PresenceRealtimeTicketService
     }
     private function enabled(): void
     {
-        abort_unless($this->policy->enabled() && config('orbit_presence.realtime_enabled') === true,404);
+        abort_unless($this->policy->enabled() && config('orbit_presence.realtime_enabled') === true
+            && strlen((string)config('orbit_presence.gateway_secret','')) >= 32,404);
     }
     public function issue(OrbitSession $session): array
     {
