@@ -13,6 +13,9 @@ on:
       - 'routes/api.php'
       - 'routes/admin.php'
       - 'tests/Feature/OrbitM9PresenceTest.php'
+      - 'tests/Feature/OrbitM8DashboardTest.php'
+      - 'scripts/m9_release_gate.py'
+      - 'docs/M9_STAGE4_ACCEPTANCE_EVIDENCE.json'
   workflow_dispatch:
 
 permissions:
@@ -71,5 +74,12 @@ jobs:
           php -l app/Modules/Identity/Services/TokenService.php
           php -l app/Modules/Circle/Services/CircleFirebaseBridge.php
           php -l tests/Feature/OrbitM9PresenceTest.php
+      - name: Evidence valid but release safely rejected
+        run: |
+          python3 scripts/m9_release_gate.py docs/M9_STAGE4_ACCEPTANCE_EVIDENCE.json --lint
+          if python3 scripts/m9_release_gate.py docs/M9_STAGE4_ACCEPTANCE_EVIDENCE.json --release; then
+            echo "M9 release gate approved without real-device and gateway evidence"
+            exit 1
+          fi
       - name: Focused M9 and M8 regression tests
         run: php artisan test --compact --filter='OrbitM9PresenceTest|OrbitM8DashboardTest'
