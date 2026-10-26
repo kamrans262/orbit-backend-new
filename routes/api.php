@@ -17,6 +17,7 @@ use App\Modules\Moments\Http\Controllers\MomentLifecycleController;
 use App\Modules\Moments\Http\Controllers\MomentNotificationController;
 use App\Modules\Moments\Http\Controllers\MomentPushDeviceController;
 use App\Modules\Dashboard\Http\Controllers\DashboardSummaryController;
+use App\Modules\Presence\Http\Controllers\PresenceController;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -31,6 +32,15 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/auth/refresh', [IdentityController::class, 'refresh'])->middleware('throttle:30,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        // M9: trusted-device ephemeral presence. No realtime/polling shortcut.
+        Route::post('/presence/heartbeat', [PresenceController::class,'heartbeat'])->middleware('throttle:30,1');
+        Route::post('/presence/disconnect', [PresenceController::class,'disconnect'])->middleware('throttle:20,1');
+        Route::get('/me/presence/settings', [PresenceController::class,'settings'])->middleware('throttle:20,1');
+        Route::put('/me/presence/circles/{circle}', [PresenceController::class,'circleSettings'])
+            ->whereUuid('circle')->middleware('throttle:12,1');
+        Route::get('/circles/{circle}/presence', [PresenceController::class,'circle'])
+            ->whereUuid('circle')->middleware('throttle:30,1');
+
         // M8: private viewer-scoped Home aggregation. Never public/cacheable.
         Route::get('/dashboard/summary', [DashboardSummaryController::class,'summary'])
             ->middleware('throttle:45,1');

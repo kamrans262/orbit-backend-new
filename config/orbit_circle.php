@@ -37,7 +37,7 @@ return [
     // approved disposable-environment verification and production release.
     'retention_autopurge_enabled' => (bool) env('ORBIT_M5_RETENTION_AUTOPURGE_ENABLED', false),
     'consumer_enabled' => [
-        'location'=>false,'presence'=>false,'moments'=>false,
+        'location'=>false,'presence'=>(bool) env('ORBIT_M5_PRESENCE_CONSUMER_ENABLED', false),'moments'=>false,
         'check_in'=>false,'plans'=>false,'status'=>false,
         'ping'=>false,'message'=>false,
     ],
