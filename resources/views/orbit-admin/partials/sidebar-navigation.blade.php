@@ -7,11 +7,15 @@
   if ($navUser?->canPerform('config.manage')) {
     $navGroups[] = [
       'title' => 'Configurations', 'icon' => 'settings',
-      'patterns' => ['orbit.admin.dashboard','orbit.admin.flags.*','orbit.admin.config.*','orbit.admin.rollback'],
+      'patterns' => ['orbit.admin.dashboard','orbit.admin.flags.*','orbit.admin.config.*','orbit.admin.rollback','orbit.admin.home-dashboard.*'],
       'children' => [
         ['title'=>'Overview','route'=>'orbit.admin.dashboard','patterns'=>['orbit.admin.dashboard']],
         ['title'=>'Feature Flags','route'=>'orbit.admin.flags.index','patterns'=>['orbit.admin.flags.*']],
         ['title'=>'Remote Config','route'=>'orbit.admin.config.index','patterns'=>['orbit.admin.config.*']],
+        ... (config('orbit_dashboard.enabled') === true ? [[
+          'title'=>'Home Dashboard','route'=>'orbit.admin.home-dashboard.index',
+          'patterns'=>['orbit.admin.home-dashboard.*'],
+        ]] : []),
       ],
     ];
   }
