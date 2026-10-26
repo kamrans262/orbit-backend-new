@@ -78,5 +78,7 @@ jobs:
           php artisan migrate:status
       - name: M8 authenticated API and RBAC integration
         run: php artisan test --filter=OrbitM8DashboardTest
+      - name: Validate M8 release evidence structure (never release on CI)
+        run: python3 scripts/m8_release_gate.py docs/M8_STAGE4_ACCEPTANCE_EVIDENCE.json --lint
       - name: M4/M5/M7 security-adjacent regressions
         run: php artisan test --filter='OrbitM4SocialGraphTest|OrbitM5CirclesTest|OrbitM7MomentsTest'
