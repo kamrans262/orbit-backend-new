@@ -5,6 +5,7 @@ namespace App\Modules\Identity\Services;
 use App\Models\AdminUser;
 use App\Models\OrbitUser;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -86,8 +87,10 @@ final class DeleteOrbitUser
                 ->where('actor_id', $userId)->orWhere('subject_id', $userId)->delete();
             // M10: recipient polymorphic grants do not have a person FK.
             // Remove every saved consent record targeting the erased user.
-            $locationRecipientShares = DB::table('location_shares')
-                ->where('audience_type', 'person')->where('audience_id', $userId)->delete();
+            $locationRecipientShares = Schema::hasTable('location_shares')
+                ? DB::table('location_shares')->where('audience_type', 'person')
+                    ->where('audience_id', $userId)->delete()
+                : 0; // M10 migration is separately gated; older releases still erase users.
             $user->delete();
 
             // Preserve the immutable audit chain without retaining the deleted
