@@ -60,6 +60,18 @@ final class LocationController extends Controller
         return $this->result($value,201);
     }
 
+    /** Link separately reviewed M6 avatar consent to an existing person share. */
+    public function attachAvatar(Request $r,
+        \App\Modules\Location\Services\LocationAvatarGrantService $avatars,
+        string $share): JsonResponse
+    {
+        [$owner]=$this->who($r);
+        $d=$r->validate(['media_id'=>['required','uuid'],
+            'grant_id'=>['required','uuid']]);
+        return $this->result($avatars->attach($owner,$share,
+            $d['media_id'],$d['grant_id']));
+    }
+
     public function revokeShare(Request $r,LocationService $location,LocationRealtimePublisher $realtime,string $share): JsonResponse
     {
         [$user]=$this->who($r);
