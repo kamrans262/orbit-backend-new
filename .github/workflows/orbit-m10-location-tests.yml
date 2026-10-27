@@ -14,6 +14,8 @@ on:
       - 'resources/views/orbit-admin/location.blade.php'
       - 'resources/views/orbit-admin/partials/sidebar-navigation.blade.php'
       - 'tests/Feature/OrbitM10LocationTest.php'
+      - 'tests/Feature/OrbitM10RealtimeTicketTest.php'
+      - 'gateway/location/**'
       - 'app/Console/Commands/PruneOrbitLocation.php'
   workflow_dispatch:
 permissions:
@@ -74,5 +76,7 @@ jobs:
           php -l app/Console/Commands/PruneOrbitLocation.php
           php -l database/migrations/2026_10_27_000001_create_m10_location.php
           php -l tests/Feature/OrbitM10LocationTest.php
+          php -l tests/Feature/OrbitM10RealtimeTicketTest.php
+          node --check gateway/location/server.mjs
       - name: Focused M10 and upstream privacy contract regressions
-        run: php artisan test --compact --filter='OrbitM10LocationTest|OrbitM9PresenceTest|OrbitM5ConsentDurationContractTest'
+        run: php artisan test --compact --filter='OrbitM10LocationTest|OrbitM10RealtimeTicketTest|OrbitM9PresenceTest|OrbitM5ConsentDurationContractTest'
