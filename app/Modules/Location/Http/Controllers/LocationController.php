@@ -85,8 +85,8 @@ final class LocationController extends Controller
 
     public function map(Request $r,LocationService $location): JsonResponse
     {
-        [$user]=$this->who($r);
+        [$user,$device]=$this->who($r);
         $d=$r->validate(['circle_id'=>['sometimes','nullable','uuid']]);
-        return $this->result($location->map($user,$d['circle_id']??null));
+        return $this->result($location->map($user,$d['circle_id']??null,$device));
     }
 }
