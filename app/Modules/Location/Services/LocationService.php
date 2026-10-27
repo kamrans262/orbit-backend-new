@@ -274,6 +274,14 @@ final class LocationService
     {
         $this->ready($owner);
         abort_unless($this->policy->canUpload($owner),403,'No active location sharing consent.');
+        if ($this->policy->privacy($owner)['activity']==='While moving') {
+            // A still OS observation may not update a moving-only audience.
+            // 1 m/s is a conservative provisional threshold, not a claim
+            // of medically/transportation-certified movement detection.
+            abort_unless(isset($data['speed_mps']) &&
+                (float)$data['speed_mps']>=1.0,422,
+                'Movement required by current location privacy.');
+        }
         $seen=Carbon::parse($data['observed_at'])->utc();
         $now=now()->utc();
         abort_unless($seen->gte($now->copy()->subSeconds((int) config('orbit_location.sample_max_age_seconds',90)))
