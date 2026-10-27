@@ -32,7 +32,7 @@ final class LocationService
             'supported_durations'=>['one_hour','until_tonight','manual','always',
                 ...(config('orbit_location.until_leaving_enabled')===true ? ['until_leaving'] : [])],
             'until_leaving_available'=>config('orbit_location.until_leaving_enabled')===true,
-            'realtime_available'=>false, // No provisioned GPS broadcaster.
+            'realtime_available'=>app(\App\Modules\Location\Services\LocationRealtimeTicketService::class)->enabled(), // No provisioned GPS broadcaster.
             'latest_ttl_seconds'=>(int)config('orbit_location.latest_ttl_seconds',120),
         ];
     }
@@ -280,7 +280,7 @@ final class LocationService
             if (!$this->policy->canUpload($owner)) {
                 DB::table('location_latest')->where('owner_id',$owner)->delete();
                 return ['accepted'=>false,'sharing_stopped'=>$stoppedOnExit,
-                    'realtime_available'=>false];
+                    'realtime_available'=>app(\App\Modules\Location\Services\LocationRealtimeTicketService::class)->enabled()];
             }
             $expires=$now->copy()->addSeconds((int)config('orbit_location.latest_ttl_seconds',120));
             DB::table('location_latest')->updateOrInsert(['owner_id'=>$owner],[
@@ -290,7 +290,7 @@ final class LocationService
                 'expires_at'=>$expires,'created_at'=>$now,'updated_at'=>$now,
             ]);
             return ['accepted'=>true,'observed_at'=>$seen->toIso8601String(),
-                'expires_at'=>$expires->toIso8601String(),'realtime_available'=>false];
+                'expires_at'=>$expires->toIso8601String(),'realtime_available'=>app(\App\Modules\Location\Services\LocationRealtimeTicketService::class)->enabled()];
         },3);
     }
 
@@ -401,7 +401,7 @@ final class LocationService
         }
         return [
             'circle_id'=>$circleId,'markers'=>array_values($pins),
-            'realtime_available'=>false,'live_claimed'=>false,
+            'realtime_available'=>app(\App\Modules\Location\Services\LocationRealtimeTicketService::class)->enabled(),'live_claimed'=>false,
             'server_time'=>now()->toIso8601String(),
         ];
     }

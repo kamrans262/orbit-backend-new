@@ -20,6 +20,7 @@ use App\Modules\Dashboard\Http\Controllers\DashboardSummaryController;
 use App\Modules\Presence\Http\Controllers\PresenceController;
 use App\Modules\Presence\Http\Controllers\PresenceGatewayController;
 use App\Modules\Location\Http\Controllers\LocationController;
+use App\Modules\Location\Http\Controllers\LocationRealtimeController;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -33,6 +34,8 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/auth/otp/verify', [IdentityController::class, 'verifyOtp'])->middleware('throttle:25,1');
     Route::post('/auth/refresh', [IdentityController::class, 'refresh'])->middleware('throttle:30,1');
     // Internal gateway: secret-authenticated, session ticket revalidation per event.
+    Route::post('/location/realtime/introspect', [LocationRealtimeController::class,'introspect'])
+        ->middleware('throttle:240,1');
     Route::post('/presence/realtime/introspect', [PresenceGatewayController::class,'introspect'])
         ->middleware('throttle:240,1');
     Route::post('/presence/realtime/inbound', [PresenceGatewayController::class,'inbound'])
@@ -40,8 +43,10 @@ Route::prefix('v1')->group(function (): void {
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
         // M10: private location sharing; all routes require trusted device tokens.
-        // No GPS WSS tickets or false "live" streaming are provided in Stage 2.
+        // Only a separately verified WSS gateway can activate location invalidations.
         Route::get('/location/capabilities',[LocationController::class,'capabilities'])->middleware('throttle:30,1');
+        Route::post('/location/realtime/ticket',[LocationRealtimeController::class,'ticket'])
+            ->middleware('throttle:20,1');
         Route::get('/location/map',[LocationController::class,'map'])->middleware('throttle:30,1');
         Route::get('/me/location/shares',[LocationController::class,'shares'])->middleware('throttle:30,1');
         Route::post('/me/location/shares',[LocationController::class,'createShare'])->middleware('throttle:10,1');

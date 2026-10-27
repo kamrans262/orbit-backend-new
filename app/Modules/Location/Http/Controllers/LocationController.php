@@ -5,6 +5,7 @@ namespace App\Modules\Location\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\OrbitDevice;
 use App\Modules\Location\Services\LocationService;
+use App\Modules\Location\Services\LocationRealtimePublisher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -42,7 +43,7 @@ final class LocationController extends Controller
         return $this->result(['shares'=>$location->shares($user)]);
     }
 
-    public function createShare(Request $r,LocationService $location): JsonResponse
+    public function createShare(Request $r,LocationService $location,LocationRealtimePublisher $realtime): JsonResponse
     {
         [$user]=$this->who($r);
         $d=$r->validate([
@@ -54,22 +55,28 @@ final class LocationController extends Controller
             'exit_radius_m'=>['required_if:duration,until_leaving','nullable','integer','between:150,1000'],
             'reviewed'=>['required','accepted'],
         ]);
-        return $this->result($location->create($user,$d),201);
+        $value=$location->create($user,$d);
+        $realtime->invalidate($user);
+        return $this->result($value,201);
     }
 
-    public function revokeShare(Request $r,LocationService $location,string $share): JsonResponse
+    public function revokeShare(Request $r,LocationService $location,LocationRealtimePublisher $realtime,string $share): JsonResponse
     {
         [$user]=$this->who($r);
-        return $this->result($location->revoke($user,$share));
+        $value=$location->revoke($user,$share);
+        $realtime->invalidate($user);
+        return $this->result($value);
     }
 
-    public function stopAll(Request $r,LocationService $location): JsonResponse
+    public function stopAll(Request $r,LocationService $location,LocationRealtimePublisher $realtime): JsonResponse
     {
         [$user]=$this->who($r);
-        return $this->result($location->revoke($user));
+        $value=$location->revoke($user);
+        $realtime->invalidate($user);
+        return $this->result($value);
     }
 
-    public function sample(Request $r,LocationService $location): JsonResponse
+    public function sample(Request $r,LocationService $location,LocationRealtimePublisher $realtime): JsonResponse
     {
         [$user,$device]=$this->who($r);
         $d=$r->validate([
@@ -80,7 +87,9 @@ final class LocationController extends Controller
             'heading'=>['sometimes','nullable','numeric','between:0,360'],
             'speed_mps'=>['sometimes','nullable','numeric','between:0,100'],
         ]);
-        return $this->result($location->ingest($user,$device,$d),202);
+        $value=$location->ingest($user,$device,$d);
+        $realtime->invalidate($user);
+        return $this->result($value,202);
     }
 
     public function map(Request $r,LocationService $location): JsonResponse

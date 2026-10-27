@@ -5,7 +5,12 @@
 return [
     'enabled' => (bool) env('ORBIT_M10_LOCATION_ENABLED', false),
     'realtime_enabled' => (bool) env('ORBIT_M10_LOCATION_REALTIME_ENABLED', false),
-    'realtime_verified' => false, // Stage 2 provides NO GPS websocket broadcaster.
+    // Only an operator-tested gateway may set the independent verified gate.
+    'realtime_verified' => (bool) env('ORBIT_M10_REALTIME_VERIFIED',false),
+    'gateway_secret' => env('ORBIT_M10_GATEWAY_SECRET',''),
+    'realtime_store' => env('ORBIT_M10_REALTIME_STORE','redis'),
+    'redis_connection' => env('ORBIT_M10_REDIS_CONNECTION','default'),
+    'wss_url' => env('ORBIT_M10_WSS_URL',''),
     'latest_ttl_seconds' => 120,
     'fresh_seconds' => 30,
     'max_accuracy_m' => 500,
