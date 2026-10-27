@@ -10,6 +10,7 @@ on:
       - 'app/Modules/Social/Http/Controllers/SocialGraphController.php'
       - 'app/Modules/Circle/Http/Controllers/CircleController.php'
       - 'database/migrations/2026_10_27_000001_create_m10_location.php'
+      - 'database/migrations/2026_10_27_000002_add_m10_private_avatar_grants.php'
       - 'config/orbit_location.php'
       - 'config/orbit_circle.php'
       - 'routes/api.php'
@@ -79,6 +80,7 @@ jobs:
           php -l routes/admin.php
           php -l app/Console/Commands/PruneOrbitLocation.php
           php -l database/migrations/2026_10_27_000001_create_m10_location.php
+          php -l database/migrations/2026_10_27_000002_add_m10_private_avatar_grants.php
           php -l tests/Feature/OrbitM10LocationTest.php
           php -l tests/Feature/OrbitM10RealtimeTicketTest.php
           php -l tests/Feature/OrbitM10GhostRevocationTest.php
