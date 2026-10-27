@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/orbit-m10-location-tests.yml'
       - 'app/Modules/Location/**'
+      - 'app/Modules/Identity/Services/DeleteOrbitUser.php'
       - 'database/migrations/2026_10_27_000001_create_m10_location.php'
       - 'config/orbit_location.php'
       - 'config/orbit_circle.php'
