@@ -30,9 +30,14 @@ final class LocationRealtimePublisher
         if (!$this->tickets->enabled()) return;
         try {
             $shares=DB::table('location_shares')->where('owner_id',$owner)
-                ->whereIn('status',['active','revoked','expired'])
-                ->where('created_at','>=',now()->subDays(7))
-                ->limit((int)config('orbit_location.max_shares_per_user',60)+1)->get();
+                ->where(function($q): void {
+                    $q->where('status','active')
+                      ->orWhere(function($r): void {
+                          $r->whereIn('status',['revoked','expired'])
+                            ->where('updated_at','>=',now()->subDays(7));
+                      });
+                })
+                ->limit((int)config('orbit_location.max_map_candidates',200)+1)->get();
             $viewers=[];
             foreach($shares as $share) {
                 if($share->audience_type==='person'){
