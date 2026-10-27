@@ -6,6 +6,9 @@ on:
       - '.github/workflows/orbit-m10-location-tests.yml'
       - 'app/Modules/Location/**'
       - 'app/Modules/Identity/Services/DeleteOrbitUser.php'
+      - 'app/Modules/Profile/Http/Controllers/ProfileSettingsController.php'
+      - 'app/Modules/Social/Http/Controllers/SocialGraphController.php'
+      - 'app/Modules/Circle/Http/Controllers/CircleController.php'
       - 'database/migrations/2026_10_27_000001_create_m10_location.php'
       - 'config/orbit_location.php'
       - 'config/orbit_circle.php'
@@ -15,6 +18,7 @@ on:
       - 'resources/views/orbit-admin/partials/sidebar-navigation.blade.php'
       - 'tests/Feature/OrbitM10LocationTest.php'
       - 'tests/Feature/OrbitM10RealtimeTicketTest.php'
+      - 'tests/Feature/OrbitM10GhostRevocationTest.php'
       - 'gateway/location/**'
       - 'app/Console/Commands/PruneOrbitLocation.php'
   workflow_dispatch:
@@ -77,6 +81,10 @@ jobs:
           php -l database/migrations/2026_10_27_000001_create_m10_location.php
           php -l tests/Feature/OrbitM10LocationTest.php
           php -l tests/Feature/OrbitM10RealtimeTicketTest.php
+          php -l tests/Feature/OrbitM10GhostRevocationTest.php
+          php -l app/Modules/Profile/Http/Controllers/ProfileSettingsController.php
+          php -l app/Modules/Social/Http/Controllers/SocialGraphController.php
+          php -l app/Modules/Circle/Http/Controllers/CircleController.php
           node --check gateway/location/server.mjs
       - name: Focused M10 and upstream privacy contract regressions
-        run: php artisan test --compact --filter='OrbitM10LocationTest|OrbitM10RealtimeTicketTest|OrbitM9PresenceTest|OrbitM5ConsentDurationContractTest'
+        run: php artisan test --compact --filter='OrbitM10LocationTest|OrbitM10RealtimeTicketTest|OrbitM10GhostRevocationTest|OrbitM9PresenceTest|OrbitM5ConsentDurationContractTest'
