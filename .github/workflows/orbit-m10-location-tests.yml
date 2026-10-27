@@ -1,0 +1,77 @@
+name: Orbit M10 location focused Laravel tests
+on:
+  push:
+    branches: [feature/m9-presence-backend-admin]
+    paths:
+      - '.github/workflows/orbit-m10-location-tests.yml'
+      - 'app/Modules/Location/**'
+      - 'database/migrations/2026_10_27_000001_create_m10_location.php'
+      - 'config/orbit_location.php'
+      - 'config/orbit_circle.php'
+      - 'routes/api.php'
+      - 'routes/admin.php'
+      - 'resources/views/orbit-admin/location.blade.php'
+      - 'resources/views/orbit-admin/partials/sidebar-navigation.blade.php'
+      - 'tests/Feature/OrbitM10LocationTest.php'
+      - 'app/Console/Commands/PruneOrbitLocation.php'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  m10-focused-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: rootpass
+          MARIADB_DATABASE: orbit_ci
+          MARIADB_USER: orbit_ci
+          MARIADB_PASSWORD: orbit_ci_pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: testing
+      APP_DEBUG: true
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: orbit_ci
+      DB_USERNAME: orbit_ci
+      DB_PASSWORD: orbit_ci_pass
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, fileinfo, pdo_mysql, openssl, sodium
+          tools: composer:v2
+          coverage: none
+      - name: Install locked dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Generate disposable test key
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+      - name: Syntax check touched PHP surfaces
+        run: |
+          find app/Modules/Location -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l config/orbit_location.php
+          php -l config/orbit_circle.php
+          php -l routes/api.php
+          php -l routes/admin.php
+          php -l app/Console/Commands/PruneOrbitLocation.php
+          php -l database/migrations/2026_10_27_000001_create_m10_location.php
+          php -l tests/Feature/OrbitM10LocationTest.php
+      - name: Focused M10 and upstream privacy contract regressions
+        run: php artisan test --compact --filter='OrbitM10LocationTest|OrbitM9PresenceTest|OrbitM5ConsentDurationContractTest'
