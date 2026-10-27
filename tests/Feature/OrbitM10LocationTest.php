@@ -267,6 +267,32 @@ final class OrbitM10LocationTest extends TestCase
         $this->withToken($bobToken)->getJson('/api/v1/location/map')->assertJsonCount(0,'data.markers');
     }
 
+    public function test_account_erasure_purges_m10_recipient_grants_and_encrypted_samples(): void
+    {
+        [$alice,$aliceToken]=$this->person('alice');
+        [$bob]=$this->person('bob');
+        $this->friend($alice->id,$bob->id);
+        $this->privacy($alice->id);
+        $share=$this->share($aliceToken,'person',$bob->id);
+        $this->sample($aliceToken);
+
+        $actor=\App\Models\AdminUser::create([
+            'name'=>'M10 Test Administrator','email'=>'m10-admin@example.test',
+            'password'=>bcrypt('local-test-only-password'),
+            'status'=>'active',
+        ]);
+        app(\App\Modules\Identity\Services\DeleteOrbitUser::class)->execute(
+            $bob->id,$actor,'Verified account erasure request',null,null);
+        $this->assertDatabaseMissing('location_shares',['id'=>$share]);
+        $this->assertDatabaseHas('location_latest',['owner_id'=>$alice->id]);
+
+        app(\App\Modules\Identity\Services\DeleteOrbitUser::class)->execute(
+            $alice->id,$actor,'Verified account erasure request',null,null);
+        $this->assertDatabaseMissing('location_latest',['owner_id'=>$alice->id]);
+        $this->assertDatabaseMissing('location_consent_audits',['owner_id'=>$alice->id]);
+        $this->assertDatabaseMissing('location_shares',['owner_id'=>$alice->id]);
+    }
+
     public function test_until_leaving_cannot_be_silently_approximated(): void
     {
         [$alice,$token]=$this->person('alice');
