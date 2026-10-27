@@ -12,6 +12,8 @@ return [
     'sample_max_age_seconds' => 90,
     'future_skew_seconds' => 15,
     'max_shares_per_user' => 60,
+    // Provisional exit geofence algorithm; off without client/security approval.
+    'until_leaving_enabled' => (bool) env('ORBIT_M10_GEOFENCE_ENABLED', false),
     'max_map_candidates' => 200,
     'operational_retention_days' => 7,
     'consent_audit_retention_days' => 30,

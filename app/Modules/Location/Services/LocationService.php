@@ -29,8 +29,9 @@ final class LocationService
             'global'=>$this->policy->privacy($user),
             'supported_audiences'=>['person','circle'],
             'supported_precisions'=>['precise','approximate'],
-            'supported_durations'=>['one_hour','until_tonight','manual','always'],
-            'until_leaving_available'=>false, // Geofence radius/hysteresis needs product approval.
+            'supported_durations'=>['one_hour','until_tonight','manual','always',
+                ...(config('orbit_location.until_leaving_enabled')===true ? ['until_leaving'] : [])],
+            'until_leaving_available'=>config('orbit_location.until_leaving_enabled')===true,
             'realtime_available'=>false, // No provisioned GPS broadcaster.
             'latest_ttl_seconds'=>(int)config('orbit_location.latest_ttl_seconds',120),
         ];
@@ -52,6 +53,8 @@ final class LocationService
             'status'=>$this->policy->active($r) ? 'active' : ($r->status==='active' ? 'expired' : $r->status),
             'starts_at'=>$r->starts_at,'expires_at'=>$r->expires_at,'revoked_at'=>$r->revoked_at,
             'revision'=>(int)$r->revision,
+            'exit_radius_m'=>$r->duration==='until_leaving' ? (int)$r->geo_radius_m : null,
+            'exit_anchor_ready'=>$r->duration==='until_leaving' && $r->geo_anchor_encrypted!==null,
         ];
     }
 
@@ -63,12 +66,18 @@ final class LocationService
         $target=$data['audience_id'];
         abort_unless($this->policy->mayCreate($owner,$type,$target),403,'Location sharing not allowed.');
         $duration=$data['duration'];
+        if ($duration==='until_leaving') {
+            abort_unless(config('orbit_location.until_leaving_enabled')===true,422,
+                'Departure sharing is awaiting policy approval.');
+            abort_unless(isset($data['exit_radius_m']) && (int)$data['exit_radius_m']>=150
+                && (int)$data['exit_radius_m']<=1000,422,'Exit radius required.');
+        }
         abort_if($duration==='always' && $type!=='person',422,
             'Always sharing requires an explicitly selected trusted friend.');
         $expiry=match($duration) {
             'one_hour'=>now()->addHour(),
             'until_tonight'=>now($data['timezone'])->endOfDay()->utc(),
-            'manual','always'=>null,
+            'manual','always','until_leaving'=>null,
             default=>abort(422,'Unsupported duration; exit geofence is not yet approved.'),
         };
         abort_if($expiry!==null && (!$expiry->isFuture()
@@ -84,7 +93,8 @@ final class LocationService
             }
             foreach ($matches as $previous) {
                 DB::table('location_shares')->where('id',$previous->id)->update([
-                    'status'=>'revoked','revoked_at'=>now(),'revision'=>DB::raw('revision + 1'),
+                    'status'=>'revoked','revoked_at'=>now(),'geo_anchor_encrypted'=>null,
+                    'revision'=>DB::raw('revision + 1'),
                     'updated_at'=>now(),
                 ]);
             }
@@ -93,6 +103,9 @@ final class LocationService
                 'id'=>$id,'owner_id'=>$owner,'audience_type'=>$type,'audience_id'=>$target,
                 'precision'=>$data['precision'],'duration'=>$duration,'status'=>'active',
                 'starts_at'=>now(),'expires_at'=>$expiry,'revoked_at'=>null,
+                'geo_anchor_encrypted'=>null,
+                'geo_radius_m'=>$duration==='until_leaving' ? (int)$data['exit_radius_m'] : null,
+                'geo_exit_streak'=>0,
                 'revision'=>1,'created_at'=>now(),'updated_at'=>now(),
             ]);
             if ($type==='circle') $this->setCirclePermission($owner,$target,true,$data['precision'],$expiry);
@@ -170,6 +183,72 @@ final class LocationService
         },3);
     }
 
+    /** Haversine separation in metres, used only for encrypted departure anchors. */
+    private function separation(float $latA,float $lonA,float $latB,float $lonB): float
+    {
+        $deltaLat=deg2rad($latB-$latA);
+        $deltaLon=deg2rad($lonB-$lonA);
+        $h=sin($deltaLat/2)**2 + cos(deg2rad($latA))*cos(deg2rad($latB))
+            * sin($deltaLon/2)**2;
+        return 6371000.0 * 2 * atan2(sqrt(max(0,$h)),sqrt(max(0,1-$h)));
+    }
+
+    /**
+     * First accepted OS sample anchors the approved exit radius. Require two
+     * consecutive reliable observations outside radius + accuracy hysteresis.
+     * Triggered stops erase the encrypted anchor immediately.
+     */
+    private function evaluateExits(string $owner,array $point): bool
+    {
+        if (config('orbit_location.until_leaving_enabled')!==true) return false;
+        $shares=DB::table('location_shares')->where('owner_id',$owner)
+            ->where('status','active')->where('duration','until_leaving')
+            ->whereNull('revoked_at')->lockForUpdate()->get();
+        $stopped=false;
+        foreach ($shares as $share) {
+            if ($share->geo_anchor_encrypted===null) {
+                DB::table('location_shares')->where('id',$share->id)->update([
+                    'geo_anchor_encrypted'=>Crypt::encryptString(json_encode([
+                        'lat'=>$point['latitude'],'lon'=>$point['longitude'],
+                    ],JSON_THROW_ON_ERROR)), 'geo_exit_streak'=>0,'updated_at'=>now(),
+                ]);
+                continue;
+            }
+            try {
+                $anchor=json_decode(Crypt::decryptString($share->geo_anchor_encrypted),
+                    true,512,JSON_THROW_ON_ERROR);
+                if (!is_numeric($anchor['lat']??null) || !is_numeric($anchor['lon']??null)) {
+                    continue; // Never revoke from malformed/unverified anchor.
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+            $radius=(int)$share->geo_radius_m;
+            if ($radius<150 || $radius>1000) continue;
+            $accurate=$point['accuracy_m']<=min(100.0,$radius/2);
+            $outside=$this->separation((float)$anchor['lat'],(float)$anchor['lon'],
+                    $point['latitude'],$point['longitude'])
+                > $radius + max(50.0,$point['accuracy_m']);
+            $streak=$accurate && $outside ? ((int)$share->geo_exit_streak+1) : 0;
+            if ($streak<2) {
+                DB::table('location_shares')->where('id',$share->id)->update([
+                    'geo_exit_streak'=>$streak,'updated_at'=>now(),
+                ]);
+                continue;
+            }
+            DB::table('location_shares')->where('id',$share->id)->update([
+                'status'=>'revoked','revoked_at'=>now(),'geo_anchor_encrypted'=>null,
+                'geo_exit_streak'=>0,'revision'=>DB::raw('revision + 1'),'updated_at'=>now(),
+            ]);
+            if ($share->audience_type==='circle') {
+                $this->setCirclePermission($owner,$share->audience_id,false);
+            }
+            $this->audit($owner,$share->audience_type,$share->precision,'revoked');
+            $stopped=true;
+        }
+        return $stopped;
+    }
+
     /** Idempotent, strictly increasing observation time prevents replay resurrecting GPS. */
     public function ingest(string $owner,string $device,array $data): array
     {
@@ -195,6 +274,12 @@ final class LocationService
             $previous=DB::table('location_latest')->where('owner_id',$owner)->first();
             if ($previous && Carbon::parse($previous->observed_at)->gte($seen)) {
                 abort(409,'Location sample is not newer.');
+            }
+            $stoppedOnExit=$this->evaluateExits($owner,$point);
+            if (!$this->policy->canUpload($owner)) {
+                DB::table('location_latest')->where('owner_id',$owner)->delete();
+                return ['accepted'=>false,'sharing_stopped'=>$stoppedOnExit,
+                    'realtime_available'=>false];
             }
             $expires=$now->copy()->addSeconds((int)config('orbit_location.latest_ttl_seconds',120));
             DB::table('location_latest')->updateOrInsert(['owner_id'=>$owner],[
@@ -298,7 +383,8 @@ final class LocationService
             ->whereNotNull('expires_at')->where('expires_at','<=',now())->get();
         foreach ($old as $share) {
             DB::table('location_shares')->where('id',$share->id)->where('status','active')->update([
-                'status'=>'expired','revision'=>DB::raw('revision + 1'),'updated_at'=>now(),
+                'status'=>'expired','geo_anchor_encrypted'=>null,
+                'revision'=>DB::raw('revision + 1'),'updated_at'=>now(),
             ]);
             if ($share->audience_type==='circle') {
                 $this->setCirclePermission($share->owner_id,$share->audience_id,false);

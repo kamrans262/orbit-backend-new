@@ -18,6 +18,11 @@ return new class extends Migration {
             $table->timestamp('starts_at');
             $table->timestamp('expires_at')->nullable();
             $table->timestamp('revoked_at')->nullable();
+            // Only for separately approved "until leaving"; sealed private
+            // anchor, no plaintext geometry, GPS history or center in API.
+            $table->longText('geo_anchor_encrypted')->nullable();
+            $table->unsignedSmallInteger('geo_radius_m')->nullable();
+            $table->unsignedTinyInteger('geo_exit_streak')->default(0);
             $table->unsignedBigInteger('revision')->default(1);
             $table->timestamps();
             $table->index(['owner_id','status','expires_at']);

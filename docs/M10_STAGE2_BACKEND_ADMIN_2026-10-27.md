@@ -17,7 +17,7 @@
 - Focused PHP syntax + MariaDB feature workflow, no destructive production tests.
 
 ## Deliberately blocked/not claimed
-- Until leaving: geofence radius/hysteresis and exact departure policy require client approval; API rejects unsupported duration rather than inventing behavior.
+- Until leaving: implemented an opt-in encrypted first-sample anchor, explicit 150–1000 m selected radius, and two reliable outside observations with accuracy hysteresis. This is a **provisional** policy, DISABLED by default via ORBIT_M10_GEOFENCE_ENABLED=false. Product approval of exact radius/hysteresis is still required; API rejects the option while disabled.
 - Standalone API & Realtime Specification missing: these route names are Stage 2 proposals, not extracted final client contract.
 - No realtime location broadcaster/ticket/gateway implemented or activated; map returns updated/paused and realtime_available=false; never labels poll as LIVE.
 - No raw GPS history, paid history, sponsor pins, SOS exception, route/navigation, background OS acquisition or Flutter native map yet.

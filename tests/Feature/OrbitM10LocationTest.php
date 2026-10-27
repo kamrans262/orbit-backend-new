@@ -214,6 +214,35 @@ final class OrbitM10LocationTest extends TestCase
         $this->get('/admin/location')->assertRedirect(route('orbit.admin.login'));
     }
 
+    public function test_opt_in_exit_geofence_uses_encrypted_anchor_and_two_reliable_fixes(): void
+    {
+        config()->set('orbit_location.until_leaving_enabled',true);
+        [$alice,$token]=$this->person('alice');
+        [$bob,$bobToken]=$this->person('bob');
+        $this->friend($alice->id,$bob->id);
+        $this->privacy($alice->id);
+        $share=$this->withToken($token)->postJson('/api/v1/me/location/shares',[
+            'audience_type'=>'person','audience_id'=>$bob->id,'precision'=>'approximate',
+            'duration'=>'until_leaving','exit_radius_m'=>250,'reviewed'=>true,
+        ])->assertCreated()->json('data.id');
+        $this->sample($token,31.582045,74.329376);
+        $anchor=DB::table('location_shares')->where('id',$share)->value('geo_anchor_encrypted');
+        $this->assertNotNull($anchor);
+        $this->assertStringNotContainsString('31.582045',(string)$anchor);
+        $this->withToken($token)->postJson('/api/v1/me/location/samples',[
+            'latitude'=>31.592045,'longitude'=>74.329376,'accuracy_m'=>12,
+            'observed_at'=>now()->addSecond()->toIso8601String(),
+        ])->assertAccepted()->assertJsonPath('data.accepted',true);
+        $this->withToken($token)->postJson('/api/v1/me/location/samples',[
+            'latitude'=>31.592045,'longitude'=>74.329376,'accuracy_m'=>12,
+            'observed_at'=>now()->addSeconds(2)->toIso8601String(),
+        ])->assertAccepted()->assertJsonPath('data.sharing_stopped',true);
+        $this->assertDatabaseHas('location_shares',['id'=>$share,'status'=>'revoked']);
+        $this->assertDatabaseMissing('location_latest',['owner_id'=>$alice->id]);
+        $this->assertNull(DB::table('location_shares')->where('id',$share)->value('geo_anchor_encrypted'));
+        $this->withToken($bobToken)->getJson('/api/v1/location/map')->assertJsonCount(0,'data.markers');
+    }
+
     public function test_until_leaving_cannot_be_silently_approximated(): void
     {
         [$alice,$token]=$this->person('alice');

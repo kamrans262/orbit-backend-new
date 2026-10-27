@@ -49,8 +49,9 @@ final class LocationController extends Controller
             'audience_type'=>['required',Rule::in(['person','circle'])],
             'audience_id'=>['required','uuid'],
             'precision'=>['required',Rule::in(['approximate','precise'])],
-            'duration'=>['required',Rule::in(['one_hour','until_tonight','manual','always'])],
+            'duration'=>['required',Rule::in(['one_hour','until_tonight','manual','always','until_leaving'])],
             'timezone'=>['required_if:duration,until_tonight','nullable','timezone'],
+            'exit_radius_m'=>['required_if:duration,until_leaving','nullable','integer','between:150,1000'],
             'reviewed'=>['required','accepted'],
         ]);
         return $this->result($location->create($user,$d),201);
