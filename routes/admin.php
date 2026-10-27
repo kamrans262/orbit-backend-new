@@ -11,6 +11,7 @@ use App\Modules\Media\Http\Controllers\AdminMediaController;
 use App\Modules\Moments\Http\Controllers\AdminMomentController;
 use App\Modules\Dashboard\Http\Controllers\AdminDashboardController;
 use App\Modules\Presence\Http\Controllers\AdminPresenceController;
+use App\Modules\Location\Http\Controllers\AdminLocationController;
 use App\Modules\Config\Http\Middleware\EnsureAdmin;
 use App\Modules\Config\Http\Middleware\RequireAdminPermission;
 
@@ -50,6 +51,8 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
             abort(403);
         })->name('landing');
 
+        Route::get('/location', [AdminLocationController::class,'index'])
+            ->middleware(RequireAdminPermission::class.':config.manage')->name('location.index');
         Route::get('/presence', [AdminPresenceController::class,'index'])
             ->middleware(RequireAdminPermission::class.':config.manage')->name('presence.index');
         Route::get('/home-dashboard', [AdminDashboardController::class,'index'])

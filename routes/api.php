@@ -19,6 +19,7 @@ use App\Modules\Moments\Http\Controllers\MomentPushDeviceController;
 use App\Modules\Dashboard\Http\Controllers\DashboardSummaryController;
 use App\Modules\Presence\Http\Controllers\PresenceController;
 use App\Modules\Presence\Http\Controllers\PresenceGatewayController;
+use App\Modules\Location\Http\Controllers\LocationController;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -38,6 +39,17 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:120,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        // M10: private location sharing; all routes require trusted device tokens.
+        // No GPS WSS tickets or false "live" streaming are provided in Stage 2.
+        Route::get('/location/capabilities',[LocationController::class,'capabilities'])->middleware('throttle:30,1');
+        Route::get('/location/map',[LocationController::class,'map'])->middleware('throttle:30,1');
+        Route::get('/me/location/shares',[LocationController::class,'shares'])->middleware('throttle:30,1');
+        Route::post('/me/location/shares',[LocationController::class,'createShare'])->middleware('throttle:10,1');
+        Route::delete('/me/location/shares',[LocationController::class,'stopAll'])->middleware('throttle:15,1');
+        Route::delete('/me/location/shares/{share}',[LocationController::class,'revokeShare'])
+            ->whereUuid('share')->middleware('throttle:20,1');
+        Route::post('/me/location/samples',[LocationController::class,'sample'])->middleware('throttle:45,1');
+
         // M9: trusted-device ephemeral presence. No realtime/polling shortcut.
         Route::post('/presence/heartbeat', [PresenceController::class,'heartbeat'])->middleware('throttle:30,1');
         Route::post('/presence/realtime/ticket', [PresenceGatewayController::class,'ticket'])
