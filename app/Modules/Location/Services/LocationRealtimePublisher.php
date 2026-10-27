@@ -11,6 +11,20 @@ final class LocationRealtimePublisher
     public function __construct(private readonly LocationRealtimeTicketService $tickets,
         private readonly LocationPolicy $policy) {}
 
+    public function invalidateViewer(string $viewer): void
+    {
+        if (!$this->tickets->enabled()) return;
+        try {
+            // Opaque, viewer-only notification; never add subject IDs or GPS.
+            $channel='orbit:m10:viewer:'.hash_hmac('sha256',$viewer,(string)config('app.key'));
+            Redis::connection((string)config('orbit_location.redis_connection','default'))
+                ->publish($channel,json_encode(['v'=>1,
+                    'type'=>'location.invalidated'],JSON_THROW_ON_ERROR));
+        }catch(\Throwable) {
+            Log::warning('M10 viewer invalidation unavailable; REST permission checks remain enforced.');
+        }
+    }
+
     public function invalidate(string $owner): void
     {
         if (!$this->tickets->enabled()) return;
