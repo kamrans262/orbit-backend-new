@@ -176,6 +176,9 @@ final class SocialGraphController extends Controller
     {
         [$viewer, $device] = $this->identity($request);
         $social->unfriend($viewer, $user, $device);
+        $location=app(\App\Modules\Location\Services\LocationRealtimePublisher::class);
+        $location->invalidateViewer($viewer);
+        $location->invalidateViewer($user);
         return $this->send(['removed' => true]);
     }
 
@@ -205,6 +208,9 @@ final class SocialGraphController extends Controller
         ]);
         [$viewer, $device] = $this->identity($request);
         $social->block($viewer, $data['user_id'], $device, $data['reason_code'] ?? null);
+        $location=app(\App\Modules\Location\Services\LocationRealtimePublisher::class);
+        $location->invalidateViewer($viewer);
+        $location->invalidateViewer($data['user_id']);
         return $this->send(['blocked' => true], 201);
     }
 
