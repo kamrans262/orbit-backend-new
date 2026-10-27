@@ -51,6 +51,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/me/location/shares',[LocationController::class,'shares'])->middleware('throttle:30,1');
         Route::post('/me/location/shares',[LocationController::class,'createShare'])->middleware('throttle:10,1');
         Route::delete('/me/location/shares',[LocationController::class,'stopAll'])->middleware('throttle:15,1');
+        Route::post('/me/location/shares/{share}/avatar-grant',[LocationController::class,'attachAvatar'])
+            ->whereUuid('share')->middleware('throttle:10,1');
         Route::delete('/me/location/shares/{share}',[LocationController::class,'revokeShare'])
             ->whereUuid('share')->middleware('throttle:20,1');
         Route::post('/me/location/samples',[LocationController::class,'sample'])->middleware('throttle:45,1');
