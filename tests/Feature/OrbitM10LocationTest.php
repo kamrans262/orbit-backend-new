@@ -279,6 +279,7 @@ final class OrbitM10LocationTest extends TestCase
         $actor=\App\Models\AdminUser::create([
             'name'=>'M10 Test Administrator','email'=>'m10-admin@example.test',
             'password'=>bcrypt('local-test-only-password'),
+            'totp_secret'=>(new \App\Modules\Config\Services\Totp())->generateSecret(),
             'status'=>'active',
         ]);
         app(\App\Modules\Identity\Services\DeleteOrbitUser::class)->execute(
