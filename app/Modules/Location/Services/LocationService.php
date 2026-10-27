@@ -97,6 +97,7 @@ final class LocationService
                     'revision'=>DB::raw('revision + 1'),
                     'updated_at'=>now(),
                 ]);
+                app(LocationAvatarGrantService::class)->revokeFor($previous);
             }
             $id=(string)Str::uuid7();
             DB::table('location_shares')->insert([
@@ -167,6 +168,7 @@ final class LocationService
                 'geo_exit_streak'=>0,'revision'=>DB::raw('revision + 1'),
                     'updated_at'=>now(),
                 ]);
+                app(LocationAvatarGrantService::class)->revokeFor($row);
                 if ($row->audience_type==='circle') {
                     $stillActive=DB::table('location_shares')->where('owner_id',$owner)
                         ->where('audience_type','circle')->where('audience_id',$row->audience_id)
@@ -241,6 +243,7 @@ final class LocationService
                 'status'=>'revoked','revoked_at'=>now(),'geo_anchor_encrypted'=>null,
                 'geo_exit_streak'=>0,'revision'=>DB::raw('revision + 1'),'updated_at'=>now(),
             ]);
+            app(LocationAvatarGrantService::class)->revokeFor($share);
             if ($share->audience_type==='circle') {
                 $this->setCirclePermission($owner,$share->audience_id,false);
             }
@@ -373,9 +376,13 @@ final class LocationService
             $subject=DB::table('orbit_users')->where('id',$id)->first();
             if ($subject) {
                 $point['display_name']=(string)$subject->display_name;
-                if ($viewerDevice && config('orbit_media.enabled') === true
+                if ($viewerDevice && $share->audience_type==='person'
+                    && config('orbit_media.enabled') === true
+                    && \Illuminate\Support\Facades\Schema::hasColumn('location_shares','avatar_grant_id')
                     && \Illuminate\Support\Facades\Schema::hasColumn('orbit_users','avatar_media_id')
-                    && $subject->avatar_media_id !== null) {
+                    && $subject->avatar_media_id !== null
+                    && $share->avatar_media_id === $subject->avatar_media_id
+                    && $share->avatar_grant_id !== null) {
                     $image=DB::table('media_objects')->where('id',$subject->avatar_media_id)
                         ->where('owner_user_id',$id)->where('purpose','avatar')->first();
                     if ($image && app(\App\Modules\Media\Services\MediaPolicy::class)
@@ -383,6 +390,7 @@ final class LocationService
                         && DB::table('media_device_key_envelopes as e')
                             ->join('media_audience_grants as g','g.id','=','e.grant_id')
                             ->where('e.media_id',$image->id)
+                            ->where('e.grant_id',$share->avatar_grant_id)
                             ->where('e.recipient_device_id',$viewerDevice)
                             ->where('e.variant','original')
                             ->whereNull('e.revoked_at')
@@ -417,6 +425,7 @@ final class LocationService
                 'status'=>'expired','geo_anchor_encrypted'=>null,
                 'revision'=>DB::raw('revision + 1'),'updated_at'=>now(),
             ]);
+            app(LocationAvatarGrantService::class)->revokeFor($share);
             if ($share->audience_type==='circle') {
                 $this->setCirclePermission($share->owner_id,$share->audience_id,false);
             }
