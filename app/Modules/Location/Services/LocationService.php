@@ -245,7 +245,7 @@ final class LocationService
             if (!$this->policy->visibleTo($share,$viewer)) continue;
             $id=(string)$share->owner_id;
             $latest=DB::table('location_latest as l')
-                ->join('orbit_devices as d','d.id','=','l.device_id')
+                ->join('devices as d','d.id','=','l.device_id')
                 ->where('l.owner_id',$id)
                 ->where('d.user_id',$id)->where('d.trust_state','trusted')->whereNull('d.revoked_at')
                 ->where('l.expires_at','>',now())

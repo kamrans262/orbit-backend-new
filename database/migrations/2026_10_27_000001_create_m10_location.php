@@ -38,7 +38,7 @@ return new class extends Migration {
             $table->timestamps();
             $table->index('expires_at');
             $table->foreign('owner_id')->references('id')->on('orbit_users')->cascadeOnDelete();
-            $table->foreign('device_id')->references('id')->on('orbit_devices')->cascadeOnDelete();
+            $table->foreign('device_id')->references('id')->on('devices')->cascadeOnDelete();
         });
         Schema::create('location_consent_audits', function (Blueprint $table): void {
             $table->uuid('id')->primary();
