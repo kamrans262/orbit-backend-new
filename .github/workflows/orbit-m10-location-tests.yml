@@ -20,6 +20,7 @@ on:
       - 'tests/Feature/OrbitM10LocationTest.php'
       - 'tests/Feature/OrbitM10RealtimeTicketTest.php'
       - 'tests/Feature/OrbitM10GhostRevocationTest.php'
+      - 'tests/Feature/OrbitM10AvatarGrantTest.php'
       - 'gateway/location/**'
       - 'app/Console/Commands/PruneOrbitLocation.php'
   workflow_dispatch:
@@ -84,9 +85,10 @@ jobs:
           php -l tests/Feature/OrbitM10LocationTest.php
           php -l tests/Feature/OrbitM10RealtimeTicketTest.php
           php -l tests/Feature/OrbitM10GhostRevocationTest.php
+          php -l tests/Feature/OrbitM10AvatarGrantTest.php
           php -l app/Modules/Profile/Http/Controllers/ProfileSettingsController.php
           php -l app/Modules/Social/Http/Controllers/SocialGraphController.php
           php -l app/Modules/Circle/Http/Controllers/CircleController.php
           node --check gateway/location/server.mjs
       - name: Focused M10 and upstream privacy contract regressions
-        run: php artisan test --compact --filter='OrbitM10LocationTest|OrbitM10RealtimeTicketTest|OrbitM10GhostRevocationTest|OrbitM9PresenceTest|OrbitM5ConsentDurationContractTest'
+        run: php artisan test --compact --filter='OrbitM10LocationTest|OrbitM10RealtimeTicketTest|OrbitM10GhostRevocationTest|OrbitM10AvatarGrantTest|OrbitM9PresenceTest|OrbitM5ConsentDurationContractTest'
