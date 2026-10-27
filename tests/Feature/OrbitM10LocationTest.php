@@ -294,6 +294,24 @@ final class OrbitM10LocationTest extends TestCase
         $this->assertDatabaseMissing('location_shares',['owner_id'=>$alice->id]);
     }
 
+    public function test_tonight_duration_uses_selected_zone_across_dst_change(): void
+    {
+        // America/New_York leaves daylight saving time on 2026-11-01.
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-11-01T16:00:00Z'));
+        [$alice,$token]=$this->person('alice');
+        [$bob]=$this->person('bob');
+        $this->friend($alice->id,$bob->id);
+        $this->privacy($alice->id);
+        $response=$this->withToken($token)->postJson('/api/v1/me/location/shares',[
+            'audience_type'=>'person','audience_id'=>$bob->id,
+            'precision'=>'approximate','duration'=>'until_tonight',
+            'timezone'=>'America/New_York','reviewed'=>true,
+        ])->assertCreated();
+        $expiry=\Illuminate\Support\Carbon::parse($response->json('data.expires_at'))->utc();
+        $this->assertSame('2026-11-02T04:59:59+00:00',$expiry->toIso8601String());
+        $this->travelBack();
+    }
+
     public function test_until_leaving_cannot_be_silently_approximated(): void
     {
         [$alice,$token]=$this->person('alice');
