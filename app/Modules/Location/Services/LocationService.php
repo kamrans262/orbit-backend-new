@@ -186,6 +186,22 @@ final class LocationService
         },3);
     }
 
+    /** Revokes grants for a specific relationship, Circle or member scope.
+     * Blocking or leaving cannot make an old location grant reactivate later.
+     */
+    public function revokeAudience(string $owner,string $type,string $target): void
+    {
+        if(!in_array($type,['person','circle'],true)||!$this->policy->enabled())return;
+        if(!\App\Models\OrbitUser::query()->whereKey($owner)
+            ->where('status','active')->whereNull('deletion_requested_at')->exists())return;
+        $ids=DB::table('location_shares')
+            ->where('owner_id',$owner)->where('audience_type',$type)
+            ->where('audience_id',$target)->where('status','active')
+            ->limit((int)config('orbit_location.max_shares_per_user',60)+1)
+            ->pluck('id');
+        foreach($ids as $id)$this->revoke($owner,(string)$id);
+    }
+
     /** Haversine separation in metres, used only for encrypted departure anchors. */
     private function separation(float $latA,float $lonA,float $latB,float $lonB): float
     {
