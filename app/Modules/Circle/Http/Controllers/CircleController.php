@@ -14,6 +14,16 @@ final class CircleController extends Controller
     {
         return $r->attributes->get('orbit_session')->user_id;
     }
+    private function invalidateLocationCircle(string $circle, ?string $removed=null): void
+    {
+        if (!app(\App\Modules\Location\Services\LocationRealtimeTicketService::class)->enabled()) return;
+        $publisher=app(\App\Modules\Location\Services\LocationRealtimePublisher::class);
+        foreach (\Illuminate\Support\Facades\DB::table('circle_members')
+            ->where('circle_id',$circle)->limit(201)->pluck('user_id') as $viewer) {
+            $publisher->invalidateViewer((string)$viewer);
+        }
+        if ($removed !== null) $publisher->invalidateViewer($removed);
+    }
     private function result(array $data, int $status = 200): JsonResponse
     {
         return response()->json(['data'=>$data],$status)->header('Cache-Control','private, no-store');
@@ -150,18 +160,22 @@ final class CircleController extends Controller
     }
     public function leave(Request $r, CircleService $circles, string $circle): JsonResponse
     {
-        $circles->leave($circle,$this->viewer($r));
+        $user=$this->viewer($r);
+        $circles->leave($circle,$user);
+        $this->invalidateLocationCircle($circle,$user);
         return $this->result(['left'=>true]);
     }
     public function remove(Request $r, CircleService $circles, string $circle, string $user): JsonResponse
     {
         $circles->remove($circle,$this->viewer($r),$user);
+        $this->invalidateLocationCircle($circle,$user);
         return $this->result(['removed'=>true]);
     }
     public function role(Request $r, CircleService $circles, string $circle, string $user): JsonResponse
     {
         $data = $r->validate(['role'=>['required',Rule::in(['admin','member','restricted'])]]);
         $circles->changeRole($circle,$this->viewer($r),$user,$data['role']);
+        $this->invalidateLocationCircle($circle,$user);
         return $this->result(['role'=>$data['role']]);
     }
     public function transfer(Request $r,
@@ -188,7 +202,9 @@ final class CircleController extends Controller
         string $circle): JsonResponse
     {
         $r->validate(['confirmation'=>['required',Rule::in(['ARCHIVE'])]]);
-        return $this->result($service->archive($circle,$this->viewer($r)));
+        $value=$service->archive($circle,$this->viewer($r));
+        $this->invalidateLocationCircle($circle);
+        return $this->result($value);
     }
 
     public function restore(Request $r,
@@ -213,6 +229,8 @@ final class CircleController extends Controller
         ]);
         // Granting any privacy-sensitive capability requires explicit approved
         // duration/precision/audience UX and downstream authorization integration.
-        return $this->result($circles->disablePermission($circle,$this->viewer($r),$data['permission_key']));
+        $value=$circles->disablePermission($circle,$this->viewer($r),$data['permission_key']);
+        if ($data['permission_key']==='location') $this->invalidateLocationCircle($circle);
+        return $this->result($value);
     }
 }
