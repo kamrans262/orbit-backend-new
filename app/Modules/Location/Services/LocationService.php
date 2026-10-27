@@ -302,7 +302,7 @@ final class LocationService
     }
 
     /** Viewer-scoped bounded projection. Never return owner history or false LIVE labels. */
-    public function map(string $viewer,?string $circleId=null): array
+    public function map(string $viewer,?string $circleId=null,?string $viewerDevice=null): array
     {
         $this->ready($viewer);
         if ($circleId!==null) {
@@ -365,6 +365,36 @@ final class LocationService
                 'state'=>$age <= (int)config('orbit_location.fresh_seconds',30) ? 'updated' : 'paused',
             ];
             if ($precision==='precise') $point['accuracy_m']=(float)($position['accuracy_m']??0);
+            // Names come from the actual owner profile, never a demo user.
+            // A private avatar UUID is returned only if THIS trusted viewer
+            // device has an active original M6 envelope and the current
+            // MediaPolicy independently permits decryption. No URLs or key
+            // material are placed in map JSON.
+            $subject=DB::table('orbit_users')->where('id',$id)->first();
+            if ($subject) {
+                $point['display_name']=(string)$subject->display_name;
+                if ($viewerDevice && config('orbit_media.enabled') === true
+                    && \Illuminate\Support\Facades\Schema::hasColumn('orbit_users','avatar_media_id')
+                    && $subject->avatar_media_id !== null) {
+                    $image=DB::table('media_objects')->where('id',$subject->avatar_media_id)
+                        ->where('owner_user_id',$id)->where('purpose','avatar')->first();
+                    if ($image && app(\App\Modules\Media\Services\MediaPolicy::class)
+                        ->canRead($image,$viewer)
+                        && DB::table('media_device_key_envelopes as e')
+                            ->join('media_audience_grants as g','g.id','=','e.grant_id')
+                            ->where('e.media_id',$image->id)
+                            ->where('e.recipient_device_id',$viewerDevice)
+                            ->where('e.variant','original')
+                            ->whereNull('e.revoked_at')
+                            ->whereNull('g.revoked_at')
+                            ->where('g.recipient_user_id',$viewer)
+                            ->where(fn($q)=>$q->whereNull('g.expires_at')
+                                ->orWhere('g.expires_at','>',now()))
+                            ->exists()) {
+                        $point['avatar_media_id']=(string)$image->id;
+                    }
+                }
+            }
             if (!isset($pins[$id]) || ($pins[$id]['precision']==='approximate' && $precision==='precise')) {
                 $pins[$id]=$point;
             }
