@@ -155,6 +155,7 @@ final class ProfileSettingsController extends Controller
             'moment_default_audience' => ['sometimes', 'required', Rule::in(['My Circle', 'Selected People', 'Nobody'])],
             'read_receipts_enabled' => ['sometimes', 'required', 'boolean'],
         ]);
+        $previous=$this->settings($request,'privacy',self::PRIVACY);
         $saved=$this->saveSettings($request, 'privacy', self::PRIVACY, $changes);
         if (config('orbit_location.enabled') === true) {
             $owner=(string)$this->user($request)->id;
@@ -163,7 +164,11 @@ final class ProfileSettingsController extends Controller
             if ($saved['ghost_mode_enabled'] === true
                 || $saved['location_sharing_enabled'] !== true
                 || $saved['location_visibility'] === 'Nobody'
-                || $saved['location_activity'] === 'Off') {
+                || $saved['location_activity'] === 'Off'
+                // Any audience/activity boundary change requires NEW reviewed
+                // location grants; switching back must not resurrect old access.
+                || $previous['location_visibility'] !== $saved['location_visibility']
+                || $previous['location_activity'] !== $saved['location_activity']) {
                 app(\App\Modules\Location\Services\LocationService::class)->revoke($owner);
             }
             $publisher=app(\App\Modules\Location\Services\LocationRealtimePublisher::class);
