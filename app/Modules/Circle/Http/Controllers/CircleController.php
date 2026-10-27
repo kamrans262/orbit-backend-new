@@ -162,12 +162,16 @@ final class CircleController extends Controller
     {
         $user=$this->viewer($r);
         $circles->leave($circle,$user);
+        app(\App\Modules\Location\Services\LocationService::class)
+            ->revokeAudience($user,'circle',$circle);
         $this->invalidateLocationCircle($circle,$user);
         return $this->result(['left'=>true]);
     }
     public function remove(Request $r, CircleService $circles, string $circle, string $user): JsonResponse
     {
         $circles->remove($circle,$this->viewer($r),$user);
+        app(\App\Modules\Location\Services\LocationService::class)
+            ->revokeAudience($user,'circle',$circle);
         $this->invalidateLocationCircle($circle,$user);
         return $this->result(['removed'=>true]);
     }
@@ -175,6 +179,9 @@ final class CircleController extends Controller
     {
         $data = $r->validate(['role'=>['required',Rule::in(['admin','member','restricted'])]]);
         $circles->changeRole($circle,$this->viewer($r),$user,$data['role']);
+        if($data['role']==='restricted')
+            app(\App\Modules\Location\Services\LocationService::class)
+                ->revokeAudience($user,'circle',$circle);
         $this->invalidateLocationCircle($circle,$user);
         return $this->result(['role'=>$data['role']]);
     }
@@ -203,6 +210,14 @@ final class CircleController extends Controller
     {
         $r->validate(['confirmation'=>['required',Rule::in(['ARCHIVE'])]]);
         $value=$service->archive($circle,$this->viewer($r));
+        if(config('orbit_location.enabled')===true) {
+            $owners=\Illuminate\Support\Facades\DB::table('location_shares')
+                ->where('audience_type','circle')->where('audience_id',$circle)
+                ->where('status','active')->distinct()->pluck('owner_id');
+            foreach($owners as $owner)
+                app(\App\Modules\Location\Services\LocationService::class)
+                    ->revokeAudience((string)$owner,'circle',$circle);
+        }
         $this->invalidateLocationCircle($circle);
         return $this->result($value);
     }
@@ -230,7 +245,11 @@ final class CircleController extends Controller
         // Granting any privacy-sensitive capability requires explicit approved
         // duration/precision/audience UX and downstream authorization integration.
         $value=$circles->disablePermission($circle,$this->viewer($r),$data['permission_key']);
-        if ($data['permission_key']==='location') $this->invalidateLocationCircle($circle);
+        if ($data['permission_key']==='location') {
+            app(\App\Modules\Location\Services\LocationService::class)
+                ->revokeAudience($this->viewer($r),'circle',$circle);
+            $this->invalidateLocationCircle($circle);
+        }
         return $this->result($value);
     }
 }
