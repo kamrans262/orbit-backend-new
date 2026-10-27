@@ -175,7 +175,12 @@ final class SocialGraphController extends Controller
     public function removeFriend(Request $request, SocialGraphService $social, string $user): JsonResponse
     {
         [$viewer, $device] = $this->identity($request);
-        $social->unfriend($viewer, $user, $device);
+        DB::transaction(function () use ($social,$viewer,$user,$device): void {
+            $social->unfriend($viewer,$user,$device);
+            $location=app(\App\Modules\Location\Services\LocationService::class);
+            $location->revokeAudience($viewer,'person',$user);
+            $location->revokeAudience($user,'person',$viewer);
+        },3);
         $location=app(\App\Modules\Location\Services\LocationRealtimePublisher::class);
         $location->invalidateViewer($viewer);
         $location->invalidateViewer($user);
@@ -207,7 +212,13 @@ final class SocialGraphController extends Controller
             'reason_code' => ['nullable', Rule::in(['safety','spam','harassment','privacy','other'])],
         ]);
         [$viewer, $device] = $this->identity($request);
-        $social->block($viewer, $data['user_id'], $device, $data['reason_code'] ?? null);
+        DB::transaction(function () use ($social,$viewer,$data,$device): void {
+            $other=$data['user_id'];
+            $social->block($viewer,$other,$device,$data['reason_code']??null);
+            $location=app(\App\Modules\Location\Services\LocationService::class);
+            $location->revokeAudience($viewer,'person',$other);
+            $location->revokeAudience($other,'person',$viewer);
+        },3);
         $location=app(\App\Modules\Location\Services\LocationRealtimePublisher::class);
         $location->invalidateViewer($viewer);
         $location->invalidateViewer($data['user_id']);
