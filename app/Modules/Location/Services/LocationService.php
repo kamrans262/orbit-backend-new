@@ -163,7 +163,8 @@ final class LocationService
             $rows=$query->get();
             foreach ($rows as $row) {
                 DB::table('location_shares')->where('id',$row->id)->update([
-                    'status'=>'revoked','revoked_at'=>now(),'revision'=>DB::raw('revision + 1'),
+                    'status'=>'revoked','revoked_at'=>now(),'geo_anchor_encrypted'=>null,
+                'geo_exit_streak'=>0,'revision'=>DB::raw('revision + 1'),
                     'updated_at'=>now(),
                 ]);
                 if ($row->audience_type==='circle') {

@@ -187,6 +187,30 @@ final class OrbitM10LocationTest extends TestCase
             ->assertOk()->assertJsonCount(0,'data.markers');
     }
 
+    public function test_m5_permission_revocation_stops_circle_only_location_ingest(): void
+    {
+        [$alice,$token]=$this->person('alice');
+        [$bob,$bobToken]=$this->person('bob');
+        $circle=$this->withToken($token)->postJson('/api/v1/circles',['name'=>'Private'])
+            ->assertCreated()->json('data.id');
+        DB::table('circle_members')->insert([
+            'circle_id'=>$circle,'user_id'=>$bob->id,'role'=>'member',
+            'joined_at'=>now(),'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->privacy($alice->id,'My Circle');
+        $this->share($token,'circle',$circle,'precise');
+        $this->sample($token);
+        $this->withToken($token)->patchJson("/api/v1/circles/$circle/permissions",[
+            'permission_key'=>'location','enabled'=>false,
+        ])->assertOk();
+        $this->withToken($bobToken)->getJson('/api/v1/location/map?circle_id='.$circle)
+            ->assertOk()->assertJsonCount(0,'data.markers');
+        $this->withToken($token)->postJson('/api/v1/me/location/samples',[
+            'latitude'=>31.582045,'longitude'=>74.329376,'accuracy_m'=>10,
+            'observed_at'=>now()->addSecond()->toIso8601String(),
+        ])->assertForbidden();
+    }
+
     public function test_stale_observation_untrusted_sample_and_expiring_share(): void
     {
         [$alice,$token,$device]=$this->person('alice');

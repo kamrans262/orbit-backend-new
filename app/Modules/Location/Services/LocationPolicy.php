@@ -120,7 +120,17 @@ final class LocationPolicy
             ->where(fn ($q)=>$q->whereNull('expires_at')->orWhere('expires_at','>',now()))
             ->limit((int) config('orbit_location.max_shares_per_user',60)+1)->get();
         foreach ($shares as $share) {
-            if ($this->mayCreate($owner,$share->audience_type,$share->audience_id)) return true;
+            if (!$this->mayCreate($owner,$share->audience_type,$share->audience_id)) continue;
+            if ($share->audience_type==='circle') {
+                $grant=DB::table('circle_permissions')
+                    ->where('circle_id',$share->audience_id)
+                    ->where('scope_key','user:'.$owner)->where('permission_key','location')
+                    ->where('subject_user_id',$owner)->first();
+                if (!$grant || !app(CircleConsentPolicy::class)->consentCurrentlyValid($grant,'location')) {
+                    continue;
+                }
+            }
+            return true;
         }
         return false;
     }
