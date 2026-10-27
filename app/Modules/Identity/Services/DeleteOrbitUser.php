@@ -84,6 +84,10 @@ final class DeleteOrbitUser
                 ->where('user_id', $userId)->delete();
             $socialEvents = DB::table('social_graph_outbox')
                 ->where('actor_id', $userId)->orWhere('subject_id', $userId)->delete();
+            // M10: recipient polymorphic grants do not have a person FK.
+            // Remove every saved consent record targeting the erased user.
+            $locationRecipientShares = DB::table('location_shares')
+                ->where('audience_type', 'person')->where('audience_id', $userId)->delete();
             $user->delete();
 
             // Preserve the immutable audit chain without retaining the deleted
@@ -98,6 +102,7 @@ final class DeleteOrbitUser
                 'social_discovery' => $socialDiscovery,
                 'contact_quotas' => $socialContactQuotas,
                 'social_event_outbox' => $socialEvents,
+                'location_recipient_shares' => $locationRecipientShares,
             ];
             $last = DB::table('admin_audit_log')->orderByDesc('created_at')->lockForUpdate()->first();
             $prev = $last?->event_hash;
