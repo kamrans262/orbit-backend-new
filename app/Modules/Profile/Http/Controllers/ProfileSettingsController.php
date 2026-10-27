@@ -155,7 +155,22 @@ final class ProfileSettingsController extends Controller
             'moment_default_audience' => ['sometimes', 'required', Rule::in(['My Circle', 'Selected People', 'Nobody'])],
             'read_receipts_enabled' => ['sometimes', 'required', 'boolean'],
         ]);
-        return $this->respond($this->saveSettings($request, 'privacy', self::PRIVACY, $changes));
+        $saved=$this->saveSettings($request, 'privacy', self::PRIVACY, $changes);
+        if (config('orbit_location.enabled') === true) {
+            $owner=(string)$this->user($request)->id;
+            // Ghost and any global opt-out permanently revoke prior GPS grants;
+            // toggling sharing on later must NOT resurrect old consent.
+            if ($saved['ghost_mode_enabled'] === true
+                || $saved['location_sharing_enabled'] !== true
+                || $saved['location_visibility'] === 'Nobody'
+                || $saved['location_activity'] === 'Off') {
+                app(\App\Modules\Location\Services\LocationService::class)->revoke($owner);
+            }
+            $publisher=app(\App\Modules\Location\Services\LocationRealtimePublisher::class);
+            $publisher->invalidate($owner);
+            $publisher->invalidateViewer($owner);
+        }
+        return $this->respond($saved);
     }
 
     /** Device-independent locale and IANA timezone preferences. */
