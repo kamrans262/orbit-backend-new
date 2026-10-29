@@ -3,7 +3,7 @@
 @section('crumb', 'ACCOUNTS / SOCIAL GRAPH')
 @section('content')
 <div class="page-heading">
-  <div><p class="eyebrow">SOCIAL GRAPH / MILESTONE 04</p><h1>Friends &amp; blocking</h1>
+  <div><p class="eyebrow">SOCIAL CONNECTIONS / SAFETY OVERSIGHT</p><h1>Friends &amp; blocking</h1>
     <p>Permission-restricted operational counters and event metadata. Private contacts, messages, locations and relationship targets are never shown.</p></div>
 </div>
 <div class="stat-grid">
@@ -58,10 +58,10 @@
         </td>
       </tr>
     @empty
-      <tr><td colspan="3"><div class="empty-state"><strong>No matching social events</strong><p>Trusted-device social actions will appear after M4 is enabled.</p></div></td></tr>
+      <tr><td colspan="3"><div class="empty-state"><strong>No matching social events</strong><p>Friend requests and connection activity will appear as members use these features.</p></div></td></tr>
     @endforelse
   </tbody></table></div>
   <div class="admin-pagination">{{ $events->links() }}</div>
 </section>
-<div class="admin-guidance" role="note"><strong>Implementation boundary:</strong> This is M4 operational oversight only. Reporting, moderation and appeals belong to M17. Realtime and Firebase notification delivery are not asserted here.</div>
+<div class="admin-guidance" role="note"><strong>Administrative scope:</strong> This page provides relationship and blocking diagnostics only. Content reporting, appeals and notification delivery are managed independently.</div>
 @endsection

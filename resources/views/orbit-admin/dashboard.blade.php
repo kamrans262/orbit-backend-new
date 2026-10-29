@@ -2,7 +2,7 @@
 @section('title', 'Configuration overview')
 @section('content')
 <div class="page-heading">
-  <div><p class="eyebrow">OPERATIONS / MODULE 01</p><h1>Platform configuration</h1><p>Control release flags and public app configuration with tracked revisions.</p></div>
+  <div><p class="eyebrow">PLATFORM OPERATIONS / SETTINGS</p><h1>Platform configuration</h1><p>Control release flags and public app configuration with tracked revisions.</p></div>
   <div class="heading-actions"><a class="btn secondary" href="{{ route('orbit.admin.config.new') }}">+ Remote config</a><a class="btn primary" href="{{ route('orbit.admin.flags.new') }}">+ Feature flag</a></div>
 </div>
 <div class="stat-grid">
@@ -20,7 +20,7 @@
       <td>@if($flag->kill_switch)<span class="pill danger">Killed</span>@elseif($flag->enabled)<span class="pill success">Enabled</span>@else<span class="pill neutral">Disabled</span>@endif</td>
       <td>{{ $flag->rollout_percentage }}%</td><td>v{{ $flag->version }}</td>
       <td><a href="{{ route('orbit.admin.flags.edit', $flag) }}">Manage →</a></td></tr>
-    @empty<tr><td colspan="5"><div class="empty-state"><span>◇</span><strong>No feature flags yet</strong><p>Create the first release flag. Nothing is enabled by default.</p></div></td></tr>@endforelse
+    @empty<tr><td colspan="5"><div class="empty-state"><span>◇</span><strong>No feature flags yet</strong><p>No custom rollout flags have been created. Core feature availability is controlled separately by server configuration.</p></div></td></tr>@endforelse
     </tbody></table></div>
   </section>
   <section class="panel">

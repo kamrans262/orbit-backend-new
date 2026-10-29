@@ -3,7 +3,7 @@
 @section('crumb','ACCOUNTS / CIRCLE MANAGEMENT')
 @section('content')
 <div class="page-heading">
-  <div><p class="eyebrow">CIRCLE OPERATIONS / MILESTONE 05</p>
+  <div><p class="eyebrow">CIRCLE OPERATIONS / GROUP MANAGEMENT</p>
     <h1>Circle Management</h1>
     <p>Permission-restricted operational health. Circle names, participants, invitations, location, presence and content are not available in Admin.</p></div>
 </div>
@@ -38,7 +38,7 @@
   @endif
 </section>
 <div class="admin-guidance" role="note" style="margin-top:20px">
-  <strong>M5 safe-release boundary:</strong> This screen is read-only.
-  Ownership transfer, Circle dissolution, emergency intervention, join-code settings and monetization rules are disabled until the applicable product and privacy policies are approved.
+  <strong>Administrative access:</strong> This screen displays operational summaries only.
+  Circle ownership, invitations, roles and archive options are available through authorized app workflows; this page does not override member permissions or expose private Circle content.
 </div>
 @endsection
