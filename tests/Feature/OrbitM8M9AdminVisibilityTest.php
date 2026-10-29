@@ -41,17 +41,18 @@ final class OrbitM8M9AdminVisibilityTest extends TestCase
 
         $this->be($this->admin(['config.manage']),'admin');
         $this->get('/admin')->assertOk()
-            ->assertSee('M8 Home Dashboard')
-            ->assertSee('M9 Presence');
+            ->assertSee('Home Dashboard')
+            ->assertSee('Presence &amp; Activity',false)
+            ->assertSee('Location Sharing');
         $m8=$this->get('/admin/home-dashboard')->assertOk()
-            ->assertSee('M8 API runtime:')
-            ->assertSee('Not activated');
+            ->assertSee('Dashboard API:')
+            ->assertSee('Disabled');
         $this->assertStringContainsString('no-store',
             (string) $m8->headers->get('Cache-Control'));
         $m9=$this->get('/admin/presence')->assertOk()
-            ->assertSee('M9 API runtime:')
-            ->assertSee('Not activated')
-            ->assertSee('Realtime transport switch');
+            ->assertSee('Presence API:')
+            ->assertSee('Unavailable — presence storage not connected')
+            ->assertSee('Realtime connection setting');
         $this->assertStringContainsString('no-store',
             (string) $m9->headers->get('Cache-Control'));
     }
@@ -66,7 +67,26 @@ final class OrbitM8M9AdminVisibilityTest extends TestCase
         $this->get('/admin/home-dashboard')->assertForbidden();
         $this->get('/admin/presence')->assertForbidden();
         $this->get('/admin/users')->assertOk()
-            ->assertDontSee('M8 Home Dashboard')
-            ->assertDontSee('M9 Presence');
+            ->assertDontSee('Home Dashboard')
+            ->assertDontSee('Presence &amp; Activity',false)
+            ->assertDontSee('Location Sharing');
+    }
+
+    public function test_location_admin_reports_enabled_api_without_milestone_release_claims(): void
+    {
+        config()->set('orbit_location.enabled',true);
+        config()->set('orbit_circle.consumer_enabled.location',true);
+        config()->set('orbit_location.realtime_enabled',false);
+        $this->be($this->admin(['config.manage']),'admin');
+
+        $this->get('/admin/location')->assertOk()
+            ->assertSee('Location Sharing &amp; Map',false)
+            ->assertSee('Location API:')
+            ->assertSee('Map access:')
+            ->assertSee('Circle location sharing')
+            ->assertSee('Standard refresh available; realtime connection not configured')
+            ->assertDontSee('NOT released')
+            ->assertDontSee('M10 location API')
+            ->assertDontSee('M5 Location consumer');
     }
 }

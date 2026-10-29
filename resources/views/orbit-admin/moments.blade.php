@@ -3,7 +3,7 @@
 @section('crumb','ACCOUNTS / MOMENT MANAGEMENT')
 @section('content')
 <div class="page-heading">
- <div><p class="eyebrow">PRIVATE MOMENT OPERATIONS / MILESTONE 07</p>
+ <div><p class="eyebrow">CONTENT OPERATIONS / MOMENT MANAGEMENT</p>
  <h1>Moment Management</h1>
  <p>Permission-restricted lifecycle and report review. Private photos, videos, captions, comments, keys and recipient lists are never shown here.</p></div>
 </div>

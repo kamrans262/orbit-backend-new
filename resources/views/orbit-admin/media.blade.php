@@ -3,7 +3,7 @@
 @section('crumb','ACCOUNTS / ENCRYPTED MEDIA OPERATIONS')
 @section('content')
 <div class="page-heading">
-  <div><p class="eyebrow">STORAGE OPERATIONS / MILESTONE 06</p>
+  <div><p class="eyebrow">SECURE STORAGE / MEDIA OPERATIONS</p>
     <h1>Encrypted Media Operations</h1>
     <p>Encrypted-object lifecycle and health only. No owner identity, thumbnails, media contents, key envelopes or recipient lists are accessible here.</p>
   </div>
