@@ -30,7 +30,7 @@ final class OrbitM8M9AdminVisibilityTest extends TestCase
         return $admin;
     }
 
-    public function test_diagnostics_remain_permission_protected_without_cluttering_navigation(): void
+    public function test_operational_pages_remain_visible_and_permission_protected(): void
     {
         config()->set('orbit_dashboard.enabled',false);
         config()->set('orbit_presence.enabled',false);
@@ -41,8 +41,8 @@ final class OrbitM8M9AdminVisibilityTest extends TestCase
 
         $this->be($this->admin(['config.manage']),'admin');
         $this->get('/admin')->assertOk()
-            ->assertDontSee('Home Dashboard')
-            ->assertDontSee('Presence &amp; Activity',false)
+            ->assertSee('Home Dashboard')
+            ->assertSee('Presence &amp; Activity',false)
             ->assertSee('Location Sharing');
         $m8=$this->get('/admin/home-dashboard')->assertOk()
             ->assertSee('Dashboard API:')
@@ -57,6 +57,8 @@ final class OrbitM8M9AdminVisibilityTest extends TestCase
             (string) $m9->headers->get('Cache-Control'));
         $this->get('/admin/ping')->assertOk()
             ->assertSee('Delivery and acknowledgement')
+            ->assertSee('Ping availability')
+            ->assertSee('Account sending limit')
             ->assertDontSee('Service readiness')
             ->assertDontSee('Not instrumented');
         $this->get('/admin/flags/new')->assertOk()
@@ -94,8 +96,8 @@ final class OrbitM8M9AdminVisibilityTest extends TestCase
             ->assertSee('Location activity')
             ->assertSee('Active sharing sessions')
             ->assertSee('Current encrypted locations')
-            ->assertDontSee('Location API:')
-            ->assertDontSee('Map access:')
+            ->assertSee('Location API')
+            ->assertSee('Circle location sharing')
             ->assertDontSee('NOT released')
             ->assertDontSee('M10 location API')
             ->assertDontSee('M5 Location consumer');

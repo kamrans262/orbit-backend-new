@@ -7,12 +7,17 @@
   if ($navUser?->canPerform('config.manage')) {
     $navGroups[] = [
       'title' => 'Configurations', 'icon' => 'settings',
-      'patterns' => ['orbit.admin.dashboard','orbit.admin.flags.*','orbit.admin.config.*','orbit.admin.rollback','orbit.admin.location.*','orbit.admin.ping.*'],
+      'patterns' => ['orbit.admin.dashboard','orbit.admin.flags.*','orbit.admin.config.*','orbit.admin.rollback','orbit.admin.home-dashboard.*','orbit.admin.presence.*','orbit.admin.location.*','orbit.admin.ping.*'],
       'children' => [
         ['title'=>'Overview','route'=>'orbit.admin.dashboard','patterns'=>['orbit.admin.dashboard']],
         ['title'=>'Feature Flags','route'=>'orbit.admin.flags.index','patterns'=>['orbit.admin.flags.*']],
         ['title'=>'Remote Config','route'=>'orbit.admin.config.index','patterns'=>['orbit.admin.config.*']],
-        // Home and Presence are diagnostic-only and retain permission-protected URLs.
+        // Admin module inspection is always available to config.manage, independently
+        // of mobile runtime gates. No live data is exposed by either admin page.
+        ['title'=>'Home Dashboard','route'=>'orbit.admin.home-dashboard.index',
+          'patterns'=>['orbit.admin.home-dashboard.*']],
+        ['title'=>'Presence & Activity','route'=>'orbit.admin.presence.index',
+          'patterns'=>['orbit.admin.presence.*']],
         ['title'=>'Location Sharing','route'=>'orbit.admin.location.index',
           'patterns'=>['orbit.admin.location.*']],
         ['title'=>'Ping Operations','route'=>'orbit.admin.ping.index',

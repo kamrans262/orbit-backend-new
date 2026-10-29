@@ -16,6 +16,8 @@
     <p>Only consented, unexpired sharing sessions and encrypted location records are counted.</p>
   </div></div>
   <div class="admin-kv">
+    <div class="kv"><small>Location API</small><strong>{{ $enabled && $schemaInstalled ? 'Available to authorized devices' : ($enabled ? 'Database setup required' : 'Disabled') }}</strong></div>
+    <div class="kv"><small>Circle location sharing</small><strong>{{ $consumer ? 'Enabled with individual consent' : 'Disabled' }}</strong></div>
     <div class="kv"><small>Active sharing sessions</small><strong>{{ $activeShares===null ? 'Unavailable' : $activeShares }}</strong></div>
     <div class="kv"><small>Current encrypted locations</small><strong>{{ $freshSamples===null ? 'Unavailable' : $freshSamples }}</strong></div>
     <div class="kv"><small>Location update expiry</small><strong>{{ $ttl }} seconds</strong></div>
