@@ -22,6 +22,7 @@ use App\Modules\Presence\Http\Controllers\PresenceGatewayController;
 use App\Modules\Location\Http\Controllers\LocationController;
 use App\Modules\Location\Http\Controllers\LocationRealtimeController;
 use App\Modules\Ping\Http\Controllers\PingController;
+use App\Modules\Ping\Http\Controllers\PingCircleConsentController;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -43,6 +44,12 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:120,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        // Individual Circle Ping consent, never granted by membership alone.
+        Route::get('/me/pings/circles/{circle}/consent', [PingCircleConsentController::class, 'show'])
+            ->whereUuid('circle')->middleware('throttle:20,1');
+        Route::put('/me/pings/circles/{circle}/consent', [PingCircleConsentController::class, 'update'])
+            ->whereUuid('circle')->middleware('throttle:12,1');
+
         // Ping: durable, trusted-device HTTP delivery. No simulated push or receipts.
         Route::get('/pings/capabilities', [PingController::class, 'capabilities'])->middleware('throttle:30,1');
         Route::get('/pings/inbox', [PingController::class, 'inbox'])->middleware('throttle:45,1');
