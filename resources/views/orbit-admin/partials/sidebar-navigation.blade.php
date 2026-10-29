@@ -14,11 +14,11 @@
         ['title'=>'Remote Config','route'=>'orbit.admin.config.index','patterns'=>['orbit.admin.config.*']],
         // Admin module inspection is always available to config.manage, independently
         // of mobile runtime gates. No live data is exposed by either admin page.
-        ['title'=>'M8 Home Dashboard','route'=>'orbit.admin.home-dashboard.index',
+        ['title'=>'Home Dashboard','route'=>'orbit.admin.home-dashboard.index',
           'patterns'=>['orbit.admin.home-dashboard.*']],
-        ['title'=>'M9 Presence','route'=>'orbit.admin.presence.index',
+        ['title'=>'Presence & Activity','route'=>'orbit.admin.presence.index',
           'patterns'=>['orbit.admin.presence.*']],
-        ['title'=>'M10 Location','route'=>'orbit.admin.location.index',
+        ['title'=>'Location Sharing','route'=>'orbit.admin.location.index',
           'patterns'=>['orbit.admin.location.*']],
       ],
     ];

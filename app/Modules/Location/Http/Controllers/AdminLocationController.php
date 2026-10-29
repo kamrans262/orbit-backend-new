@@ -20,7 +20,7 @@ final class AdminLocationController extends Controller
         return response()->view('orbit-admin.location',[
             'enabled'=>config('orbit_location.enabled')===true,
             'consumer'=>config('orbit_circle.consumer_enabled.location')===true,
-            'realtime'=>false, // No approved location WSS implementation in Stage 2.
+            'realtime'=>app(\App\Modules\Location\Services\LocationRealtimeTicketService::class)->enabled(), // Configuration eligibility, not a live network probe.
             'schemaInstalled'=>$installed,
             'activeShares'=>$installed ? DB::table('location_shares')->where('status','active')
                 ->where(fn($q)=>$q->whereNull('expires_at')->orWhere('expires_at','>',now()))->count() : null,
