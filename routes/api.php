@@ -46,19 +46,19 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
         // Individual Circle Ping consent, never granted by membership alone.
         Route::get('/me/pings/circles/{circle}/consent', [PingCircleConsentController::class, 'show'])
-            ->whereUuid('circle')->middleware('throttle:20,1');
+            ->whereUuid('circle');
         Route::put('/me/pings/circles/{circle}/consent', [PingCircleConsentController::class, 'update'])
-            ->whereUuid('circle')->middleware('throttle:12,1');
+            ->whereUuid('circle');
 
         // Ping: durable, trusted-device HTTP delivery. No simulated push or receipts.
-        Route::get('/pings/capabilities', [PingController::class, 'capabilities'])->middleware('throttle:30,1');
-        Route::get('/pings/inbox', [PingController::class, 'inbox'])->middleware('throttle:45,1');
-        Route::get('/pings/outbox', [PingController::class, 'outbox'])->middleware('throttle:45,1');
-        Route::post('/pings', [PingController::class, 'send'])->middleware('throttle:30,1');
-        Route::get('/pings/{ping}', [PingController::class, 'detail'])->whereUuid('ping')->middleware('throttle:45,1');
-        Route::post('/pings/{ping}/delivered', [PingController::class, 'delivered'])->whereUuid('ping')->middleware('throttle:60,1');
-        Route::post('/pings/{ping}/seen', [PingController::class, 'seen'])->whereUuid('ping')->middleware('throttle:60,1');
-        Route::post('/pings/{ping}/respond', [PingController::class, 'respond'])->whereUuid('ping')->middleware('throttle:20,1');
+        Route::get('/pings/capabilities', [PingController::class, 'capabilities']);
+        Route::get('/pings/inbox', [PingController::class, 'inbox']);
+        Route::get('/pings/outbox', [PingController::class, 'outbox']);
+        Route::post('/pings', [PingController::class, 'send']);
+        Route::get('/pings/{ping}', [PingController::class, 'detail'])->whereUuid('ping');
+        Route::post('/pings/{ping}/delivered', [PingController::class, 'delivered'])->whereUuid('ping');
+        Route::post('/pings/{ping}/seen', [PingController::class, 'seen'])->whereUuid('ping');
+        Route::post('/pings/{ping}/respond', [PingController::class, 'respond'])->whereUuid('ping');
 
         // M10: private location sharing; all routes require trusted device tokens.
         // Only a separately verified WSS gateway can activate location invalidations.

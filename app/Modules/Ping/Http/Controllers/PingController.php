@@ -8,6 +8,7 @@ use App\Modules\Ping\Services\PingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\RateLimiter;
 
 final class PingController extends Controller
 {
@@ -21,6 +22,11 @@ final class PingController extends Controller
         $session = $request->attributes->get('orbit_session');
         abort_unless($session, 401, 'Unauthenticated.');
         $this->policy->assertSession((string) $session->user_id, (string) $session->device_id);
+        // Per-device throttling preserves fairness for members sharing an IP.
+        $key = 'ping:api:'.hash('sha256', (string) $session->user_id.'|'.(string) $session->device_id);
+        abort_if(RateLimiter::tooManyAttempts($key, 120), 429,
+            'Too many Ping requests. Please try again.');
+        RateLimiter::hit($key, 60);
         return $session;
     }
 

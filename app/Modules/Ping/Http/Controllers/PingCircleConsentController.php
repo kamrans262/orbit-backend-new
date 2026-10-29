@@ -9,6 +9,7 @@ use App\Modules\Ping\Services\PingAccessPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 
 final class PingCircleConsentController extends Controller
 {
@@ -25,6 +26,10 @@ final class PingCircleConsentController extends Controller
         $user = (string) $session->user_id;
         $this->devicePolicy->assertSession($user, (string) $session->device_id);
         abort_unless($this->circles->isMember($circle, $user), 404, 'Circle unavailable.');
+        $key = 'ping:consent:'.hash('sha256', $user.'|'.$circle);
+        abort_if(RateLimiter::tooManyAttempts($key, 30), 429,
+            'Too many Ping permission requests. Please try again.');
+        RateLimiter::hit($key, 60);
         return $user;
     }
 
