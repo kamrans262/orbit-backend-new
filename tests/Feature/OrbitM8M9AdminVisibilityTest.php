@@ -30,7 +30,7 @@ final class OrbitM8M9AdminVisibilityTest extends TestCase
         return $admin;
     }
 
-    public function test_module_admin_pages_remain_visible_without_enabling_mobile_runtime(): void
+    public function test_diagnostics_remain_permission_protected_without_cluttering_navigation(): void
     {
         config()->set('orbit_dashboard.enabled',false);
         config()->set('orbit_presence.enabled',false);
@@ -41,8 +41,8 @@ final class OrbitM8M9AdminVisibilityTest extends TestCase
 
         $this->be($this->admin(['config.manage']),'admin');
         $this->get('/admin')->assertOk()
-            ->assertSee('Home Dashboard')
-            ->assertSee('Presence &amp; Activity',false)
+            ->assertDontSee('Home Dashboard')
+            ->assertDontSee('Presence &amp; Activity',false)
             ->assertSee('Location Sharing');
         $m8=$this->get('/admin/home-dashboard')->assertOk()
             ->assertSee('Dashboard API:')
@@ -55,6 +55,16 @@ final class OrbitM8M9AdminVisibilityTest extends TestCase
             ->assertSee('Realtime connection setting');
         $this->assertStringContainsString('no-store',
             (string) $m9->headers->get('Cache-Control'));
+        $this->get('/admin/ping')->assertOk()
+            ->assertSee('Delivery and acknowledgement')
+            ->assertDontSee('Service readiness')
+            ->assertDontSee('Not instrumented');
+        $this->get('/admin/flags/new')->assertOk()
+            ->assertDontSee('Safety and permissions')
+            ->assertSee('Feature flags never override server-side privacy');
+        $this->get('/admin/config/new')->assertOk()
+            ->assertDontSee('Configuration visibility')
+            ->assertSee('Never include passwords, API keys or credentials');
     }
 
     public function test_pages_are_still_permission_gated_when_mobile_runtime_is_off(): void
@@ -81,10 +91,11 @@ final class OrbitM8M9AdminVisibilityTest extends TestCase
 
         $this->get('/admin/location')->assertOk()
             ->assertSee('Location Sharing &amp; Map',false)
-            ->assertSee('Location API:')
-            ->assertSee('Map access:')
-            ->assertSee('Circle location sharing')
-            ->assertSee('Standard refresh available; realtime connection not configured')
+            ->assertSee('Location activity')
+            ->assertSee('Active sharing sessions')
+            ->assertSee('Current encrypted locations')
+            ->assertDontSee('Location API:')
+            ->assertDontSee('Map access:')
             ->assertDontSee('NOT released')
             ->assertDontSee('M10 location API')
             ->assertDontSee('M5 Location consumer');

@@ -4,7 +4,7 @@
 @section('content')
 <a class="back" href="{{ route('orbit.admin.dashboard') }}">← Back to configuration</a>
 <div class="page-heading"><div><p class="eyebrow">RELEASE CONTROL</p><h1>{{ $flag?->exists ? 'Manage feature flag' : 'Create feature flag' }}</h1><p>Audience constraints and emergency disable take effect immediately for new requests.</p></div></div>
-<div class="form-layout">
+<div class="form-layout" @unless($flag?->exists) style="display:block;max-width:960px" @endunless>
   <section class="panel form-panel"><form method="post" action="{{ $flag?->exists ? route('orbit.admin.flags.update',$flag) : route('orbit.admin.flags.store') }}">@csrf
   <div class="form-grid">
     <label>Feature key <input name="key" type="text" required maxlength="120" pattern="[a-z][a-z0-9_.-]*" value="{{ old('key',$flag?->key ?? '') }}" {{ $flag?->exists ? 'readonly' : '' }} placeholder="relay.beta"></label>
@@ -23,18 +23,18 @@
       <label class="check critical"><input type="checkbox" name="kill_switch" value="1" {{ old('kill_switch',$flag?->kill_switch ?? false) ? 'checked' : '' }}>Emergency kill switch (force off)</label>
     </div></div>
     <label class="span2">Audit reason (required) <textarea required minlength="5" maxlength="500" name="reason" rows="3" placeholder="Explain the rollout/change and approval">{{ old('reason') }}</textarea></label>
+    <p class="span2" style="font-size:11px;line-height:1.6">Feature flags never override server-side privacy, authorization or safety controls.</p>
   </div><div class="form-actions"><a class="btn secondary" href="{{ route('orbit.admin.dashboard') }}">Cancel</a><button class="btn primary" type="submit">{{ $flag?->exists ? 'Save new revision' : 'Create flag' }} →</button></div>
   </form></section>
+  @if($flag?->exists)
   <aside class="form-aside">
-    <div class="info-card"><span class="info-icon">ⓘ</span><h3>Safety and permissions</h3><p>Feature flags affect client presentation only. Server APIs must still enforce privacy, entitlement, SOS and role permissions independently.</p></div>
-    @if($flag?->exists)
       <div class="info-card"><h3>Preview rollout</h3><form method="get" action="{{ route('orbit.admin.flags.preview', $flag) }}"><label>Platform<select name="platform"><option value="ios">iOS</option><option value="android">Android</option><option value="web">Web</option></select></label><label>App version<input name="app_version" value="1.0.0" required></label><label>Country<input name="country" value="PK" maxlength="2" required></label><label>Cohort<input name="cohort" placeholder="optional"></label><label>Subject UUID<input name="subject" placeholder="for percentage rollout"></label><button class="btn secondary full">Preview eligibility</button></form></div>
       <div class="info-card"><h3>Revision history</h3><p>Rollback creates another audited revision; it never deletes history.</p>
       @forelse($revisions as $rev)<div class="revision"><div><strong>Version {{ $rev->version }}</strong><small>{{ $rev->created_at }}</small><small>{{ $rev->reason }}</small></div>
         <form method="post" action="{{ route('orbit.admin.rollback',['type'=>'flag','key'=>$flag->key]) }}" data-confirm="Create an audited rollback revision?">@csrf<input type="hidden" name="revision" value="{{ $rev->id }}"><input type="hidden" name="confirm" value="1"><input name="reason" required minlength="5" maxlength="500" placeholder="Reason for rollback"><button class="text-action">Restore</button></form></div>
       @empty<p>No revisions yet.</p>@endforelse
       </div>
-    @endif
   </aside>
+  @endif
 </div>
 @endsection

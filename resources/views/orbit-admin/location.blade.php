@@ -3,37 +3,29 @@
 @section('crumb','CONFIGURATIONS / LOCATION SHARING')
 @section('content')
 <div class="page-heading">
-  <div><p class="eyebrow">LOCATION SERVICES / PRIVACY-PROTECTED METRICS</p>
-  <h1>Location Sharing &amp; Map</h1>
-  <p>Review location service availability and aggregate usage. Personal coordinates, travel routes and recipient identities are never visible to administrators.</p></div>
+  <div>
+    <p class="eyebrow">LOCATION SERVICES / PRIVACY-PROTECTED METRICS</p>
+    <h1>Location Sharing &amp; Map</h1>
+    <p>Aggregate sharing activity only. Personal coordinates, routes and recipient identities remain private.</p>
+  </div>
 </div>
 <section class="panel">
-  <div class="panel-head"><div><p class="eyebrow">SERVICE STATUS / PRIVACY CONTROLS</p>
-    <h2>Location service status</h2>
-    <p>Map access is available with an active service and trusted-device authorization. Location sharing separately requires the member's consent and approved audience permissions.</p></div></div>
-  <div class="admin-guidance" role="status">
-    Location API: <strong>{{ $enabled && $schemaInstalled ? 'Enabled' : ($enabled ? 'Enabled — database setup required' : 'Disabled') }}</strong>.
-    Map access: <strong>{{ $enabled && $schemaInstalled ? 'Available to authorized devices' : 'Unavailable until setup is complete' }}</strong>.
-    Live location updates: <strong>{{ $realtime ? 'Realtime configured — connection verification required' : 'Standard refresh available; realtime connection not configured' }}</strong>.
-    Location access follows account privacy settings, trusted-device security and explicitly approved sharing permissions.
-  </div>
+  <div class="panel-head"><div>
+    <p class="eyebrow">SHARING ACTIVITY</p>
+    <h2>Location activity</h2>
+    <p>Only consented, unexpired sharing sessions and encrypted location records are counted.</p>
+  </div></div>
   <div class="admin-kv">
-    <div class="kv"><small>Database tables</small><strong>{{ $schemaInstalled ? 'Installed' : 'Not migrated' }}</strong></div>
-    <div class="kv"><small>Circle location sharing</small><strong>{{ $consumer ? 'Enabled' : 'Disabled' }}</strong></div>
-    <div class="kv"><small>Location update expiry</small><strong>{{ $ttl }} seconds</strong></div>
-    <div class="kv"><small>Active consent records</small><strong>{{ $activeShares===null ? 'Unavailable' : $activeShares }}</strong></div>
+    <div class="kv"><small>Active sharing sessions</small><strong>{{ $activeShares===null ? 'Unavailable' : $activeShares }}</strong></div>
     <div class="kv"><small>Current encrypted locations</small><strong>{{ $freshSamples===null ? 'Unavailable' : $freshSamples }}</strong></div>
+    <div class="kv"><small>Location update expiry</small><strong>{{ $ttl }} seconds</strong></div>
   </div>
-  @if($schemaInstalled && $activeShares === 0)
-    <div class="admin-guidance" role="note" style="margin-top:14px">
-      <strong>No active sharing sessions.</strong> The map can display streets without a sharing grant, but people appear only after a member explicitly enables location sharing in Privacy Settings, selects an authorized friend or Circle, confirms the audience and grants foreground GPS access. The recipient must be signed in on a trusted device.
-    </div>
-  @elseif($schemaInstalled && $freshSamples === 0)
-    <div class="admin-guidance" role="note" style="margin-top:14px">
-      <strong>Awaiting current location updates.</strong> Approved sharing is present, but no unexpired GPS sample is stored. The sharing member must keep Orbit open with device location permission. Samples expire after {{ $ttl }} seconds.
-    </div>
+  @if(!$schemaInstalled)
+  <div class="admin-guidance" role="status">Location activity is unavailable until the required database setup is installed.</div>
+  @elseif($activeShares === 0)
+  <div class="admin-guidance" role="note">No active sharing sessions. Members must explicitly enable location sharing and approve an audience before anyone can receive their location.</div>
+  @elseif($freshSamples === 0)
+  <div class="admin-guidance" role="note">Sharing is authorized, but no unexpired location update is available. Device permission and foreground use are required.</div>
   @endif
-  <p>The figures above are aggregate totals. Individual access always requires current privacy permissions. No precise coordinates are shown or logged.</p>
-  <p><a href="{{ route('orbit.admin.flags.index') }}">View feature flags</a></p>
 </section>
 @endsection
