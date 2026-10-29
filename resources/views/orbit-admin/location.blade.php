@@ -24,6 +24,15 @@
     <div class="kv"><small>Active consent records</small><strong>{{ $activeShares===null ? 'Unavailable' : $activeShares }}</strong></div>
     <div class="kv"><small>Current encrypted locations</small><strong>{{ $freshSamples===null ? 'Unavailable' : $freshSamples }}</strong></div>
   </div>
+  @if($schemaInstalled && $activeShares === 0)
+    <div class="admin-guidance" role="note" style="margin-top:14px">
+      <strong>No active sharing sessions.</strong> The map can display streets without a sharing grant, but people appear only after a member explicitly enables location sharing in Privacy Settings, selects an authorized friend or Circle, confirms the audience and grants foreground GPS access. The recipient must be signed in on a trusted device.
+    </div>
+  @elseif($schemaInstalled && $freshSamples === 0)
+    <div class="admin-guidance" role="note" style="margin-top:14px">
+      <strong>Awaiting current location updates.</strong> Approved sharing is present, but no unexpired GPS sample is stored. The sharing member must keep Orbit open with device location permission. Samples expire after {{ $ttl }} seconds.
+    </div>
+  @endif
   <p>The figures above are aggregate totals. Individual access always requires current privacy permissions. No precise coordinates are shown or logged.</p>
   <p><a href="{{ route('orbit.admin.flags.index') }}">View feature flags</a></p>
 </section>
