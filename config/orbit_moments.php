@@ -1,6 +1,6 @@
 <?php
 return [
-    'enabled' => (bool) env('ORBIT_M7_MOMENTS_ENABLED', false),
+    'enabled' => (bool) env('ORBIT_M7_MOMENTS_ENABLED', true),
     'rail_hours' => 24,
     'view_days' => 7,
     'purge_days' => 30,

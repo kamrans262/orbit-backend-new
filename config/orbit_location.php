@@ -1,9 +1,10 @@
 <?php
 
-// M10 stays OFF until reviewed mobile permissions, privacy tests and infrastructure approval.
-// These settings are not a live transport health declaration.
+// M10 foreground REST map and explicit-consent sharing are ON for test builds.
+// A server ON flag is not user GPS opt-in. Ghost Mode, trusted device and
+// reviewed audience grants remain required. Realtime needs external WSS/Redis.
 return [
-    'enabled' => (bool) env('ORBIT_M10_LOCATION_ENABLED', false),
+    'enabled' => (bool) env('ORBIT_M10_LOCATION_ENABLED', true),
     'realtime_enabled' => (bool) env('ORBIT_M10_LOCATION_REALTIME_ENABLED', false),
     // Only an operator-tested gateway may set the independent verified gate.
     'realtime_verified' => (bool) env('ORBIT_M10_REALTIME_VERIFIED',false),
