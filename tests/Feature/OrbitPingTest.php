@@ -190,6 +190,36 @@ final class OrbitPingTest extends TestCase
             ->assertOk()->assertJsonPath('data.available', false);
     }
 
+    public function test_second_trusted_device_records_independent_delivery_without_faking_seen(): void
+    {
+        [$sender, $sendToken] = $this->person('Sender');
+        [$recipient, $recipientToken] = $this->person('Recipient');
+        $this->friends($sender, $recipient);
+        $this->consent($recipient, 'Friends', true);
+        $otherDevice = OrbitDevice::create([
+            'user_id' => $recipient->id, 'device_public_id' => (string) Str::uuid(),
+            'name' => 'Second device', 'platform' => 'android',
+            'public_key' => base64_encode(random_bytes(32)),
+            'trust_state' => 'trusted', 'attestation_state' => 'verified',
+            'approved_at' => now(),
+        ]);
+        $secondToken = app(TokenService::class)->issue($recipient, $otherDevice, null)['access_token'];
+        $id = $this->withToken($sendToken)->postJson('/api/v1/pings', $this->payload($recipient))
+            ->assertCreated()->json('data.id');
+        $this->withToken($recipientToken)->postJson('/api/v1/pings/'.$id.'/delivered')
+            ->assertOk()->assertJsonPath('data.status','delivered');
+        $this->withToken($secondToken)->postJson('/api/v1/pings/'.$id.'/delivered')
+            ->assertOk()->assertJsonPath('data.status','delivered');
+        $this->assertDatabaseCount('ping_receipts',2);
+        $this->withToken($sendToken)->getJson('/api/v1/pings/'.$id)
+            ->assertOk()->assertJsonPath('data.status','delivered');
+        $this->withToken($secondToken)->postJson('/api/v1/pings/'.$id.'/seen')
+            ->assertOk()->assertJsonPath('data.status','seen');
+        $this->assertDatabaseCount('ping_receipts',3);
+        $this->withToken($sendToken)->getJson('/api/v1/pings/'.$id)
+            ->assertOk()->assertJsonPath('data.status','seen');
+    }
+
     public function test_ping_operations_is_role_restricted_and_content_free(): void
     {
         $role = AdminRole::create(['name' => 'Ping operator', 'permissions' => ['config.manage']]);
@@ -199,6 +229,7 @@ final class OrbitPingTest extends TestCase
         $admin->roles()->attach($role->id);
         $this->actingAs($admin, 'admin')->get('/admin/ping')->assertOk()
             ->assertSee('Ping Operations')->assertSee('Accepted requests')
+            ->assertSee('Rejected requests (last 24h)')
             ->assertDontSee('custom_text');
         $role->update(['permissions' => ['users.read']]);
         $this->actingAs($admin, 'admin')->get('/admin/ping')->assertForbidden();
