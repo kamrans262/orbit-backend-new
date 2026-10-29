@@ -32,6 +32,10 @@ final class AdminPingController extends Controller
                 'replies_24h' => DB::table('ping_responses')->where('created_at', '>=', $since)->count(),
                 'awaiting_receipt' => DB::table('pings')->whereNull('delivered_at')->count(),
                 'delivery_lag_seconds' => $lag,
+                'rejected_24h' => Schema::hasTable('ping_operational_events')
+                    ? DB::table('ping_operational_events')->where('action','send')
+                        ->where('status_code','>=',400)->where('created_at','>=',$since)->count()
+                    : null,
             ];
         }
         return response()->view('orbit-admin.ping', [

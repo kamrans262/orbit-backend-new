@@ -30,6 +30,7 @@
     <div class="kv"><small>Quick acknowledgements</small><strong>{{ $metrics['replies_24h'] }}</strong></div>
     <div class="kv"><small>Awaiting recipient confirmation (all time)</small><strong>{{ $metrics['awaiting_receipt'] }}</strong></div>
     <div class="kv"><small>Average recent confirmation lag</small><strong>{{ $metrics['delivery_lag_seconds'] === null ? 'Not available' : $metrics['delivery_lag_seconds'].' seconds' }}</strong></div>
+    <div class="kv"><small>Rejected requests (last 24h)</small><strong>{{ $metrics['rejected_24h'] === null ? 'Not available' : $metrics['rejected_24h'] }}</strong></div>
   </div>
   @else
   <div class="admin-guidance" role="status">Ping metrics will be available after the database migration has been applied.</div>

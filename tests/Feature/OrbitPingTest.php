@@ -73,10 +73,14 @@ final class OrbitPingTest extends TestCase
         $this->friends($a, $b);
         $payload = $this->payload($b);
         $this->postJson('/api/v1/pings', $payload)->assertUnauthorized();
-        $this->withToken($ta)->postJson('/api/v1/pings', $payload)->assertNotFound();
+        $this->withToken($ta)->postJson('/api/v1/pings', $payload)
+            ->assertNotFound()->assertHeader('X-Orbit-Request-ID');
         $this->consent($b, 'Friends');
         $this->withToken($ta)->postJson('/api/v1/pings', $payload)->assertCreated()
-            ->assertJsonPath('data.status', 'accepted');
+            ->assertHeader('X-Orbit-Request-ID')->assertJsonPath('data.status', 'accepted');
+        $this->assertDatabaseHas('ping_operational_events',[
+            'action'=>'send','status_code'=>404,'reason_code'=>'unavailable',
+        ]);
         $device->update(['trust_state' => 'pending']);
         $this->withToken($ta)->getJson('/api/v1/pings/outbox')->assertForbidden();
     }

@@ -23,6 +23,7 @@ use App\Modules\Location\Http\Controllers\LocationController;
 use App\Modules\Location\Http\Controllers\LocationRealtimeController;
 use App\Modules\Ping\Http\Controllers\PingController;
 use App\Modules\Ping\Http\Controllers\PingCircleConsentController;
+use App\Modules\Ping\Http\Middleware\PingOperationalTelemetry;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -51,14 +52,14 @@ Route::prefix('v1')->group(function (): void {
             ->whereUuid('circle');
 
         // Ping: durable, trusted-device HTTP delivery. No simulated push or receipts.
-        Route::get('/pings/capabilities', [PingController::class, 'capabilities']);
-        Route::get('/pings/inbox', [PingController::class, 'inbox']);
-        Route::get('/pings/outbox', [PingController::class, 'outbox']);
-        Route::post('/pings', [PingController::class, 'send']);
-        Route::get('/pings/{ping}', [PingController::class, 'detail'])->whereUuid('ping');
-        Route::post('/pings/{ping}/delivered', [PingController::class, 'delivered'])->whereUuid('ping');
-        Route::post('/pings/{ping}/seen', [PingController::class, 'seen'])->whereUuid('ping');
-        Route::post('/pings/{ping}/respond', [PingController::class, 'respond'])->whereUuid('ping');
+        Route::get('/pings/capabilities', [PingController::class, 'capabilities'])->middleware(PingOperationalTelemetry::class);
+        Route::get('/pings/inbox', [PingController::class, 'inbox'])->middleware(PingOperationalTelemetry::class);
+        Route::get('/pings/outbox', [PingController::class, 'outbox'])->middleware(PingOperationalTelemetry::class);
+        Route::post('/pings', [PingController::class, 'send'])->middleware(PingOperationalTelemetry::class);
+        Route::get('/pings/{ping}', [PingController::class, 'detail'])->whereUuid('ping')->middleware(PingOperationalTelemetry::class);
+        Route::post('/pings/{ping}/delivered', [PingController::class, 'delivered'])->whereUuid('ping')->middleware(PingOperationalTelemetry::class);
+        Route::post('/pings/{ping}/seen', [PingController::class, 'seen'])->whereUuid('ping')->middleware(PingOperationalTelemetry::class);
+        Route::post('/pings/{ping}/respond', [PingController::class, 'respond'])->whereUuid('ping')->middleware(PingOperationalTelemetry::class);
 
         // M10: private location sharing; all routes require trusted device tokens.
         // Only a separately verified WSS gateway can activate location invalidations.
