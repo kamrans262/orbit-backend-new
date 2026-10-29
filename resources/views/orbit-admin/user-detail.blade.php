@@ -16,7 +16,7 @@
 </tbody></table></div></section></div>
 <div class="two-col" style="margin-top:20px">
   <section class="panel">
-    <div class="panel-head"><div><p class="eyebrow">PROFILE / MILESTONE 03</p><h2>Account profile metadata</h2>
+    <div class="panel-head"><div><p class="eyebrow">PROFILE / ACCOUNT INFORMATION</p><h2>Account profile metadata</h2>
       <p>Non-sensitive account data only. Biography text, private content and contact identifiers are not shown here.</p></div></div>
     <div class="admin-kv">
       <div class="kv"><small>Display name</small><strong>{{ $orbitUser->display_name ?: 'Not supplied' }}</strong></div>
@@ -28,7 +28,7 @@
     </div>
   </section>
   <section class="panel">
-    <div class="panel-head"><div><p class="eyebrow">SETTINGS / MILESTONE 03</p><h2>Settings record status</h2>
+    <div class="panel-head"><div><p class="eyebrow">SETTINGS / PRIVACY CONTROLS</p><h2>Settings record status</h2>
       <p>Only whether preferences have been saved is visible. Actual privacy, location and notification choices remain private.</p></div></div>
     <div class="admin-kv">
       <div class="kv"><small>Privacy preferences</small><strong>{{ $preferenceRecord?->privacy !== null ? 'Saved on server' : 'Default policy' }}</strong></div>
@@ -42,7 +42,7 @@
 </div>
 @if(auth()->guard('admin')->user()->canPerform('social.read'))
 <section class="panel" style="margin-top:20px">
-  <div class="panel-head"><div><p class="eyebrow">SOCIAL GRAPH / MILESTONE 04</p><h2>Relationship operations</h2>
+  <div class="panel-head"><div><p class="eyebrow">SOCIAL CONNECTIONS / ACCESS CONTROL</p><h2>Relationship operations</h2>
     <p>Review restricted relationship counters and event types without exposing counterparts or private content.</p></div>
     <a href="{{ route('orbit.admin.social.index',['user_id'=>$orbitUser->id]) }}">Review social metadata →</a>
   </div>
@@ -50,7 +50,7 @@
 @endif
 @if($deletionRecord)
 <section class="panel" style="margin-top:20px">
-  <div class="panel-head"><div><p class="eyebrow">ACCOUNT LIFECYCLE / MILESTONE 03</p><h2>Deletion request status</h2>
+  <div class="panel-head"><div><p class="eyebrow">ACCOUNT LIFECYCLE / PRIVACY REQUESTS</p><h2>Deletion request status</h2>
   <p>Eligibility date does not mean the user has been erased. Final retention/erasure processing is a separate controlled workflow.</p></div></div>
   <div class="admin-kv">
     <div class="kv"><small>Current status</small><strong>{{ ucfirst($deletionRecord->status) }}</strong></div>

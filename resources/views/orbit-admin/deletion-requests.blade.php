@@ -3,7 +3,7 @@
 @section('crumb', 'ACCOUNTS / DELETION REQUESTS')
 @section('content')
 <div class="page-heading">
-  <div><p class="eyebrow">ACCOUNTS / MILESTONE 03</p><h1>Account deletion requests</h1>
+  <div><p class="eyebrow">ACCOUNTS / PRIVACY REQUESTS</p><h1>Account deletion requests</h1>
     <p>Operational request states and deadlines only. A request is not proof of erasure; no private content is exposed.</p></div>
 </div>
 <div class="stat-grid stat-grid--compact">
@@ -49,8 +49,8 @@
  <div class="panel-head">
   <div>
    <p class="eyebrow">PROCESSED / PRIVACY AUDIT</p>
-   <h2>Completed M1–M3 database cleanup</h2>
-   <p>Non-identifying receipts for reviewed, current-schema erasure only. Media, backup and future-module erasure are not implied.</p>
+   <h2>Completed identity and profile data cleanup</h2>
+   <p>Non-identifying receipts for reviewed, current-schema erasure only. Media, backups and other account data are not covered by this receipt.</p>
   </div>
  </div>
  <div class="table-scroll">
@@ -61,7 +61,7 @@
       <tr><td>{{ $receipt->request_id }}</td><td>{{ $receipt->completed_at }}</td>
       <td><span class="pill success">{{ $receipt->scope }}</span></td></tr>
     @empty
-      <tr><td colspan="3"><div class="empty-state"><strong>No completed M1–M3 cleanup receipts</strong>
+      <tr><td colspan="3"><div class="empty-state"><strong>No completed identity and profile cleanup receipts</strong>
       <p>No erasure has been recorded by the reviewed processor.</p></div></td></tr>
     @endforelse
    </tbody>

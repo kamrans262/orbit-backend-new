@@ -20,7 +20,7 @@
       <nav aria-label="Main administration sections">
         @include('orbit-admin.partials.sidebar-navigation')
       </nav>
-      <div class="nav-caption space-top">UPCOMING MODULES</div>
+      <div class="nav-caption space-top">PLANNED SERVICES</div>
       <div class="upcoming-list" aria-label="Future modules">
         @if(config('orbit_circle.enabled') !== true)
         <div class="nav-item disabled"><span class="upcoming-icon" aria-hidden="true">@include('orbit-admin.partials.icon', ['name'=>'circles'])</span><span>Circles</span><small>Upcoming</small></div>

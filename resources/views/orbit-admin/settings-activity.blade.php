@@ -2,7 +2,7 @@
 @section('title', 'Settings change activity')
 @section('crumb', 'ACCOUNTS / SETTINGS AUDIT')
 @section('content')
-<div class="page-heading"><div><p class="eyebrow">READ-ONLY AUDIT / MILESTONE 03</p><h1>Profile &amp; settings activity</h1><p>Field-only event history for authorized auditors. No private settings values, bios, contacts or coordinates are recorded here.</p></div></div>
+<div class="page-heading"><div><p class="eyebrow">ACCOUNT SETTINGS / ACTIVITY AUDIT</p><h1>Profile &amp; settings activity</h1><p>Field-only event history for authorized auditors. No private settings values, bios, contacts or coordinates are recorded here.</p></div></div>
 <section class="panel">
  <div class="panel-head"><div><h2>Account settings changes</h2><p>Search uses an exact internal user UUID; events are retained according to security policy.</p></div></div>
  <form class="admin-filters" method="get" action="{{ route('orbit.admin.settings.activity') }}">

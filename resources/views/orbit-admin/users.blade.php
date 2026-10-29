@@ -2,7 +2,7 @@
 @section('title','User identities')
 @section('crumb','USERS / IDENTITIES')
 @section('content')
-<div class="page-heading"><div><p class="eyebrow">IDENTITY / MODULE 02</p><h1>Users &amp; devices</h1><p>Minimal account metadata for authorized support. No OTP codes, private messages or precise locations.</p></div></div>
+<div class="page-heading"><div><p class="eyebrow">ACCOUNT DIRECTORY / DEVICE SECURITY</p><h1>Users &amp; devices</h1><p>Minimal account metadata for authorized support. No OTP codes, private messages or precise locations.</p></div></div>
 <div class="stat-grid stat-grid--three">
 <article class="stat-card"><span class="stat-label">Active accounts</span><strong>{{ $activeUsers }}</strong><p>Accounts with active status</p></article>
 <article class="stat-card"><span class="stat-label">Pending device approvals</span><strong>{{ $pendingDevices }}</strong><p>New device trust requests</p></article>
