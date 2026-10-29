@@ -39,7 +39,7 @@ return [
     'consumer_enabled' => [
         'location'=>(bool) env('ORBIT_M5_LOCATION_CONSUMER_ENABLED', true),'presence'=>(bool) env('ORBIT_M5_PRESENCE_CONSUMER_ENABLED', false),'moments'=>false,
         'check_in'=>false,'plans'=>false,'status'=>false,
-        'ping'=>false,'message'=>false,
+        'ping'=>(bool) env('ORBIT_M5_PING_CONSUMER_ENABLED', true),'message'=>false,
     ],
     // Location, presence, chat, Moments and SOS are never activated by M5 config.
 ];

@@ -7,7 +7,7 @@
   if ($navUser?->canPerform('config.manage')) {
     $navGroups[] = [
       'title' => 'Configurations', 'icon' => 'settings',
-      'patterns' => ['orbit.admin.dashboard','orbit.admin.flags.*','orbit.admin.config.*','orbit.admin.rollback','orbit.admin.home-dashboard.*','orbit.admin.presence.*','orbit.admin.location.*'],
+      'patterns' => ['orbit.admin.dashboard','orbit.admin.flags.*','orbit.admin.config.*','orbit.admin.rollback','orbit.admin.home-dashboard.*','orbit.admin.presence.*','orbit.admin.location.*','orbit.admin.ping.*'],
       'children' => [
         ['title'=>'Overview','route'=>'orbit.admin.dashboard','patterns'=>['orbit.admin.dashboard']],
         ['title'=>'Feature Flags','route'=>'orbit.admin.flags.index','patterns'=>['orbit.admin.flags.*']],
@@ -20,6 +20,8 @@
           'patterns'=>['orbit.admin.presence.*']],
         ['title'=>'Location Sharing','route'=>'orbit.admin.location.index',
           'patterns'=>['orbit.admin.location.*']],
+        ['title'=>'Ping Operations','route'=>'orbit.admin.ping.index',
+          'patterns'=>['orbit.admin.ping.*']],
       ],
     ];
   }

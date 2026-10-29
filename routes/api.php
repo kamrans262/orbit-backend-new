@@ -21,6 +21,7 @@ use App\Modules\Presence\Http\Controllers\PresenceController;
 use App\Modules\Presence\Http\Controllers\PresenceGatewayController;
 use App\Modules\Location\Http\Controllers\LocationController;
 use App\Modules\Location\Http\Controllers\LocationRealtimeController;
+use App\Modules\Ping\Http\Controllers\PingController;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -42,6 +43,16 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:120,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        // Ping: durable, trusted-device HTTP delivery. No simulated push or receipts.
+        Route::get('/pings/capabilities', [PingController::class, 'capabilities'])->middleware('throttle:30,1');
+        Route::get('/pings/inbox', [PingController::class, 'inbox'])->middleware('throttle:45,1');
+        Route::get('/pings/outbox', [PingController::class, 'outbox'])->middleware('throttle:45,1');
+        Route::post('/pings', [PingController::class, 'send'])->middleware('throttle:30,1');
+        Route::get('/pings/{ping}', [PingController::class, 'detail'])->whereUuid('ping')->middleware('throttle:45,1');
+        Route::post('/pings/{ping}/delivered', [PingController::class, 'delivered'])->whereUuid('ping')->middleware('throttle:60,1');
+        Route::post('/pings/{ping}/seen', [PingController::class, 'seen'])->whereUuid('ping')->middleware('throttle:60,1');
+        Route::post('/pings/{ping}/respond', [PingController::class, 'respond'])->whereUuid('ping')->middleware('throttle:20,1');
+
         // M10: private location sharing; all routes require trusted device tokens.
         // Only a separately verified WSS gateway can activate location invalidations.
         Route::get('/location/capabilities',[LocationController::class,'capabilities'])->middleware('throttle:30,1');

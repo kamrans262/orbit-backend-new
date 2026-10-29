@@ -239,3 +239,28 @@ footer{padding-top:34px;padding-bottom:12px;font-size:10px;line-height:1.6}
 @media(prefers-reduced-motion:reduce){
   .sidebar,.nav-chevron,.nav-subitem,.nav-item,.btn{transition:none!important}
 }
+
+
+/* Shared card-content gutters: text and guidance must not touch panel edges.
+   Applies to Location Sharing, Presence, Home Dashboard and future operations.
+   Preserve current Orbit colors, type, cards and responsive layout. */
+.panel > p:not(.eyebrow) {
+  margin:0 24px 16px;
+  line-height:1.7;
+  color:var(--admin-muted);
+  font-size:12px;
+  overflow-wrap:break-word;
+}
+.panel > p:not(.eyebrow):last-child { margin-bottom:24px; }
+.panel > .admin-guidance { margin:0 24px 20px; }
+.panel > .admin-kv { padding:4px 24px 22px; }
+.panel > .stat-grid { margin:0 24px 24px; }
+.panel > .admin-guidance + .admin-kv { padding-top:0; }
+.panel > p > a { display:inline-block; }
+@media(max-width:600px) {
+  .panel > p:not(.eyebrow) { margin:0 18px 14px; }
+  .panel > p:not(.eyebrow):last-child { margin-bottom:20px; }
+  .panel > .admin-guidance { margin:0 18px 18px; padding:14px 16px; }
+  .panel > .admin-kv { padding:4px 18px 20px; }
+  .panel > .stat-grid { margin:0 18px 20px; }
+}
