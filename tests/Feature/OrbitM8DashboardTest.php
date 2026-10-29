@@ -147,7 +147,7 @@ final class OrbitM8DashboardTest extends TestCase
             ->assertDontSee('Private Alpha');
         config()->set('orbit_dashboard.enabled',false);
         $this->get('/admin/home-dashboard')->assertOk()
-            ->assertSee('Not activated')
+            ->assertSee('Dashboard API:')->assertSee('Disabled')
             ->assertDontSee('Private Alpha');
     }
 }
