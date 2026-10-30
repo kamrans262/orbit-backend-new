@@ -2,6 +2,7 @@
 namespace App\Modules\Messaging\Services;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Pagination\Cursor;
 use Illuminate\Support\Str;
 
 final class MessagingSenderKeyService
@@ -150,8 +151,11 @@ final class MessagingSenderKeyService
     }
 
     public function forDevice(object $thread,string $viewer,
-        string $device,int $limit): array
+        string $device,int $limit,?string $encodedCursor=null): array
     {
+        $cursor=$encodedCursor===null?null:Cursor::fromEncoded($encodedCursor);
+        abort_unless($encodedCursor===null||$cursor!==null,422,
+            'Invalid encrypted sender-key cursor.');
         $this->conversations->assertReady();
         $this->access->assertConversation($thread,$viewer);
         abort_unless($thread->kind==='circle',422,
@@ -171,7 +175,8 @@ final class MessagingSenderKeyService
                 'e.created_at','b.sender_id','b.sender_device_id',
                 'b.protocol','b.group_epoch',
             ])->orderByDesc('e.created_at')->orderByDesc('e.id')
-            ->cursorPaginate(min(max(1,$limit),100));
+            ->cursorPaginate(min(max(1,$limit),100),
+                ['*'],'cursor',$cursor);
         return [
             'items'=>$records->items(),
             'next_cursor'=>$records->nextCursor()?->encode(),
