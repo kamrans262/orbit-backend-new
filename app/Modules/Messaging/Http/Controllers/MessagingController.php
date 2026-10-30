@@ -9,6 +9,7 @@ use App\Modules\Messaging\Services\MessagingKeyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\RateLimiter;
 
 final class MessagingController extends Controller
 {
@@ -249,6 +250,8 @@ final class MessagingController extends Controller
     public function report(Request $r,string $conversation): JsonResponse
     {
         $session=$this->session($r);
+        $rateKey='messaging:report:'.hash('sha256',(string)$session->user_id);
+        abort_if(RateLimiter::tooManyAttempts($rateKey,10),429,'Report limit reached.');
         abort_if(array_diff(array_keys($r->all()),['message_id','reason'])!==[],
             422,'Private message plaintext cannot be uploaded in reports.');
         $input=$r->validate([
@@ -256,7 +259,9 @@ final class MessagingController extends Controller
             'reason'=>['required',Rule::in(['spam','abuse','harassment','impersonation','other'])],
         ]);
         $thread=$this->conversations->get($conversation,(string)$session->user_id);
-        return $this->response($this->messages->report($thread,
-            (string)$session->user_id,$input['message_id']??null,$input['reason']),201);
+        $result=$this->messages->report($thread,
+            (string)$session->user_id,$input['message_id']??null,$input['reason']);
+        RateLimiter::hit($rateKey,60);
+        return $this->response($result,201);
     }
 }

@@ -82,7 +82,7 @@ Route::prefix('v1')->group(function (): void {
         Route::put('/conversations/{conversation}/preferences',[MessagingController::class,'preferences'])
             ->whereUuid('conversation');
         Route::post('/conversations/{conversation}/reports',[MessagingController::class,'report'])
-            ->whereUuid('conversation')->middleware('throttle:10,1');
+            ->whereUuid('conversation');
         Route::get('/me/messaging/circles/{circle}/consent',
             [MessagingCircleConsentController::class,'show'])->whereUuid('circle');
         Route::put('/me/messaging/circles/{circle}/consent',
