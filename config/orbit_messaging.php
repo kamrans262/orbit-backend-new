@@ -4,7 +4,12 @@ return [
     // separately pass review before the app represents secure chat as ready.
     'enabled'=>(bool) env('ORBIT_MESSAGING_ENABLED',true),
     'https_enabled'=>true,
+    // Safety barrier: only a separately security-reviewed client release may
+    // enable encrypted sends. HTTPS mailbox availability is not E2EE proof.
     'e2ee_client_verified'=>false,
+    // No production protocol is approved yet. Keep empty until a vetted
+    // Double Ratchet + sender-key build passes cross-device acceptance.
+    'approved_protocols'=>[],
     'realtime_enabled'=>false, // Hostinger Redis/WSS not provisioned
     'push_enabled'=>false, // Firebase credentials not provisioned
     'typing_http_enabled'=>true,
