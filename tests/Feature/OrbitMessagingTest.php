@@ -434,6 +434,25 @@ final class OrbitMessagingTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_message_media_recipient_keys_require_mutual_message_privacy(): void
+    {
+        [$a,$ta,$da,$b,$tb,$db,$thread]=$this->setupDirect();
+        $route='/api/v1/media/recipient-keys';
+        $input=[
+            'purpose'=>'message','audience_kind'=>'selected_friends',
+            'recipient_ids'=>[$b->id],
+        ];
+        $this->withToken($ta)->postJson($route,$input)->assertOk()
+            ->assertJsonPath('data.recipients.0.recipient_id',$b->id)
+            ->assertJsonPath('data.recipients.0.devices.0.device_id',$db->id);
+        $this->privacy($b,'Nobody');
+        $this->withToken($ta)->postJson($route,$input)->assertNotFound();
+        // The media endpoint may never override explicit M13 denial merely
+        // because the underlying social friendship still exists.
+        $this->withToken($tb)->getJson('/api/v1/conversations/'.$thread.'/envelopes')
+            ->assertNotFound();
+    }
+
     public function test_admin_rbac_and_aggregate_only_review(): void
     {
         [$a,$ta,$da,$b,$tb,$db,$thread]=$this->setupDirect();
