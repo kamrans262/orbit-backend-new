@@ -117,6 +117,10 @@ final class MessagingKeyService
             'fingerprint'=>$row->identity_ed25519
                 ?hash('sha256',$row->identity_ed25519):null,
             'key_version'=>$row->key_version===null?null:(int)$row->key_version,
+            'available_one_time_prekeys'=>$row->identity_ed25519===null
+                ?0:DB::table('messaging_one_time_prekeys')
+                    ->where('device_id',$row->id)
+                    ->whereNull('claimed_at')->count(),
         ])->all()];
     }
 
