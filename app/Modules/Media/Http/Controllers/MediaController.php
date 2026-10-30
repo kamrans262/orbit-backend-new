@@ -249,6 +249,7 @@ final class MediaController extends Controller
             'recipient_ids'=>['required','array','max:100'],
             'recipient_ids.*'=>['required','uuid','distinct'],
             'circle_id'=>['nullable','uuid'],
+            'purpose'=>['sometimes','in:moment,message'],
         ]);
         $audience=$d['audience_kind'];
         $circle=$audience==='selected_circles'
@@ -256,6 +257,8 @@ final class MediaController extends Controller
         abort_if($audience==='selected_circles' && !$circle,422,'Circle required.');
         if($circle)abort_unless($circles->isMember($circle,$actor),404);
         $ids=$d['recipient_ids'];
+        $forMessage=($d['purpose']??'moment')==='message';
+        $messaging=app(\App\Modules\Messaging\Services\MessagingAccessPolicy::class);
         abort_unless(count($ids)>0,422,'No recipient specified.');
         $records=[];
         foreach($ids as $recipient) {
@@ -264,8 +267,15 @@ final class MediaController extends Controller
             } else {
                 abort_unless($policy->recipientEligible(
                     $actor,$recipient,$audience,$circle),404,'Recipient unavailable.');
-                if($circle)abort_unless($circles->canAccessProtected(
-                    $circle,$recipient,$actor,'moments'),404,'Recipient unavailable.');
+                if($forMessage){
+                    abort_unless($circle
+                        ? $messaging->canCirclePair($circle,$actor,$recipient)
+                        : $messaging->canDirect($actor,$recipient),404,
+                        'Messaging consent is required for media keys.');
+                } elseif($circle) {
+                    abort_unless($circles->canAccessProtected(
+                        $circle,$recipient,$actor,'moments'),404,'Recipient unavailable.');
+                }
             }
             $devices=DB::table('devices')->where('user_id',$recipient)
                 ->where('trust_state','trusted')->whereNotNull('approved_at')
@@ -617,6 +627,8 @@ final class MediaController extends Controller
             'key_envelopes.*.wrapped_key_ciphertext'=>['required','string','min:32','max:8192'],
         ]);
         $targets=array_unique($d['target_ids']);$kind=$d['audience_kind'];
+        $forMessage=$m->purpose==='message';
+        $messaging=app(\App\Modules\Messaging\Services\MessagingAccessPolicy::class);
         $recipients=[];
         if($kind==='only_me') {
             abort_unless(count($targets)===0,422,'Only Me does not accept targets.');
@@ -627,12 +639,16 @@ final class MediaController extends Controller
                 ->get(['user_low_id','user_high_id']);
             foreach($all as $f) {
                 $id=$f->user_low_id===$actor?$f->user_high_id:$f->user_low_id;
-                if($policy->recipientEligible($actor,$id,$kind,null))$recipients[$id]=null;
+                if($policy->recipientEligible($actor,$id,$kind,null) &&
+                    (!$forMessage || $messaging->canDirect($actor,$id)))
+                    $recipients[$id]=null;
             }
         } elseif($kind==='selected_friends') {
             abort_unless(count($targets)>0,422,'Select recipients.');
             foreach($targets as $id) {
                 abort_unless($policy->recipientEligible($actor,$id,$kind,null),422,'Recipient unavailable.');
+                if($forMessage)abort_unless($messaging->canDirect($actor,$id),403,
+                    'Message media requires reciprocal message privacy.');
                 $recipients[$id]=null;
             }
         } else {
@@ -643,7 +659,9 @@ final class MediaController extends Controller
                     ->pluck('user_id');
                 foreach($members as $id) {
                     if($policy->recipientEligible($actor,$id,$kind,$circleId)
-                        && $circles->canAccessProtected($circleId,$id,$actor,'moments'))
+                        && ($forMessage
+                            ? $messaging->canCirclePair($circleId,$actor,$id)
+                            : $circles->canAccessProtected($circleId,$id,$actor,'moments')))
                         $recipients[$id.'|'.$circleId]=['user_id'=>$id,'circle_id'=>$circleId];
                 }
             }

@@ -72,7 +72,10 @@ final class MediaPolicy
                 if(!is_array($privacy) || ($privacy['moment_default_audience']??'Nobody')!=='Selected People')continue;
             }
             if ($g->audience_kind === 'selected_friends' || $g->audience_kind === 'accepted_friends') {
-                if ($this->social->isFriend($media->owner_user_id,$viewer)) return true;
+                if ($this->social->isFriend($media->owner_user_id,$viewer)
+                    && ($media->purpose !== 'message' ||
+                        app(\App\Modules\Messaging\Services\MessagingAccessPolicy::class)
+                            ->canDirect($media->owner_user_id,$viewer))) return true;
             }
             if(isset($published) && $published !== null && $g->audience_kind==='selected_circles'){
                 $raw=DB::table('orbit_user_preferences')->where('user_id',$media->owner_user_id)->value('privacy');
@@ -82,8 +85,11 @@ final class MediaPolicy
             if ($g->audience_kind === 'selected_circles' && $g->circle_id !== null
                 && $this->circles->isMember($g->circle_id,$viewer)
                 && $this->circles->isMember($g->circle_id,$media->owner_user_id)
-                && $this->circles->canAccessProtected($g->circle_id,$viewer,
-                    $media->owner_user_id,$media->purpose === 'message' ? 'message':'moments')) return true;
+                && ($media->purpose === 'message'
+                    ? app(\App\Modules\Messaging\Services\MessagingAccessPolicy::class)
+                        ->canCirclePair($g->circle_id,$media->owner_user_id,$viewer)
+                    : $this->circles->canAccessProtected($g->circle_id,$viewer,
+                        $media->owner_user_id,'moments'))) return true;
         }
         return false;
     }
