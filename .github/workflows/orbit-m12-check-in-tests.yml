@@ -1,0 +1,70 @@
+name: Orbit Check-In focused Laravel verification
+on:
+  push:
+    branches: [feature/m9-presence-backend-admin]
+    paths:
+      - '.github/workflows/orbit-m12-check-in-tests.yml'
+      - 'app/Modules/CheckIn/**'
+      - 'config/orbit_check_in.php'
+      - 'config/orbit_circle.php'
+      - 'database/migrations/2026_10_30_000003_create_orbit_check_ins.php'
+      - 'routes/api.php'
+      - 'routes/admin.php'
+      - 'tests/Feature/OrbitCheckInTest.php'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check-in-focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: rootpass
+          MARIADB_DATABASE: orbit_ci
+          MARIADB_USER: orbit_ci
+          MARIADB_PASSWORD: orbit_ci_pass
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: testing
+      APP_DEBUG: true
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: orbit_ci
+      DB_USERNAME: orbit_ci
+      DB_PASSWORD: orbit_ci_pass
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, fileinfo, pdo_mysql, openssl, sodium
+          tools: composer:v2
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Configure disposable test database
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+      - name: Syntax of Check-In surfaces only
+        run: |
+          find app/Modules/CheckIn -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l config/orbit_check_in.php
+          php -l database/migrations/2026_10_30_000003_create_orbit_check_ins.php
+          php -l tests/Feature/OrbitCheckInTest.php
+          php -l routes/api.php
+          php -l routes/admin.php
+      - name: Check-In privacy, lifecycle and Circle consent tests
+        run: php artisan test --compact --filter='OrbitCheckInTest'
