@@ -534,4 +534,71 @@ final class OrbitMessagingTest extends TestCase
         )->assertNotFound();
     }
 
+    public function test_circle_sender_key_distribution_is_ciphertext_only_epoch_bound_and_idempotent(): void
+    {
+        [$a,$ta,$da]=$this->person('Circle A');
+        [$b,$tb,$db]=$this->person('Circle B');
+        $circle=(string)Str::uuid();
+        DB::table('circles')->insert([
+            'id'=>$circle,'owner_id'=>$a->id,'name'=>'Sender Keys',
+            'revision'=>1,'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        foreach([$a,$b] as $user){
+            DB::table('circle_members')->insert([
+                'circle_id'=>$circle,'user_id'=>$user->id,'role'=>'member',
+                'joined_at'=>now(),'created_at'=>now(),'updated_at'=>now(),
+            ]);
+        }
+        $this->privacy($a,'My Circle');
+        $this->privacy($b,'My Circle');
+        $this->keys($ta,$da);
+        $this->keys($tb,$db);
+        foreach([[$ta,$a],[$tb,$b]] as [$token,$member]){
+            $this->withToken($token)->putJson(
+                '/api/v1/me/messaging/circles/'.$circle.'/consent',
+                ['enabled'=>true,'confirm'=>true]
+            )->assertOk()->assertJsonPath('data.enabled',true);
+        }
+        $info=$this->withToken($ta)->getJson(
+            '/api/v1/circles/'.$circle.'/messages/conversation'
+        )->assertOk()->json('data');
+        $route='/api/v1/conversations/'.$info['id'].'/sender-keys';
+        $request=[
+            'client_id'=>(string)Str::uuid(),
+            'protocol'=>'ratchet.v1','group_epoch'=>$info['group_epoch'],
+            'envelopes'=>[$this->envelope($da),$this->envelope($db)],
+        ];
+        config(['orbit_messaging.e2ee_client_verified'=>false]);
+        $this->withToken($ta)->postJson($route,$request)->assertStatus(503);
+        config(['orbit_messaging.e2ee_client_verified'=>true]);
+        $this->withToken($ta)->postJson($route,
+            array_merge($request,['protocol'=>'not-approved']))
+            ->assertUnprocessable();
+        $this->withToken($ta)->postJson($route,
+            array_merge($request,['envelopes'=>[$this->envelope($da)]]))
+            ->assertStatus(409);
+        $sent=$this->withToken($ta)->postJson($route,$request)
+            ->assertCreated()->assertJsonPath('data.stored',true)
+            ->assertJsonPath('data.recipient_delivered',false)
+            ->json('data.id');
+        $this->withToken($ta)->postJson($route,$request)
+            ->assertOk()->assertJsonPath('data.id',$sent);
+        $this->assertDatabaseCount('messaging_sender_key_batches',1);
+        $this->assertDatabaseCount('messaging_sender_key_envelopes',2);
+        $this->withToken($tb)->getJson($route)->assertOk()
+            ->assertJsonCount(1,'data.items')
+            ->assertJsonPath('data.items.0.sender_device_id',$da->id)
+            ->assertJsonPath('data.group_epoch',$info['group_epoch']);
+
+        // A roster change prevents old-epoch material from being replayed.
+        DB::table('circle_members')->where('circle_id',$circle)
+            ->where('user_id',$b->id)->update(['role'=>'restricted']);
+        $this->withToken($tb)->getJson($route)->assertNotFound();
+        $this->withToken($ta)->postJson($route,
+            array_merge($request,['client_id'=>(string)Str::uuid()]))
+            ->assertStatus(409);
+        $this->withToken($ta)->getJson($route)->assertOk()
+            ->assertJsonCount(0,'data.items');
+    }
+
 }
