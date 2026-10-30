@@ -3,6 +3,7 @@ namespace App\Modules\Messaging\Services;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\RateLimiter;
 
 final class MessagingKeyService
 {
@@ -30,10 +31,20 @@ final class MessagingKeyService
         $signed=self::SIGNATURE_CONTEXT.'|'.$device.'|'.$input['signed_prekey_id'].'|'.$prekey;
         abort_unless(sodium_crypto_sign_verify_detached($signature,$signed,$identity),
             422,'Signed prekey identity verification failed.');
+        try{
+            sodium_crypto_scalarmult(random_bytes(32),$prekey);
+        }catch(\SodiumException){
+            abort(422,'Invalid X25519 signed prekey.');
+        }
         $new=$input['one_time_prekeys'] ?? [];
         $seen=[];
         foreach($new as $item) {
-            self::bytes($item['public_x25519'],32);
+            $public=self::bytes($item['public_x25519'],32);
+            try{
+                sodium_crypto_scalarmult(random_bytes(32),$public);
+            }catch(\SodiumException){
+                abort(422,'Invalid X25519 one-time prekey.');
+            }
             abort_if(isset($seen[$item['key_id']]),422,'Duplicate one-time prekey ID.');
             $seen[$item['key_id']]=true;
         }
@@ -72,11 +83,19 @@ final class MessagingKeyService
             abort_if($remaining+count($new)>(int)config('orbit_messaging.max_one_time_prekeys',100),
                 422,'Too many unclaimed device prekeys.');
             foreach($new as $item) {
-                DB::table('messaging_one_time_prekeys')->insertOrIgnore([
-                    'id'=>(string)Str::uuid(),'device_id'=>$device,
-                    'key_id'=>$item['key_id'],'public_x25519'=>$item['public_x25519'],
-                    'created_at'=>now(),
-                ]);
+                $existing=DB::table('messaging_one_time_prekeys')
+                    ->where('device_id',$device)->where('key_id',$item['key_id'])
+                    ->lockForUpdate()->first();
+                abort_if($existing && ($existing->claimed_at!==null ||
+                    $existing->public_x25519!==$item['public_x25519']),409,
+                    'One-time prekey ID was already published or consumed.');
+                if(!$existing){
+                    DB::table('messaging_one_time_prekeys')->insert([
+                        'id'=>(string)Str::uuid(),'device_id'=>$device,
+                        'key_id'=>$item['key_id'],'public_x25519'=>$item['public_x25519'],
+                        'created_at'=>now(),
+                    ]);
+                }
             }
             return ['device_id'=>$device,'key_version'=>$version,
                 'fingerprint'=>hash('sha256',$input['identity_ed25519']),
@@ -105,14 +124,21 @@ final class MessagingKeyService
     {
         abort_unless($this->access->canDiscoverKeys($viewer,$target),
             404,'Messaging key directory unavailable.');
+        $rate='messaging:prekey:'.hash('sha256',$viewer.'|'.$target);
+        abort_if(RateLimiter::tooManyAttempts($rate,30),429,
+            'Key directory request limit exceeded.');
+        RateLimiter::hit($rate,60);
         return DB::transaction(function() use($viewer,$target):array{
             $records=DB::table('messaging_device_keys as k')
                 ->join('devices as d','d.id','=','k.device_id')
                 ->where('k.user_id',$target)->where('d.user_id',$target)
                 ->where('d.trust_state','trusted')->whereNull('d.revoked_at')
-                ->orderBy('k.device_id')->limit(16)
+                ->orderBy('k.device_id')
+                ->limit((int)config('orbit_messaging.max_direct_devices',12)+1)
                 ->get(['k.device_id','k.identity_ed25519','k.signed_prekey_x25519',
                     'k.signed_prekey_signature','k.signed_prekey_id','k.key_version']);
+            abort_if($records->count()>(int)config('orbit_messaging.max_direct_devices',12),
+                409,'Recipient has too many approved messaging devices.');
             $devices=[];
             foreach($records as $record){
                 // One-time prekeys are claimed only for eligible authenticated

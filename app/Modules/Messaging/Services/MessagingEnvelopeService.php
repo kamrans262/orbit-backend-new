@@ -97,6 +97,8 @@ final class MessagingEnvelopeService
             sort($required,SORT_STRING);
             $supplied=array_keys($sorted);
             sort($supplied,SORT_STRING);
+            abort_if(count($required)>(int)config('orbit_messaging.max_message_devices',128),
+                422,'Too many recipient messaging devices for one encrypted send.');
             abort_unless($required!==[] && in_array($device,$required,true)
                 && $required===$supplied,409,
                 'Device recipient roster changed; refresh keys and re-encrypt.');
