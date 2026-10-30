@@ -15,6 +15,7 @@
 <div class="kv"><small>HTTPS ciphertext API</small><strong>{{ $ready && $backendEnabled ? 'Available to authorized devices' : 'Not available' }}</strong></div>
 <div class="kv"><small>Circle messaging</small><strong>{{ $circleEnabled ? 'Enabled with reviewed per-user consent' : 'Unavailable' }}</strong></div>
 <div class="kv"><small>Mobile E2EE validation</small><strong>{{ $clientVerified ? 'Verified' : 'Pending independent device/protocol verification' }}</strong></div>
+<div class="kv"><small>Encrypted send release</small><strong>{{ $clientVerified && count(config('orbit_messaging.approved_protocols', [])) > 0 ? 'Enabled for approved protocol' : 'Held pending protocol review' }}</strong></div>
 <div class="kv"><small>Live WebSocket / Push</small><strong>Not provisioned — secure HTTPS fallback only</strong></div>
 <div class="kv"><small>Server envelope retention</small><strong>{{ $retentionDays }} days maximum</strong></div>
 </div>
