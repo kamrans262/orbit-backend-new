@@ -169,6 +169,48 @@ final class OrbitMessagingTest extends TestCase
         $this->withToken($tb)->getJson('/api/v1/messaging/keys/'.$a->id)->assertNotFound();
     }
 
+    public function test_claiming_one_device_prekey_preserves_other_trusted_devices(): void
+    {
+        [$a,$ta,$da]=$this->person('Sender');
+        [$b,$tb,$db]=$this->person('Multi Device Recipient');
+        $this->privacy($a,'Friends');
+        $this->privacy($b,'Friends');
+        $this->friend($a,$b);
+        $this->keys($tb,$db,true);
+
+        $second=OrbitDevice::create([
+            'user_id'=>$b->id,'device_public_id'=>(string)Str::uuid(),
+            'name'=>'Second trusted phone','platform'=>'android',
+            'public_key'=>base64_encode(random_bytes(32)),
+            'trust_state'=>'trusted','attestation_state'=>'verified',
+            'approved_at'=>now(),
+        ]);
+        $secondToken=app(TokenService::class)->issue($b,$second,null)
+            ['access_token'];
+        $this->keys($secondToken,$second,true);
+        $path='/api/v1/messaging/keys/'.$b->id;
+
+        $result=$this->withToken($ta)->getJson($path.
+            '?claim_one_time_prekey=1&device_id='.$db->id)
+            ->assertOk()->json('data.devices');
+        $primary=collect($result)->firstWhere('device_id',$db->id);
+        $other=collect($result)->firstWhere('device_id',$second->id);
+        $this->assertSame(101,$primary['one_time_prekey']['key_id']);
+        $this->assertNull($other['one_time_prekey']);
+        $this->assertDatabaseHas('messaging_one_time_prekeys',[
+            'device_id'=>$second->id,'key_id'=>101,'claimed_at'=>null,
+        ]);
+
+        $this->withToken($ta)->getJson($path.
+            '?claim_one_time_prekey=1&device_id='.$second->id)->assertOk();
+        $this->assertEquals(1,DB::table('messaging_one_time_prekeys')
+            ->where('device_id',$second->id)
+            ->whereNotNull('claimed_at')->count());
+        $this->withToken($ta)->getJson($path.
+            '?claim_one_time_prekey=1&device_id='.(string)Str::uuid())
+            ->assertNotFound();
+    }
+
     public function test_read_only_sender_identity_lookup_does_not_consume_one_time_prekeys(): void
     {
         [$a,$ta,$da]=$this->person('A');
