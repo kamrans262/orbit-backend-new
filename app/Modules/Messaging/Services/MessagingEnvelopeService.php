@@ -72,8 +72,27 @@ final class MessagingEnvelopeService
             // separate opaque envelope. One own copy supports local history
             // replay without granting the server access to plaintext.
             abort_if(count($recipients)===0,422,'No currently eligible recipients.');
-            $required=$this->keys->eligibleDevices(array_values(array_unique(
-                [$sender,...$recipients])));
+            $targetUsers=array_values(array_unique([$sender,...$recipients]));
+            $devices=DB::table('devices as d')
+                ->leftJoin('messaging_device_keys as k','k.device_id','=','d.id')
+                ->whereIn('d.user_id',$targetUsers)->where('d.trust_state','trusted')
+                ->whereNotNull('d.public_key')->whereNull('d.revoked_at')
+                ->get(['d.id','d.user_id','k.key_version']);
+            $requiredVersions=[];
+            $presentUsers=[];
+            foreach($devices as $target){
+                // Never accept a send if any approved target device cannot
+                // decrypt. Require registration instead of silent delivery loss.
+                abort_unless($target->key_version!==null,409,
+                    'Recipient device needs messaging key setup.');
+                $requiredVersions[(string)$target->id]=(int)$target->key_version;
+                $presentUsers[(string)$target->user_id]=true;
+            }
+            foreach($targetUsers as $member){
+                abort_unless(isset($presentUsers[$member]),409,
+                    'Recipient has no registered messaging device.');
+            }
+            $required=array_keys($requiredVersions);
             sort($required,SORT_STRING);
             $supplied=array_keys($sorted);
             sort($supplied,SORT_STRING);
@@ -103,6 +122,7 @@ final class MessagingEnvelopeService
                 DB::table('messaging_envelopes')->insert([
                     'id'=>(string)Str::uuid(),'message_id'=>$id,
                     'recipient_device_id'=>$env['device_id'],
+                    'recipient_key_version'=>$requiredVersions[$env['device_id']],
                     'ciphertext_b64'=>$env['ciphertext_b64'],
                     'protocol_header_b64'=>$env['protocol_header_b64'],
                     'created_at'=>$now,
@@ -136,7 +156,7 @@ final class MessagingEnvelopeService
             ->where('e.recipient_device_id',$device)
             ->whereNull('m.redacted_at')
             ->where('m.expires_at','>',now())
-            ->select(['e.id','e.ciphertext_b64',
+            ->select(['e.id','e.ciphertext_b64','e.recipient_key_version',
                 'e.protocol_header_b64','e.delivered_at','e.read_at',
                 'm.id as message_id','m.sender_id','m.sender_device_id',
                 'm.kind','m.protocol','m.group_epoch','e.created_at'])
@@ -194,9 +214,11 @@ final class MessagingEnvelopeService
             ->where('conversation_id',$conversation->id)
             ->where('sender_id',$sender)->first();
         abort_unless($row,404,'Message unavailable.');
+        $currentRecipients=$this->access->recipients($conversation,$sender);
         $counts=DB::table('messaging_envelopes as e')
             ->join('devices as d','d.id','=','e.recipient_device_id')
-            ->where('e.message_id',$message)->where('d.user_id','!=',$sender)
+            ->where('e.message_id',$message)->whereIn('d.user_id',$currentRecipients)
+            ->where('d.trust_state','trusted')->whereNull('d.revoked_at')
             ->selectRaw('count(*) as total,
                 SUM(CASE WHEN e.delivered_at IS NOT NULL THEN 1 ELSE 0 END) as delivered')
             ->first();
@@ -204,7 +226,8 @@ final class MessagingEnvelopeService
         // sharing read receipts, and only within the conversation.
         $read=DB::table('messaging_envelopes as e')
             ->join('devices as d','d.id','=','e.recipient_device_id')
-            ->where('e.message_id',$message)->where('d.user_id','!=',$sender)
+            ->where('e.message_id',$message)->whereIn('d.user_id',$currentRecipients)
+            ->where('d.trust_state','trusted')->whereNull('d.revoked_at')
             ->whereNotNull('e.read_at')->pluck('d.user_id')->unique()->all();
         $allowed=array_reduce($read,fn(int $n,string $id):int=>
             $n+($this->access->readReceiptsAllowed($id)?1:0),0);

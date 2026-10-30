@@ -190,6 +190,36 @@ final class OrbitMessagingTest extends TestCase
             ->assertJsonPath('data.ciphertext_only',true)->assertDontSee('secret');
     }
 
+    public function test_approved_recipient_without_keys_is_not_silently_dropped(): void
+    {
+        [$a,$ta,$da]=$this->person('A');
+        [$b,$tb,$db]=$this->person('B');
+        $this->privacy($a,'Friends');
+        $this->privacy($b,'Friends');
+        $this->friend($a,$b);
+        $this->keys($ta,$da);
+        $thread=$this->withToken($ta)->postJson('/api/v1/conversations/direct',[
+            'recipient_id'=>$b->id])->assertOk()->json('data.id');
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            $this->payload([$da]))->assertStatus(409);
+        $this->keys($tb,$db);
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            $this->payload([$da,$db]))->assertCreated();
+        $this->assertDatabaseHas('messaging_envelopes',[
+            'recipient_device_id'=>$db->id,'recipient_key_version'=>1,
+        ]);
+        // Another approved, unregistered device must not be silently missed.
+        [$unused,$otherToken,$unusedDevice]=$this->person('Other');
+        $newDevice=OrbitDevice::create([
+            'user_id'=>$b->id,'device_public_id'=>(string)Str::uuid(),
+            'name'=>'Second approved phone','platform'=>'android',
+            'public_key'=>base64_encode(random_bytes(32)),
+            'trust_state'=>'trusted','attestation_state'=>'verified','approved_at'=>now(),
+        ]);
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            $this->payload([$da,$db]))->assertStatus(409);
+    }
+
     public function test_receipts_require_specific_recipient_device_dwell_and_privacy(): void
     {
         [$a,$ta,$da,$b,$tb,$db,$thread]=$this->setupDirect();

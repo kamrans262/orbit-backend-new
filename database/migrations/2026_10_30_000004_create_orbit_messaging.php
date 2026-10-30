@@ -78,6 +78,7 @@ return new class extends Migration {
             $t->uuid('id')->primary();
             $t->uuid('message_id');
             $t->uuid('recipient_device_id');
+            $t->unsignedInteger('recipient_key_version');
             $t->longText('ciphertext_b64');
             $t->text('protocol_header_b64'); // opaque ratchet header, never plaintext
             $t->timestamp('delivered_at')->nullable();
