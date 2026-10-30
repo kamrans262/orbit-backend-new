@@ -75,6 +75,10 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/conversations/{conversation}/envelopes/{envelope}/read',
             [MessagingController::class,'read'])->whereUuid('conversation')
             ->whereUuid('envelope')->middleware('throttle:90,1');
+        Route::post('/conversations/{conversation}/receipts/delivered',
+            [MessagingController::class,'deliveredReceipt'])->whereUuid('conversation');
+        Route::post('/conversations/{conversation}/receipts/read',
+            [MessagingController::class,'readReceipt'])->whereUuid('conversation');
         Route::get('/conversations/{conversation}/messages/{message}/receipts',
             [MessagingController::class,'receipts'])->whereUuid('conversation')->whereUuid('message');
         Route::delete('/conversations/{conversation}/messages/{message}',

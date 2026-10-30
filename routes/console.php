@@ -89,3 +89,15 @@ Artisan::command('orbit:moments:push-send', function () {
     $this->info('M7 FCM dispatch: '.json_encode($stats));
 })->purpose('Deliver generic opted-in Moment notices only when FCM is configured');
 Schedule::command('orbit:moments:push-send')->everyFiveMinutes()->withoutOverlapping();
+
+/** M13 encrypted envelope retention: ciphertext only; no plaintext or keys. */
+Artisan::command('orbit:messaging:prune', function () {
+    $count=0;
+    for($batch=0;$batch<20;$batch++){
+        $n=app(\App\Modules\Messaging\Services\MessagingEnvelopeService::class)->prune();
+        $count+=$n;
+        if($n<500)break;
+    }
+    $this->info('Expired ciphertext envelopes purged: '.$count);
+})->purpose('Purge expired encrypted messaging envelopes within retention bounds');
+Schedule::command('orbit:messaging:prune')->dailyAt('03:35')->withoutOverlapping();

@@ -93,7 +93,9 @@ final class MessagingConversationService
                     ->where('k.user_id',$member->user_id)->where('d.trust_state','trusted')
                     ->whereNull('d.revoked_at')->orderBy('k.device_id')
                     ->pluck('k.key_version','k.device_id')->all();
-                $list[]=[$member->user_id,$member->role,$member->joined_at,$devices];
+                $list[]=[$member->user_id,$member->role,$member->joined_at,$devices,
+                    $this->access->circleSenderAllowed((string)$locked->circle_id,
+                        (string)$member->user_id)];
             }
             $fingerprint=hash('sha256',json_encode($list,JSON_THROW_ON_ERROR));
             if($locked->roster_fingerprint!==$fingerprint){
@@ -172,14 +174,17 @@ final class MessagingConversationService
     public function preferences(object $row,string $viewer,array $prefs): array
     {
         $this->access->assertConversation($row,$viewer);
+        $current=DB::table('messaging_members')->where('conversation_id',$row->id)
+            ->where('user_id',$viewer)->first();
+        $muted=array_key_exists('mute',$prefs)
+            ?($prefs['mute']?now()->addDays(365):null):($current?->muted_until);
+        $archived=array_key_exists('archive',$prefs)
+            ?($prefs['archive']?now():null):($current?->archived_at);
         DB::table('messaging_members')->updateOrInsert(
             ['conversation_id'=>$row->id,'user_id'=>$viewer],
-            [
-                'muted_until'=>($prefs['mute']??false)?now()->addDays(365):null,
-                'archived_at'=>($prefs['archive']??false)?now():null,
-            ],
+            ['muted_until'=>$muted,'archived_at'=>$archived],
         );
-        return ['muted'=>$prefs['mute']??false,'archived'=>$prefs['archive']??false];
+        return ['muted'=>$muted!==null,'archived'=>$archived!==null];
     }
 
     public function consent(string $circle,string $subject): array

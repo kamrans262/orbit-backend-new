@@ -190,6 +190,21 @@ final class MessagingController extends Controller
         return $this->encryptedSend($r,$session,$record['id']);
     }
 
+    public function deliveredReceipt(Request $r,string $conversation): JsonResponse
+    {
+        $data=$r->validate(['envelope_id'=>['required','uuid']]);
+        return $this->delivered($r,$conversation,$data['envelope_id']);
+    }
+
+    public function readReceipt(Request $r,string $conversation): JsonResponse
+    {
+        $data=$r->validate([
+            'envelope_id'=>['required','uuid'],
+            'visible_dwell_ms'=>['required','integer','between:600,600000'],
+        ]);
+        return $this->read($r,$conversation,$data['envelope_id']);
+    }
+
     public function sync(Request $r,string $conversation): JsonResponse
     {
         $session=$this->session($r);

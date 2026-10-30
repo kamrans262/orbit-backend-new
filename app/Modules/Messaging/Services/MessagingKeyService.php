@@ -41,7 +41,8 @@ final class MessagingKeyService
             $old=DB::table('messaging_device_keys')
                 ->where('device_id',$device)->lockForUpdate()->first();
             $rotation=$old && ($old->identity_ed25519!==$input['identity_ed25519']
-                || $old->signed_prekey_x25519!==$input['signed_prekey_x25519']);
+                || $old->signed_prekey_x25519!==$input['signed_prekey_x25519']
+                || (int)$old->signed_prekey_id!==(int)$input['signed_prekey_id']);
             abort_if($rotation && ($input['confirm_key_rotation']??false)!==true,
                 409,'Key rotation requires explicit device confirmation.');
             $version=(int)($old->key_version??0)+($old?($rotation?1:0):1);
