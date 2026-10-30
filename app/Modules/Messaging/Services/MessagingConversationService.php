@@ -216,7 +216,7 @@ final class MessagingConversationService
         ],[
             'subject_user_id'=>$subject,'enabled'=>true,'expires_at'=>null,
             'value_json'=>json_encode(['reviewed'=>true,'audience'=>'circle',
-                'duration'=>'persistent'],JSON_THROW_ON_ERROR),
+                'duration'=>'persistent','typing_enabled'=>true],JSON_THROW_ON_ERROR),
             'updated_at'=>now(),
         ]);
         return ['circle_id'=>$circle,'enabled'=>true];

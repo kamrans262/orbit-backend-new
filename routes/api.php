@@ -67,6 +67,10 @@ Route::prefix('v1')->group(function (): void {
             ->whereUuid('conversation')->middleware(MessagingOperationalTelemetry::class);
         Route::post('/conversations/{conversation}/envelopes',[MessagingController::class,'send'])
             ->whereUuid('conversation')->middleware(['throttle:50,1',MessagingOperationalTelemetry::class]);
+        Route::post('/conversations/{conversation}/typing',[MessagingController::class,'typing'])
+            ->whereUuid('conversation')->middleware('throttle:60,1');
+        Route::get('/conversations/{conversation}/typing',[MessagingController::class,'currentTyping'])
+            ->whereUuid('conversation')->middleware('throttle:60,1');
         Route::post('/conversations/{conversation}/sync',[MessagingController::class,'sync'])
             ->whereUuid('conversation')->middleware('throttle:50,1');
         Route::post('/conversations/{conversation}/envelopes/{envelope}/delivered',
@@ -87,6 +91,8 @@ Route::prefix('v1')->group(function (): void {
             ->whereUuid('conversation');
         Route::post('/conversations/{conversation}/reports',[MessagingController::class,'report'])
             ->whereUuid('conversation');
+        Route::put('/me/messaging/circles/{circle}/typing',
+            [MessagingController::class,'circleTyping'])->whereUuid('circle');
         Route::get('/me/messaging/circles/{circle}/consent',
             [MessagingCircleConsentController::class,'show'])->whereUuid('circle');
         Route::put('/me/messaging/circles/{circle}/consent',

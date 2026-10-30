@@ -6,6 +6,7 @@ use App\Modules\Messaging\Services\MessagingAccessPolicy;
 use App\Modules\Messaging\Services\MessagingConversationService;
 use App\Modules\Messaging\Services\MessagingEnvelopeService;
 use App\Modules\Messaging\Services\MessagingKeyService;
+use App\Modules\Messaging\Services\MessagingTypingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -17,7 +18,8 @@ final class MessagingController extends Controller
         private readonly MessagingAccessPolicy $access,
         private readonly MessagingConversationService $conversations,
         private readonly MessagingEnvelopeService $messages,
-        private readonly MessagingKeyService $keys
+        private readonly MessagingKeyService $keys,
+        private readonly MessagingTypingService $typing
     ) {}
 
     private function session(Request $r): object
@@ -47,6 +49,7 @@ final class MessagingController extends Controller
                 && config('orbit_circle.consumer_enabled.message')===true,
             'e2ee_client_verified'=>config('orbit_messaging.e2ee_client_verified')===true,
             'realtime_available'=>false,'push_available'=>false,
+            'typing_http_available'=>config('orbit_messaging.typing_http_enabled')===true,
             'server_content_readable'=>false,
             'delivery_transport'=>'foreground_https',
             'one_time_prekeys'=>true,'per_device_envelopes'=>true,
@@ -203,6 +206,34 @@ final class MessagingController extends Controller
             'visible_dwell_ms'=>['required','integer','between:600,600000'],
         ]);
         return $this->read($r,$conversation,$data['envelope_id']);
+    }
+
+    public function typing(Request $r,string $conversation): JsonResponse
+    {
+        $session=$this->session($r);
+        abort_unless(config('orbit_messaging.typing_http_enabled')===true,503);
+        $input=$r->validate(['active'=>['required','boolean']]);
+        $thread=$this->conversations->get($conversation,(string)$session->user_id);
+        return $this->response($this->typing->update(
+            $thread,(string)$session->user_id,(bool)$input['active']));
+    }
+
+    public function currentTyping(Request $r,string $conversation): JsonResponse
+    {
+        $session=$this->session($r);
+        abort_unless(config('orbit_messaging.typing_http_enabled')===true,503);
+        $thread=$this->conversations->get($conversation,(string)$session->user_id);
+        return $this->response($this->typing->current(
+            $thread,(string)$session->user_id));
+    }
+
+    public function circleTyping(Request $r,string $circle): JsonResponse
+    {
+        $session=$this->session($r);
+        $this->conversations->circle($circle,(string)$session->user_id);
+        $input=$r->validate(['enabled'=>['required','boolean']]);
+        return $this->response($this->typing->circleSetting(
+            $circle,(string)$session->user_id,(bool)$input['enabled']));
     }
 
     public function sync(Request $r,string $conversation): JsonResponse
