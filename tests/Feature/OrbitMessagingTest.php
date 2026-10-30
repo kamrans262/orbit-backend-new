@@ -594,6 +594,21 @@ final class OrbitMessagingTest extends TestCase
             ->assertJsonPath('data.items.0.sender_device_id',$da->id)
             ->assertJsonPath('data.group_epoch',$info['group_epoch']);
 
+        $this->withToken($ta)->postJson($route,[
+            'client_id'=>(string)Str::uuid(),
+            'protocol'=>'ratchet.v1','group_epoch'=>$info['group_epoch'],
+            'envelopes'=>[$this->envelope($da),$this->envelope($db)],
+        ])->assertCreated();
+        $page1=$this->withToken($tb)->getJson($route.'?limit=1')
+            ->assertOk()->assertJsonCount(1,'data.items')->json('data');
+        $this->assertNotNull($page1['next_cursor']);
+        $page2=$this->withToken($tb)->getJson($route.'?limit=1&cursor='.
+            rawurlencode($page1['next_cursor']))->assertOk()
+            ->assertJsonCount(1,'data.items')->json('data');
+        $this->assertNotEquals($page1['items'][0]['id'],$page2['items'][0]['id']);
+        $this->withToken($tb)->getJson($route.'?cursor=invalid')
+            ->assertUnprocessable();
+
         // A roster change prevents old-epoch material from being replayed.
         DB::table('circle_members')->where('circle_id',$circle)
             ->where('user_id',$b->id)->update(['role'=>'restricted']);
@@ -603,6 +618,36 @@ final class OrbitMessagingTest extends TestCase
             ->assertStatus(409);
         $this->withToken($ta)->getJson($route)->assertOk()
             ->assertJsonCount(0,'data.items');
+    }
+
+    public function test_encrypted_mailbox_and_sync_follow_the_authenticated_older_cursor(): void
+    {
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+        [$a,$ta,$da,$b,$tb,$db,$thread]=$this->setupDirect();
+        $route='/api/v1/conversations/'.$thread;
+        for($i=0;$i<4;$i++){
+            $this->withToken($ta)->postJson($route.'/envelopes',
+                $this->payload([$da,$db]))->assertCreated();
+        }
+        $page1=$this->withToken($tb)->getJson(
+            $route.'/envelopes?limit=2')->assertOk()
+            ->assertJsonCount(2,'data.items')->json('data');
+        $this->assertNotNull($page1['next_cursor']);
+        $page2=$this->withToken($tb)->getJson(
+            $route.'/envelopes?limit=2&cursor='.
+                rawurlencode($page1['next_cursor']))
+            ->assertOk()->assertJsonCount(2,'data.items')->json('data');
+        $ids1=array_column($page1['items'],'id');
+        $ids2=array_column($page2['items'],'id');
+        $this->assertCount(0,array_intersect($ids1,$ids2));
+        $this->withToken($tb)->postJson($route.'/sync',[
+            'limit'=>2,'cursor'=>$page1['next_cursor'],
+        ])->assertOk()->assertJsonPath('data.items.0.id',$ids2[0]);
+        $this->withToken($tb)->getJson(
+            $route.'/envelopes?cursor=invalid')->assertUnprocessable();
+        $this->withToken($tb)->postJson($route.'/sync',[
+            'limit'=>2,'cursor'=>'invalid',
+        ])->assertUnprocessable();
     }
 
     public function test_megolm_message_requires_current_sender_key_distribution_and_denies_old_epoch_retry(): void
