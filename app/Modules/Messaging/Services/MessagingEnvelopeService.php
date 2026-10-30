@@ -24,6 +24,15 @@ final class MessagingEnvelopeService
     public function send(object $conversation,string $sender,string $device,array $payload): array
     {
         $this->conversations->assertReady();
+        // Server-side release policy prevents unaudited clients from claiming
+        // production E2EE by putting arbitrary base64 bytes in an envelope.
+        // This is a release gate, NOT cryptographic proof of client honesty.
+        abort_unless(config('orbit_messaging.e2ee_client_verified')===true,
+            503,'Secure messaging has not passed release verification.');
+        $approved=config('orbit_messaging.approved_protocols',[]);
+        abort_unless(is_array($approved) &&
+            in_array($payload['protocol'],$approved,true),
+            422,'Unapproved encryption protocol.');
         $this->access->assertConversation($conversation,$sender);
         $key='messaging:send:'.hash('sha256',$sender.'|'.$device);
         $old=DB::table('messaging_messages')->where('sender_device_id',$device)
