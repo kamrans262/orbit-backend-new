@@ -92,6 +92,11 @@ Schedule::command('orbit:moments:push-send')->everyFiveMinutes()->withoutOverlap
 
 /** M13 encrypted envelope retention: ciphertext only; no plaintext or keys. */
 Artisan::command('orbit:messaging:prune', function () {
+    if(!app(\App\Modules\Messaging\Services\MessagingConversationService::class)
+        ->ready()){
+        $this->info('Encrypted messaging retention: schema not provisioned.');
+        return;
+    }
     $count=0;
     for($batch=0;$batch<20;$batch++){
         $n=app(\App\Modules\Messaging\Services\MessagingEnvelopeService::class)->prune();
