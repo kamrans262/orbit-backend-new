@@ -63,6 +63,7 @@ return new class extends Migration {
             $t->uuid('client_id');
             $t->string('kind',20); // metadata type only, not content
             $t->string('protocol',48);
+            $t->char('payload_hash',64);
             $t->unsignedInteger('group_epoch')->default(1);
             $t->timestamp('created_at')->useCurrent();
             $t->timestamp('expires_at')->nullable()->index();
