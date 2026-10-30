@@ -104,5 +104,12 @@ Artisan::command('orbit:messaging:prune', function () {
         if($n<500)break;
     }
     $this->info('Expired ciphertext envelopes purged: '.$count);
+    $groupCount=0;
+    for($batch=0;$batch<20;$batch++){
+        $n=app(\App\Modules\Messaging\Services\MessagingSenderKeyService::class)->prune();
+        $groupCount+=$n;
+        if($n<500)break;
+    }
+    $this->info('Expired opaque sender-key distribution packets purged: '.$groupCount);
 })->purpose('Purge expired encrypted messaging envelopes within retention bounds');
 Schedule::command('orbit:messaging:prune')->dailyAt('03:35')->withoutOverlapping();
