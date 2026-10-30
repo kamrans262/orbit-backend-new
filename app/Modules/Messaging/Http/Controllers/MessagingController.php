@@ -139,7 +139,8 @@ final class MessagingController extends Controller
         ]);
         $thread=$this->conversations->get($conversation,(string)$session->user_id);
         return $this->response($this->messages->page($thread,
-            (string)$session->user_id,(string)$session->device_id,(int)($input['limit']??50)));
+            (string)$session->user_id,(string)$session->device_id,
+            (int)($input['limit']??50),$input['cursor']??null));
     }
 
     public function senderKeyInbox(Request $r,string $conversation): JsonResponse
@@ -152,7 +153,7 @@ final class MessagingController extends Controller
         $thread=$this->conversations->get($conversation,(string)$session->user_id);
         return $this->response($this->senderKeys->forDevice(
             $thread,(string)$session->user_id,(string)$session->device_id,
-            (int)($input['limit']??50)));
+            (int)($input['limit']??50),$input['cursor']??null));
     }
 
     public function distributeSenderKey(Request $r,string $conversation): JsonResponse
@@ -233,7 +234,8 @@ final class MessagingController extends Controller
         ]);
         $thread=$this->conversations->get($conversation,(string)$session->user_id);
         return $this->response($this->messages->page($thread,
-            (string)$session->user_id,(string)$session->device_id,(int)($input['limit']??50)));
+            (string)$session->user_id,(string)$session->device_id,
+            (int)($input['limit']??50),$input['cursor']??null));
     }
     public function circleSend(Request $r,string $circle): JsonResponse
     {
