@@ -27,6 +27,9 @@ use App\Modules\Ping\Http\Middleware\PingOperationalTelemetry;
 use App\Modules\CheckIn\Http\Controllers\CheckInController;
 use App\Modules\CheckIn\Http\Controllers\CheckInCircleConsentController;
 use App\Modules\CheckIn\Http\Middleware\CheckInOperationalTelemetry;
+use App\Modules\Messaging\Http\Controllers\MessagingController;
+use App\Modules\Messaging\Http\Controllers\MessagingCircleConsentController;
+use App\Modules\Messaging\Http\Middleware\MessagingOperationalTelemetry;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -48,6 +51,49 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:120,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        // Encrypted per-device messaging: all payloads are ciphertext only.
+        // No fake realtime, plaintext transport or universal Circle membership grant.
+        Route::get('/messaging/capabilities',[MessagingController::class,'capabilities']);
+        Route::get('/me/messaging/devices',[MessagingController::class,'myDevices']);
+        Route::post('/me/messaging/keys',[MessagingController::class,'registerKeys'])
+            ->middleware('throttle:12,1');
+        Route::get('/messaging/keys/{recipient}',[MessagingController::class,'discoverKeys'])
+            ->whereUuid('recipient')->middleware('throttle:40,1');
+        Route::get('/conversations',[MessagingController::class,'listing'])
+            ->middleware(MessagingOperationalTelemetry::class);
+        Route::post('/conversations/direct',[MessagingController::class,'openDirect'])
+            ->middleware(['throttle:20,1',MessagingOperationalTelemetry::class]);
+        Route::get('/conversations/{conversation}/envelopes',[MessagingController::class,'envelopes'])
+            ->whereUuid('conversation')->middleware(MessagingOperationalTelemetry::class);
+        Route::post('/conversations/{conversation}/envelopes',[MessagingController::class,'send'])
+            ->whereUuid('conversation')->middleware(['throttle:50,1',MessagingOperationalTelemetry::class]);
+        Route::post('/conversations/{conversation}/sync',[MessagingController::class,'sync'])
+            ->whereUuid('conversation')->middleware('throttle:50,1');
+        Route::post('/conversations/{conversation}/envelopes/{envelope}/delivered',
+            [MessagingController::class,'delivered'])->whereUuid('conversation')
+            ->whereUuid('envelope')->middleware('throttle:90,1');
+        Route::post('/conversations/{conversation}/envelopes/{envelope}/read',
+            [MessagingController::class,'read'])->whereUuid('conversation')
+            ->whereUuid('envelope')->middleware('throttle:90,1');
+        Route::get('/conversations/{conversation}/messages/{message}/receipts',
+            [MessagingController::class,'receipts'])->whereUuid('conversation')->whereUuid('message');
+        Route::delete('/conversations/{conversation}/messages/{message}',
+            [MessagingController::class,'redact'])->whereUuid('conversation')->whereUuid('message');
+        Route::put('/conversations/{conversation}/preferences',[MessagingController::class,'preferences'])
+            ->whereUuid('conversation');
+        Route::post('/conversations/{conversation}/reports',[MessagingController::class,'report'])
+            ->whereUuid('conversation')->middleware('throttle:10,1');
+        Route::get('/me/messaging/circles/{circle}/consent',
+            [MessagingCircleConsentController::class,'show'])->whereUuid('circle');
+        Route::put('/me/messaging/circles/{circle}/consent',
+            [MessagingCircleConsentController::class,'update'])->whereUuid('circle');
+        Route::get('/circles/{circle}/messages/conversation',
+            [MessagingController::class,'circle'])->whereUuid('circle');
+        Route::get('/circles/{circle}/messages',[MessagingController::class,'circleEnvelopes'])
+            ->whereUuid('circle')->middleware(MessagingOperationalTelemetry::class);
+        Route::post('/circles/{circle}/messages',[MessagingController::class,'circleSend'])
+            ->whereUuid('circle')->middleware([MessagingOperationalTelemetry::class,'throttle:50,1']);
+
         // Check-In: private, device-bound publication and authorized reading.
         Route::get('/check-ins/capabilities', [CheckInController::class,'capabilities']);
         Route::get('/check-ins/feed', [CheckInController::class,'feed'])
