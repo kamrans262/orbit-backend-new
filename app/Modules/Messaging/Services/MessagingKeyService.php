@@ -124,7 +124,7 @@ final class MessagingKeyService
         ])->all()];
     }
 
-    public function discover(string $viewer,string $target,bool $claimOneTimePrekey=true): array
+    public function discover(string $viewer,string $target,bool $claimOneTimePrekey=true,?string $claimDevice=null): array
     {
         abort_unless($this->access->canDiscoverKeys($viewer,$target),
             404,'Messaging key directory unavailable.');
@@ -132,7 +132,7 @@ final class MessagingKeyService
         abort_if(RateLimiter::tooManyAttempts($rate,30),429,
             'Key directory request limit exceeded.');
         RateLimiter::hit($rate,60);
-        return DB::transaction(function() use($viewer,$target,$claimOneTimePrekey):array{
+        return DB::transaction(function() use($viewer,$target,$claimOneTimePrekey,$claimDevice):array{
             $records=DB::table('messaging_device_keys as k')
                 ->join('devices as d','d.id','=','k.device_id')
                 ->where('k.user_id',$target)->where('d.user_id',$target)
@@ -143,11 +143,17 @@ final class MessagingKeyService
                     'k.signed_prekey_signature','k.signed_prekey_id','k.key_version']);
             abort_if($records->count()>(int)config('orbit_messaging.max_direct_devices',12),
                 409,'Recipient has too many approved messaging devices.');
+            if($claimDevice!==null){
+                abort_unless($records->contains('device_id',$claimDevice),404,
+                    'Trusted recipient device is unavailable.');
+            }
             $devices=[];
             foreach($records as $record){
                 // One-time prekeys are claimed only for eligible authenticated
                 // viewers, atomically and at most once globally.
-                $oneTime=$claimOneTimePrekey ? DB::table('messaging_one_time_prekeys')
+                $oneTime=($claimOneTimePrekey && ($claimDevice===null ||
+                    $claimDevice===(string)$record->device_id))
+                    ? DB::table('messaging_one_time_prekeys')
                     ->where('device_id',$record->device_id)
                     ->whereNull('claimed_at')->orderBy('key_id')->lockForUpdate()->first() : null;
                 if($oneTime){
