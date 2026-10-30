@@ -22,6 +22,10 @@ final class OrbitMessagingTest extends TestCase
         parent::setUp();
         config([
             'orbit_messaging.enabled'=>true,
+            // Unit tests use opaque bytes solely to verify server mailbox ACL.
+            // This is NOT a Signal or cryptographic protocol certification.
+            'orbit_messaging.e2ee_client_verified'=>true,
+            'orbit_messaging.approved_protocols'=>['ratchet.v1'],
             'orbit_messaging.per_minute_send'=>200,
             'orbit_circle.enabled'=>true,
             'orbit_circle.consumer_enabled.message'=>true,
@@ -107,6 +111,7 @@ final class OrbitMessagingTest extends TestCase
     public function test_capabilities_trusted_session_and_no_fake_e2ee_or_push(): void
     {
         $this->getJson('/api/v1/messaging/capabilities')->assertUnauthorized();
+        config(['orbit_messaging.e2ee_client_verified'=>false]);
         [$a,$ta,$device]=$this->person('A');
         $this->withToken($ta)->getJson('/api/v1/messaging/capabilities')->assertOk()
             ->assertJsonPath('data.available',true)
@@ -192,6 +197,12 @@ final class OrbitMessagingTest extends TestCase
         $this->assertSame($thread,$same);
         $client=(string)Str::uuid();
         $payload=$this->payload([$da,$db],1,$client);
+        config(['orbit_messaging.e2ee_client_verified'=>false]);
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            $payload)->assertStatus(503);
+        config(['orbit_messaging.e2ee_client_verified'=>true]);
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            array_merge($payload,['protocol'=>'unverified.v99']))->assertUnprocessable();
         $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
             array_merge($payload,['text'=>'secret']))->assertUnprocessable();
         $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
