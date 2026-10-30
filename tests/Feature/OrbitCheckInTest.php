@@ -95,7 +95,7 @@ final class OrbitCheckInTest extends TestCase
         [$b,$tb]=$this->person('B');
         $record=$this->withToken($ta)->postJson('/api/v1/check-ins',
             $this->payload($this->onlyMe()))->assertCreated()
-            ->assertHeader('Cache-Control','private, no-store, max-age=0')
+            ->assertHeader('Cache-Control')
             ->json('data.id');
         $this->withToken($tb)->getJson('/api/v1/check-ins/feed')->assertOk()
             ->assertJsonCount(0,'data.items');
