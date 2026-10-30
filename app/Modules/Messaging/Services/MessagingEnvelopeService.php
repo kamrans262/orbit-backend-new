@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Pagination\Cursor;
 
 final class MessagingEnvelopeService
 {
@@ -178,9 +179,12 @@ final class MessagingEnvelopeService
     }
 
     public function page(object $conversation,string $user,string $device,
-        int $limit): array
+        int $limit,?string $encodedCursor=null): array
     {
         $this->access->assertConversation($conversation,$user);
+        $cursor=$encodedCursor===null?null:Cursor::fromEncoded($encodedCursor);
+        abort_unless($encodedCursor===null||$cursor!==null,422,
+            'Invalid encrypted mailbox cursor.');
         $records=DB::table('messaging_envelopes as e')
             ->join('messaging_messages as m','m.id','=','e.message_id')
             ->where('m.conversation_id',$conversation->id)
@@ -192,7 +196,9 @@ final class MessagingEnvelopeService
                 'm.id as message_id','m.sender_id','m.sender_device_id',
                 'm.kind','m.protocol','m.group_epoch','e.created_at'])
             ->orderByDesc('e.created_at')->orderByDesc('e.id')
-            ->cursorPaginate(min(max(1,$limit),(int)config('orbit_messaging.sync_max',200)));
+            ->cursorPaginate(min(max(1,$limit),
+                (int)config('orbit_messaging.sync_max',200)),
+                ['*'],'cursor',$cursor);
         // Device-scoped deletion notices prevent stale encrypted local history
         // after an authorized sender redacts a message. Never include private
         // text or another device's message IDs in this projection.
@@ -221,7 +227,8 @@ final class MessagingEnvelopeService
                 ->update(['e.delivered_at'=>now()]);
         }
         return $this->page($conversation,$user,$device,
-            (int)($input['limit']??(int)config('orbit_messaging.sync_max',200)));
+            (int)($input['limit']??(int)config('orbit_messaging.sync_max',200)),
+            $input['cursor']??null);
     }
 
     public function receipt(object $conversation,string $user,string $device,
