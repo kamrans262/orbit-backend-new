@@ -169,6 +169,37 @@ final class OrbitMessagingTest extends TestCase
         $this->withToken($tb)->getJson('/api/v1/messaging/keys/'.$a->id)->assertNotFound();
     }
 
+    public function test_retrying_identical_claimed_one_time_prekey_never_republishes_it(): void
+    {
+        [$a,$ta,$da]=$this->person('Private Sender');
+        [$b,$tb,$db]=$this->person('Private Recipient');
+        $this->privacy($a,'Friends');$this->privacy($b,'Friends');
+        $this->friend($a,$b);
+        $bundle=$this->keys($tb,$db,true);
+        $path='/api/v1/messaging/keys/'.$b->id;
+        $this->withToken($ta)->getJson($path)->assertOk()
+            ->assertJsonPath('data.devices.0.one_time_prekey.key_id',101);
+        $this->assertDatabaseHas('messaging_one_time_prekeys',[
+            'device_id'=>$db->id,'key_id'=>101,
+        ]);
+        // Same device private state was successfully published but its
+        // HTTP ACK was lost before the client marked the batch complete.
+        $this->withToken($tb)->postJson(
+            '/api/v1/me/messaging/keys',$bundle
+        )->assertOk()->assertJsonPath('data.registered',true);
+        $this->assertDatabaseCount('messaging_one_time_prekeys',1);
+        $this->assertEquals(1,DB::table('messaging_one_time_prekeys')
+            ->where('device_id',$db->id)->whereNotNull('claimed_at')->count());
+        $this->withToken($ta)->getJson($path)
+            ->assertOk()->assertJsonPath('data.devices.0.one_time_prekey',null);
+
+        $wrong=$bundle;
+        $wrong['one_time_prekeys'][0]['public_x25519']=
+            base64_encode(random_bytes(32));
+        $this->withToken($tb)->postJson('/api/v1/me/messaging/keys',$wrong)
+            ->assertStatus(409);
+    }
+
     public function test_claiming_one_device_prekey_preserves_other_trusted_devices(): void
     {
         [$a,$ta,$da]=$this->person('Sender');
