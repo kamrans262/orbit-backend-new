@@ -536,6 +536,10 @@ final class OrbitMessagingTest extends TestCase
 
     public function test_circle_sender_key_distribution_is_ciphertext_only_epoch_bound_and_idempotent(): void
     {
+        // Focus on sender-key authorization and epoch revocation. These
+        // repeated negative/positive calls must not accidentally consume
+        // the unrelated shared HTTP throttle budget across feature tests.
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
         [$a,$ta,$da]=$this->person('Circle A');
         [$b,$tb,$db]=$this->person('Circle B');
         $circle=(string)Str::uuid();
