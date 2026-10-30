@@ -3,6 +3,10 @@ namespace App\Modules\Messaging\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Response;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -48,4 +52,58 @@ final class AdminMessagingController extends Controller
             'retentionDays'=>(int)config('orbit_messaging.undelivered_retention_days',30),
         ])->header('Cache-Control','private, no-store');
     }
+    public function reports(): Response
+    {
+        abort_unless(Schema::hasTable('messaging_reports'),503,'Messaging schema required.');
+        $rows=DB::table('messaging_reports')->orderByDesc('created_at')
+            ->limit(40)->get(['id','reason','status','evidence_shared','created_at']);
+        return response()->view('orbit-admin.messaging-reports',[
+            'reports'=>$rows,
+        ])->header('Cache-Control','private, no-store');
+    }
+
+    public function evidence(Request $r,string $report): Response
+    {
+        $input=$r->validate(['confirm'=>['required','accepted']]);
+        $row=DB::table('messaging_reports')->where('id',$report)->first();
+        abort_unless($row && (bool)$row->evidence_shared && $row->evidence_enc,
+            404,'No user-shared report evidence.');
+        $actor=auth()->guard('admin')->user();
+        abort_unless($actor,403);
+        DB::table('messaging_report_audits')->insert([
+            'id'=>(string)Str::uuid(),'report_id'=>$report,
+            'admin_user_id'=>$actor->id,'action'=>'view_user_evidence',
+            'created_at'=>now(),
+        ]);
+        // Exactly the text the user knowingly submitted with the report.
+        // Never decrypt conversation envelopes or media.
+        return response()->view('orbit-admin.messaging-evidence',[
+            'report'=>$report,'evidence'=>Crypt::decryptString($row->evidence_enc),
+            'reason'=>$row->reason,
+        ])->header('Cache-Control','private, no-store')
+          ->header('Referrer-Policy','no-referrer');
+    }
+
+    public function action(Request $r,string $report): \Illuminate\Http\RedirectResponse
+    {
+        $input=$r->validate(['action'=>['required',Rule::in(['reviewed','dismissed'])]]);
+        $actor=auth()->guard('admin')->user();
+        abort_unless($actor,403);
+        DB::transaction(function()use($report,$input,$actor):void{
+            $row=DB::table('messaging_reports')->where('id',$report)
+                ->lockForUpdate()->first();
+            abort_unless($row,404,'Report unavailable.');
+            DB::table('messaging_reports')->where('id',$report)->update([
+                'status'=>$input['action'],'reviewed_at'=>now(),
+                'reviewed_by'=>$actor->id,
+            ]);
+            DB::table('messaging_report_audits')->insert([
+                'id'=>(string)Str::uuid(),'report_id'=>$report,
+                'admin_user_id'=>$actor->id,'action'=>$input['action'],
+                'created_at'=>now(),
+            ]);
+        });
+        return redirect()->route('orbit.admin.messaging.reports');
+    }
+
 }

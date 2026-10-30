@@ -56,6 +56,14 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
 
         Route::get('/messaging', [AdminMessagingController::class,'index'])
             ->middleware(RequireAdminPermission::class.':config.manage')->name('messaging.index');
+        Route::get('/messaging/reports',[AdminMessagingController::class,'reports'])
+            ->middleware(RequireAdminPermission::class.':messages.moderate')->name('messaging.reports');
+        Route::post('/messaging/reports/{report}/evidence',[AdminMessagingController::class,'evidence'])
+            ->whereUuid('report')->middleware([RequireAdminPermission::class.':messages.moderate','throttle:10,1'])
+            ->name('messaging.reports.evidence');
+        Route::post('/messaging/reports/{report}/action',[AdminMessagingController::class,'action'])
+            ->whereUuid('report')->middleware([RequireAdminPermission::class.':messages.moderate','throttle:10,1'])
+            ->name('messaging.reports.action');
         Route::get('/check-in', [AdminCheckInController::class,'index'])
             ->middleware(RequireAdminPermission::class.':config.manage')->name('check-in.index');
         Route::get('/ping', [AdminPingController::class, 'index'])
