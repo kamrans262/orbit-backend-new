@@ -7,6 +7,7 @@ use App\Modules\Messaging\Services\MessagingConversationService;
 use App\Modules\Messaging\Services\MessagingEnvelopeService;
 use App\Modules\Messaging\Services\MessagingKeyService;
 use App\Modules\Messaging\Services\MessagingTypingService;
+use App\Modules\Messaging\Services\MessagingSenderKeyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -19,7 +20,8 @@ final class MessagingController extends Controller
         private readonly MessagingConversationService $conversations,
         private readonly MessagingEnvelopeService $messages,
         private readonly MessagingKeyService $keys,
-        private readonly MessagingTypingService $typing
+        private readonly MessagingTypingService $typing,
+        private readonly MessagingSenderKeyService $senderKeys
     ) {}
 
     private function session(Request $r): object
@@ -138,6 +140,47 @@ final class MessagingController extends Controller
         $thread=$this->conversations->get($conversation,(string)$session->user_id);
         return $this->response($this->messages->page($thread,
             (string)$session->user_id,(string)$session->device_id,(int)($input['limit']??50)));
+    }
+
+    public function senderKeyInbox(Request $r,string $conversation): JsonResponse
+    {
+        $session=$this->session($r);
+        $input=$r->validate([
+            'limit'=>['sometimes','integer','between:1,100'],
+            'cursor'=>['sometimes','string','max:500'],
+        ]);
+        $thread=$this->conversations->get($conversation,(string)$session->user_id);
+        return $this->response($this->senderKeys->forDevice(
+            $thread,(string)$session->user_id,(string)$session->device_id,
+            (int)($input['limit']??50)));
+    }
+
+    public function distributeSenderKey(Request $r,string $conversation): JsonResponse
+    {
+        $session=$this->session($r);
+        abort_if(array_diff(array_keys($r->all()),[
+            'client_id','protocol','group_epoch','envelopes'])!==[],
+            422,'Only encrypted sender-key distribution is accepted.');
+        $input=$r->validate([
+            'client_id'=>['required','uuid'],
+            'protocol'=>['required','string','min:3','max:48',
+                'regex:/^[a-z0-9._-]+$/D'],
+            'group_epoch'=>['required','integer','between:1,2147483647'],
+            'envelopes'=>['required','array','min:1','max:128'],
+            'envelopes.*.device_id'=>['required','uuid'],
+            'envelopes.*.ciphertext_b64'=>['required','string','min:24','max:45000'],
+            'envelopes.*.protocol_header_b64'=>['required','string','min:16','max:5600'],
+        ]);
+        foreach($input['envelopes'] as $env){
+            abort_if(array_diff(array_keys($env),[
+                'device_id','ciphertext_b64','protocol_header_b64'])!==[],
+                422,'Sender-key envelope cannot include private key material.');
+        }
+        $thread=$this->conversations->get($conversation,(string)$session->user_id);
+        [$result,$created]=$this->senderKeys->publish(
+            $thread,(string)$session->user_id,(string)$session->device_id,
+            $input);
+        return $this->response($result,$created?201:200);
     }
 
     private function encryptedSend(Request $r,object $session,string $conversation): JsonResponse
