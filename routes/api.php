@@ -24,6 +24,9 @@ use App\Modules\Location\Http\Controllers\LocationRealtimeController;
 use App\Modules\Ping\Http\Controllers\PingController;
 use App\Modules\Ping\Http\Controllers\PingCircleConsentController;
 use App\Modules\Ping\Http\Middleware\PingOperationalTelemetry;
+use App\Modules\CheckIn\Http\Controllers\CheckInController;
+use App\Modules\CheckIn\Http\Controllers\CheckInCircleConsentController;
+use App\Modules\CheckIn\Http\Middleware\CheckInOperationalTelemetry;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -45,6 +48,27 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:120,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        // Check-In: private, device-bound publication and authorized reading.
+        Route::get('/check-ins/capabilities', [CheckInController::class,'capabilities']);
+        Route::get('/check-ins/feed', [CheckInController::class,'feed'])
+            ->middleware(CheckInOperationalTelemetry::class);
+        Route::get('/check-ins/mine', [CheckInController::class,'mine'])
+            ->middleware(CheckInOperationalTelemetry::class);
+        Route::post('/check-ins', [CheckInController::class,'publish'])
+            ->middleware([CheckInOperationalTelemetry::class,'throttle:30,1']);
+        Route::get('/check-ins/{checkin}', [CheckInController::class,'detail'])
+            ->whereUuid('checkin')->middleware(CheckInOperationalTelemetry::class);
+        Route::put('/check-ins/{checkin}/audience', [CheckInController::class,'audience'])
+            ->whereUuid('checkin')->middleware(CheckInOperationalTelemetry::class);
+        Route::patch('/check-ins/{checkin}', [CheckInController::class,'expiry'])
+            ->whereUuid('checkin')->middleware(CheckInOperationalTelemetry::class);
+        Route::delete('/check-ins/{checkin}', [CheckInController::class,'withdraw'])
+            ->whereUuid('checkin')->middleware(CheckInOperationalTelemetry::class);
+        Route::get('/me/check-ins/circles/{circle}/consent',
+            [CheckInCircleConsentController::class,'show'])->whereUuid('circle');
+        Route::put('/me/check-ins/circles/{circle}/consent',
+            [CheckInCircleConsentController::class,'update'])->whereUuid('circle');
+
         // Individual Circle Ping consent, never granted by membership alone.
         Route::get('/me/pings/circles/{circle}/consent', [PingCircleConsentController::class, 'show'])
             ->whereUuid('circle');

@@ -38,7 +38,7 @@ return [
     'retention_autopurge_enabled' => (bool) env('ORBIT_M5_RETENTION_AUTOPURGE_ENABLED', false),
     'consumer_enabled' => [
         'location'=>(bool) env('ORBIT_M5_LOCATION_CONSUMER_ENABLED', true),'presence'=>(bool) env('ORBIT_M5_PRESENCE_CONSUMER_ENABLED', false),'moments'=>false,
-        'check_in'=>false,'plans'=>false,'status'=>false,
+        'check_in'=>(bool) env('ORBIT_M5_CHECK_IN_CONSUMER_ENABLED', false),'plans'=>false,'status'=>false,
         'ping'=>(bool) env('ORBIT_M5_PING_CONSUMER_ENABLED', true),'message'=>false,
     ],
     // Location, presence, chat, Moments and SOS are never activated by M5 config.

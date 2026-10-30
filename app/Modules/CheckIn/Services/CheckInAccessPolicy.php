@@ -5,6 +5,7 @@ namespace App\Modules\CheckIn\Services;
 use App\Models\OrbitDevice;
 use App\Models\OrbitUser;
 use App\Modules\Circle\Services\CircleAccessPolicy;
+use App\Modules\Circle\Services\CircleConsentPolicy;
 use App\Modules\Social\Services\SocialRelationPolicy;
 use Illuminate\Support\Facades\DB;
 
@@ -45,7 +46,11 @@ final class CheckInAccessPolicy
         if ($type === 'circle') {
             return is_string($id) && config('orbit_circle.consumer_enabled.check_in') === true
                 && ($this->privacy($creator)['activity_visibility'] ?? 'Nobody') === 'My Circle'
-                && $this->circles->isMember($id, $creator);
+                && $this->circles->isMember($id, $creator)
+                && (($grant = DB::table('circle_permissions')->where('circle_id', $id)
+                    ->where('scope_key', 'user:'.$creator)->where('subject_user_id', $creator)
+                    ->where('permission_key','check_in')->first()) !== null)
+                && app(CircleConsentPolicy::class)->consentCurrentlyValid($grant,'check_in');
         }
         return false;
     }
