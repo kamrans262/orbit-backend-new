@@ -164,6 +164,26 @@ final class OrbitMessagingTest extends TestCase
         $this->withToken($tb)->getJson('/api/v1/messaging/keys/'.$a->id)->assertNotFound();
     }
 
+    public function test_read_only_sender_identity_lookup_does_not_consume_one_time_prekeys(): void
+    {
+        [$a,$ta,$da]=$this->person('A');
+        [$b,$tb,$db]=$this->person('B');
+        $this->privacy($a,'Friends');
+        $this->privacy($b,'Friends');
+        $this->friend($a,$b);
+        $this->keys($tb,$db,true);
+        $path='/api/v1/messaging/keys/'.$b->id;
+        $this->withToken($ta)->getJson($path.'?claim_one_time_prekey=0')->assertOk()
+            ->assertJsonPath('data.devices.0.one_time_prekey',null);
+        $this->assertDatabaseHas('messaging_one_time_prekeys',[
+            'device_id'=>$db->id,'claimed_at'=>null,
+        ]);
+        $this->withToken($ta)->getJson($path)->assertOk()
+            ->assertJsonPath('data.devices.0.one_time_prekey.key_id',101);
+        $this->withToken($ta)->getJson($path.'?claim_one_time_prekey=0')->assertOk()
+            ->assertJsonPath('data.devices.0.one_time_prekey',null);
+    }
+
     public function test_direct_send_requires_exact_device_envelopes_is_idempotent_and_never_plaintext(): void
     {
         [$a,$ta,$da,$b,$tb,$db,$thread]=$this->setupDirect();

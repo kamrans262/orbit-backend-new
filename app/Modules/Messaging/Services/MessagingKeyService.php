@@ -120,7 +120,7 @@ final class MessagingKeyService
         ])->all()];
     }
 
-    public function discover(string $viewer,string $target): array
+    public function discover(string $viewer,string $target,bool $claimOneTimePrekey=true): array
     {
         abort_unless($this->access->canDiscoverKeys($viewer,$target),
             404,'Messaging key directory unavailable.');
@@ -128,7 +128,7 @@ final class MessagingKeyService
         abort_if(RateLimiter::tooManyAttempts($rate,30),429,
             'Key directory request limit exceeded.');
         RateLimiter::hit($rate,60);
-        return DB::transaction(function() use($viewer,$target):array{
+        return DB::transaction(function() use($viewer,$target,$claimOneTimePrekey):array{
             $records=DB::table('messaging_device_keys as k')
                 ->join('devices as d','d.id','=','k.device_id')
                 ->where('k.user_id',$target)->where('d.user_id',$target)
@@ -143,9 +143,9 @@ final class MessagingKeyService
             foreach($records as $record){
                 // One-time prekeys are claimed only for eligible authenticated
                 // viewers, atomically and at most once globally.
-                $oneTime=DB::table('messaging_one_time_prekeys')
+                $oneTime=$claimOneTimePrekey ? DB::table('messaging_one_time_prekeys')
                     ->where('device_id',$record->device_id)
-                    ->whereNull('claimed_at')->orderBy('key_id')->lockForUpdate()->first();
+                    ->whereNull('claimed_at')->orderBy('key_id')->lockForUpdate()->first() : null;
                 if($oneTime){
                     DB::table('messaging_one_time_prekeys')->where('id',$oneTime->id)
                         ->update(['claimed_by'=>$viewer,'claimed_at'=>now()]);
