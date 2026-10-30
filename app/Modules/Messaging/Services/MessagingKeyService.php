@@ -86,9 +86,14 @@ final class MessagingKeyService
                 $existing=DB::table('messaging_one_time_prekeys')
                     ->where('device_id',$device)->where('key_id',$item['key_id'])
                     ->lockForUpdate()->first();
-                abort_if($existing && ($existing->claimed_at!==null ||
-                    $existing->public_x25519!==$item['public_x25519']),409,
-                    'One-time prekey ID was already published or consumed.');
+                // An ambiguous HTTPS response may cause the same signed
+                // public prekey registration to be retried after a recipient
+                // has claimed it. Identical key bytes are an idempotent
+                // no-op: NEVER unset claimed_at or publish the key again.
+                // A reused key ID with DIFFERENT bytes is rejected.
+                abort_if($existing &&
+                    $existing->public_x25519!==$item['public_x25519'],409,
+                    'One-time prekey ID is already bound to another key.');
                 if(!$existing){
                     DB::table('messaging_one_time_prekeys')->insert([
                         'id'=>(string)Str::uuid(),'device_id'=>$device,
