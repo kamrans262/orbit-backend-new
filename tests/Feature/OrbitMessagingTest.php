@@ -282,8 +282,9 @@ final class OrbitMessagingTest extends TestCase
             ->assertOk()->assertJsonPath('data.redacted',true);
         $this->assertDatabaseCount('messaging_envelopes',0);
         $db->update(['revoked_at'=>now()]);
+        // Revocation invalidates the bearer session at the identity middleware.
         $this->withToken($tb)->getJson('/api/v1/conversations/'.$thread.'/envelopes')
-            ->assertForbidden();
+            ->assertUnauthorized();
     }
 
     public function test_prune_removes_expired_ciphertext_without_exposing_content(): void
