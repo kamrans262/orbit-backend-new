@@ -176,6 +176,12 @@ final class OrbitMessagingTest extends TestCase
         $this->privacy($a,'Friends');$this->privacy($b,'Friends');
         $this->friend($a,$b);
         $bundle=$this->keys($tb,$db,true);
+        // Maximum capacity is already reached. Registering identical public
+        // keys again is not a new allocation and must be idempotent.
+        config(['orbit_messaging.max_one_time_prekeys'=>1]);
+        $this->withToken($tb)->postJson(
+            '/api/v1/me/messaging/keys',$bundle
+        )->assertOk()->assertJsonPath('data.registered',true);
         $path='/api/v1/messaging/keys/'.$b->id;
         $this->withToken($ta)->getJson($path)->assertOk()
             ->assertJsonPath('data.devices.0.one_time_prekey.key_id',101);
