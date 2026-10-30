@@ -67,6 +67,15 @@ Route::prefix('v1')->group(function (): void {
             ->whereUuid('conversation')->middleware(MessagingOperationalTelemetry::class);
         Route::post('/conversations/{conversation}/envelopes',[MessagingController::class,'send'])
             ->whereUuid('conversation')->middleware(['throttle:50,1',MessagingOperationalTelemetry::class]);
+        // Current-epoch per-device Circle sender-key packets. Routing only:
+        // trusted devices and consented membership are rechecked on every call.
+        Route::get('/conversations/{conversation}/sender-keys',
+            [MessagingController::class,'senderKeyInbox'])
+            ->whereUuid('conversation')->middleware('throttle:40,1');
+        Route::post('/conversations/{conversation}/sender-keys',
+            [MessagingController::class,'distributeSenderKey'])
+            ->whereUuid('conversation')
+            ->middleware(['throttle:20,1',MessagingOperationalTelemetry::class]);
         Route::post('/conversations/{conversation}/typing',[MessagingController::class,'typing'])
             ->whereUuid('conversation')->middleware('throttle:60,1');
         Route::get('/conversations/{conversation}/typing',[MessagingController::class,'currentTyping'])
