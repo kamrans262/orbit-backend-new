@@ -64,16 +64,8 @@ final class MessagingSenderKeyService
             $input['protocol'],(int)$input['group_epoch'],$sorted
         ],JSON_THROW_ON_ERROR));
 
-        $existing=DB::table('messaging_sender_key_batches')
-            ->where('sender_device_id',$device)
-            ->where('client_id',$input['client_id'])->first();
-        if($existing){
-            abort_unless($existing->conversation_id===$thread->id &&
-                hash_equals((string)$existing->payload_hash,$hash),
-                409,'Sender-key client ID conflict.');
-            return [$this->present($existing),false];
-        }
-
+        // Idempotency is checked inside the fresh, locked Circle epoch. An
+        // old client ID can never make a revoked roster look distributed.
         return DB::transaction(function()use($thread,$user,$device,$input,
             $sorted,$hash):array {
             $row=DB::table('messaging_conversations')
@@ -122,8 +114,9 @@ final class MessagingSenderKeyService
                 ->where('client_id',$input['client_id'])->first();
             if($old){
                 abort_unless($old->conversation_id===$row->id &&
+                    (int)$old->group_epoch===(int)$row->group_epoch &&
                     hash_equals((string)$old->payload_hash,$hash),
-                    409,'Sender-key client ID conflict.');
+                    409,'Sender-key client ID conflict or revoked epoch.');
                 return [$this->present($old),false];
             }
 
