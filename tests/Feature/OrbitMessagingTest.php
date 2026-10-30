@@ -500,4 +500,38 @@ final class OrbitMessagingTest extends TestCase
         $role->update(['permissions'=>['users.read']]);
         $this->actingAs($admin,'admin')->get('/admin/messaging')->assertForbidden();
     }
+    public function test_redacted_envelopes_sync_opaque_device_scoped_deletion_receipts(): void
+    {
+        [$a,$ta,$da,$b,$tb,$db,$thread]=$this->setupDirect();
+        $id=$this->withToken($ta)->postJson(
+            '/api/v1/conversations/'.$thread.'/envelopes',
+            $this->payload([$da,$db])
+        )->assertCreated()->json('data.id');
+
+        $this->withToken($tb)->getJson(
+            '/api/v1/conversations/'.$thread.'/envelopes'
+        )->assertOk()->assertJsonPath('data.items.0.message_id',$id);
+
+        $this->withToken($ta)->deleteJson(
+            '/api/v1/conversations/'.$thread.'/messages/'.$id
+        )->assertOk()->assertJsonPath('data.redacted',true);
+
+        $this->assertDatabaseHas('messaging_redactions',[
+            'conversation_id'=>$thread,
+            'message_id'=>$id,
+            'recipient_device_id'=>$db->id,
+        ]);
+        $this->withToken($tb)->postJson(
+            '/api/v1/conversations/'.$thread.'/sync',['limit'=>50]
+        )->assertOk()->assertJsonCount(0,'data.items')
+            ->assertJsonPath('data.redacted_message_ids.0',$id)
+            ->assertDontSee('ciphertext_b64');
+
+        // Revoked privacy denies the whole conversation, including tombstones.
+        $this->privacy($b,'Nobody');
+        $this->withToken($tb)->getJson(
+            '/api/v1/conversations/'.$thread.'/envelopes'
+        )->assertNotFound();
+    }
+
 }
