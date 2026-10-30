@@ -136,11 +136,11 @@ final class MessagingEnvelopeService
             ->where('e.recipient_device_id',$device)
             ->whereNull('m.redacted_at')
             ->where('m.expires_at','>',now())
-            ->select(['e.id as envelope_id','e.ciphertext_b64',
+            ->select(['e.id','e.ciphertext_b64',
                 'e.protocol_header_b64','e.delivered_at','e.read_at',
                 'm.id as message_id','m.sender_id','m.sender_device_id',
-                'm.kind','m.protocol','m.group_epoch','m.created_at'])
-            ->orderByDesc('m.created_at')->orderByDesc('m.id')
+                'm.kind','m.protocol','m.group_epoch','e.created_at'])
+            ->orderByDesc('e.created_at')->orderByDesc('e.id')
             ->cursorPaginate(min(max(1,$limit),(int)config('orbit_messaging.page_max',100)));
         return ['items'=>$records->items(),'next_cursor'=>$records->nextCursor()?->encode(),
             'ciphertext_only'=>true];

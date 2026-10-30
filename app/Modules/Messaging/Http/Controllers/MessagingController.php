@@ -65,6 +65,15 @@ final class MessagingController extends Controller
     {
         $session=$this->session($r);
         $this->conversations->assertReady();
+        abort_if(array_diff(array_keys($r->all()),[
+            'identity_ed25519','signed_prekey_x25519','signed_prekey_signature',
+            'signed_prekey_id','confirm_key_rotation','one_time_prekeys'])!==[],
+            422,'Only device public key material may be uploaded.');
+        foreach($r->input('one_time_prekeys',[]) as $key) {
+            abort_if(!is_array($key) ||
+                array_diff(array_keys($key),['key_id','public_x25519'])!==[],
+                422,'Private messaging key fields are prohibited.');
+        }
         $input=$r->validate([
             'identity_ed25519'=>['required','string','max:64'],
             'signed_prekey_x25519'=>['required','string','max:64'],

@@ -140,7 +140,7 @@ final class OrbitMessagingTest extends TestCase
         $this->withToken($ta)->getJson('/api/v1/me/messaging/devices')
             ->assertJsonPath('data.devices.0.messaging_keys_registered',true);
         $this->withToken($ta)->postJson('/api/v1/me/messaging/keys',
-            array_merge($good,['private_key'=>'secret']))->assertOk();
+            array_merge($good,['private_key'=>'secret']))->assertUnprocessable();
         // No private key is persisted, returned or exposed in admin operations.
         $this->assertDatabaseCount('messaging_device_keys',1);
         $this->assertDatabaseCount('messaging_one_time_prekeys',1);
