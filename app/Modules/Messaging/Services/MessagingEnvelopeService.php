@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Schema;
 
 final class MessagingEnvelopeService
 {
@@ -174,8 +175,18 @@ final class MessagingEnvelopeService
                 'm.kind','m.protocol','m.group_epoch','e.created_at'])
             ->orderByDesc('e.created_at')->orderByDesc('e.id')
             ->cursorPaginate(min(max(1,$limit),(int)config('orbit_messaging.sync_max',200)));
+        // Device-scoped deletion notices prevent stale encrypted local history
+        // after an authorized sender redacts a message. Never include private
+        // text or another device's message IDs in this projection.
+        $redacted=Schema::hasTable('messaging_redactions')
+            ?DB::table('messaging_redactions')
+                ->where('conversation_id',$conversation->id)
+                ->where('recipient_device_id',$device)
+                ->where('created_at','>=',now()->subDays(30))
+                ->orderByDesc('id')->limit(1000)->pluck('message_id')->all()
+            :[];
         return ['items'=>$records->items(),'next_cursor'=>$records->nextCursor()?->encode(),
-            'ciphertext_only'=>true];
+            'redacted_message_ids'=>$redacted,'ciphertext_only'=>true];
     }
 
     public function sync(object $conversation,string $user,string $device,
@@ -263,7 +274,19 @@ final class MessagingEnvelopeService
             ->where('conversation_id',$conversation->id)
             ->where('sender_id',$sender)->first();
         abort_unless($message,404,'Message unavailable.');
-        DB::transaction(function()use($id):void{
+        abort_unless(Schema::hasTable('messaging_redactions'),503,
+            'Private message deletion synchronization requires migration.');
+        DB::transaction(function()use($id,$conversation):void{
+            $targets=DB::table('messaging_envelopes')
+                ->where('message_id',$id)->pluck('recipient_device_id');
+            foreach($targets as $device){
+                DB::table('messaging_redactions')->insertOrIgnore([
+                    'conversation_id'=>$conversation->id,
+                    'message_id'=>$id,
+                    'recipient_device_id'=>(string)$device,
+                    'created_at'=>now(),
+                ]);
+            }
             DB::table('messaging_messages')->where('id',$id)
                 ->whereNull('redacted_at')->update(['redacted_at'=>now()]);
             DB::table('messaging_envelopes')->where('message_id',$id)->delete();
@@ -301,6 +324,12 @@ final class MessagingEnvelopeService
 
     public function prune(): int
     {
+        // Tombstones expire after their bounded synchronization window.
+        if(Schema::hasTable('messaging_redactions')){
+            DB::table('messaging_redactions')
+                ->where('created_at','<=',now()->subDays(30))
+                ->limit(500)->delete();
+        }
         // Max 30-day ciphertext server retention; client history remains
         // exclusively inside separately encrypted local storage.
         $ids=DB::table('messaging_messages')->where('expires_at','<=',now())
