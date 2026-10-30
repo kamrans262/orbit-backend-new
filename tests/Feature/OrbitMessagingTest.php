@@ -601,4 +601,64 @@ final class OrbitMessagingTest extends TestCase
             ->assertJsonCount(0,'data.items');
     }
 
+    public function test_megolm_message_requires_current_sender_key_distribution_and_denies_old_epoch_retry(): void
+    {
+        [$a,$ta,$da]=$this->person('Alice Megolm');
+        [$b,$tb,$db]=$this->person('Bob Megolm');
+        $circle=(string)Str::uuid();
+        DB::table('circles')->insert([
+            'id'=>$circle,'owner_id'=>$a->id,'name'=>'Encrypted Circle',
+            'revision'=>1,'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        foreach([$a,$b] as $member){
+            DB::table('circle_members')->insert([
+                'circle_id'=>$circle,'user_id'=>$member->id,'role'=>'member',
+                'joined_at'=>now(),'created_at'=>now(),'updated_at'=>now(),
+            ]);
+        }
+        $this->privacy($a,'My Circle');
+        $this->privacy($b,'My Circle');
+        $this->keys($ta,$da);
+        $this->keys($tb,$db);
+        foreach([[$ta,$a],[$tb,$b]] as [$token,$member]){
+            $this->withToken($token)->putJson(
+                '/api/v1/me/messaging/circles/'.$circle.'/consent',
+                ['enabled'=>true,'confirm'=>true]
+            )->assertOk();
+        }
+        $thread=$this->withToken($ta)->getJson(
+            '/api/v1/circles/'.$circle.'/messages/conversation'
+        )->assertOk()->json('data');
+        config([
+            'orbit_messaging.e2ee_client_verified'=>true,
+            'orbit_messaging.approved_protocols'=>['orbit-m13-olm-megolm-v1'],
+        ]);
+        $protocol='orbit-m13-olm-megolm-v1';
+        $message=array_merge(
+            $this->payload([$da,$db],$thread['group_epoch']),
+            ['protocol'=>$protocol]
+        );
+        $messageRoute='/api/v1/circles/'.$circle.'/messages';
+        $distribution='/api/v1/conversations/'.$thread['id'].'/sender-keys';
+        $this->withToken($ta)->postJson($messageRoute,$message)
+            ->assertStatus(409);
+        $this->withToken($ta)->postJson($distribution,[
+            'client_id'=>(string)Str::uuid(),'protocol'=>$protocol,
+            'group_epoch'=>$thread['group_epoch'],
+            'envelopes'=>[$this->envelope($da),$this->envelope($db)],
+        ])->assertCreated()->assertJsonPath('data.ciphertext_only',true);
+        $this->withToken($ta)->postJson($messageRoute,$message)
+            ->assertCreated();
+        $this->withToken($ta)->postJson($messageRoute,$message)
+            ->assertOk();
+        DB::table('circle_members')->where('circle_id',$circle)
+            ->where('user_id',$b->id)->update(['role'=>'restricted']);
+        // The same request ID cannot replay a previously authorized group
+        // envelope after the Circle group epoch is rotated.
+        $this->withToken($ta)->postJson($messageRoute,$message)
+            ->assertStatus(409);
+        $this->withToken($tb)->getJson($distribution)
+            ->assertNotFound();
+    }
+
 }
