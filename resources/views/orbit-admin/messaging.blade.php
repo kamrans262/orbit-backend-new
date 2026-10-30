@@ -31,5 +31,8 @@
 @else <div class="admin-guidance">Apply the messaging schema migration to display operational aggregates.</div> @endif
 <p><strong>Encryption transparency:</strong> the Laravel server accepts opaque per-device envelopes only and cannot decrypt message content. A registered device key is not proof that the Flutter Double Ratchet and group sender-key engine has passed security review. Do not describe the app as live end-to-end encrypted messaging until that separate review is complete.</p>
 <p>Active friend/Circle permission, trusted-device status and recipient eligibility are checked on every read and send. Group sender-key epochs must rotate after roster changes.</p>
+@if(auth()->guard('admin')->user()?->canPerform('messages.moderate'))
+<p><a href="{{ route('orbit.admin.messaging.reports') }}">Review user-selected reports (restricted permission)</a></p>
+@endif
 </section>
 @endsection

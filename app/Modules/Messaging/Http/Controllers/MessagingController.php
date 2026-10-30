@@ -267,15 +267,28 @@ final class MessagingController extends Controller
         $session=$this->session($r);
         $rateKey='messaging:report:'.hash('sha256',(string)$session->user_id);
         abort_if(RateLimiter::tooManyAttempts($rateKey,10),429,'Report limit reached.');
-        abort_if(array_diff(array_keys($r->all()),['message_id','reason'])!==[],
-            422,'Private message plaintext cannot be uploaded in reports.');
+        abort_if(array_diff(array_keys($r->all()),
+            ['message_id','reason','share_evidence','confirm_evidence_share','evidence_text'])!==[],
+            422,'Unexpected report fields.');
         $input=$r->validate([
             'message_id'=>['sometimes','nullable','uuid'],
             'reason'=>['required',Rule::in(['spam','abuse','harassment','impersonation','other'])],
+            'share_evidence'=>['sometimes','boolean'],
+            'confirm_evidence_share'=>['required_if:share_evidence,true','sometimes','boolean'],
+            'evidence_text'=>['required_if:share_evidence,true',
+                'prohibited_unless:share_evidence,true','nullable','string','max:1500'],
         ]);
+        if(($input['share_evidence']??false)===true){
+            abort_unless(($input['confirm_evidence_share']??false)===true
+                && ($input['message_id']??null)!==null
+                && trim((string)($input['evidence_text']??''))!=='',422,
+                'Sharing selected report evidence requires explicit confirmation.');
+        }
         $thread=$this->conversations->get($conversation,(string)$session->user_id);
         $result=$this->messages->report($thread,
-            (string)$session->user_id,$input['message_id']??null,$input['reason']);
+            (string)$session->user_id,$input['message_id']??null,$input['reason'],
+            ($input['share_evidence']??false)===true
+                ?trim((string)$input['evidence_text']):null);
         RateLimiter::hit($rateKey,60);
         return $this->response($result,201);
     }

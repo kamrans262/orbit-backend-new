@@ -96,11 +96,23 @@ return new class extends Migration {
             $t->uuid('reporter_id');
             $t->string('reason',32);
             $t->string('status',20)->default('pending');
+            $t->boolean('evidence_shared')->default(false);
+            $t->text('evidence_enc')->nullable(); // explicit user-selected report only, encrypted at rest
+            $t->uuid('reviewed_by')->nullable();
             $t->timestamp('created_at')->useCurrent();
             $t->timestamp('reviewed_at')->nullable();
             $t->foreign('conversation_id')->references('id')->on('messaging_conversations')->cascadeOnDelete();
             $t->foreign('message_id')->references('id')->on('messaging_messages')->nullOnDelete();
             $t->foreign('reporter_id')->references('id')->on('orbit_users')->cascadeOnDelete();
+        });
+        Schema::create('messaging_report_audits', function (Blueprint $t): void {
+            $t->uuid('id')->primary();
+            $t->uuid('report_id');
+            $t->uuid('admin_user_id');
+            $t->string('action',32);
+            $t->timestamp('created_at')->useCurrent();
+            $t->foreign('report_id')->references('id')->on('messaging_reports')->cascadeOnDelete();
+            $t->foreign('admin_user_id')->references('id')->on('admin_users')->cascadeOnDelete();
         });
         Schema::create('messaging_operational_events', function (Blueprint $t): void {
             $t->bigIncrements('id');
@@ -111,7 +123,7 @@ return new class extends Migration {
     }
     public function down(): void
     {
-        foreach (['messaging_operational_events','messaging_reports','messaging_envelopes',
+        foreach (['messaging_operational_events','messaging_report_audits','messaging_reports','messaging_envelopes',
             'messaging_messages','messaging_members','messaging_conversations',
             'messaging_one_time_prekeys','messaging_device_keys'] as $table) {
             Schema::dropIfExists($table);

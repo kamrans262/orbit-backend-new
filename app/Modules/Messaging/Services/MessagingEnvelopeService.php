@@ -4,6 +4,7 @@ namespace App\Modules\Messaging\Services;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Crypt;
 
 final class MessagingEnvelopeService
 {
@@ -161,7 +162,7 @@ final class MessagingEnvelopeService
                 'm.id as message_id','m.sender_id','m.sender_device_id',
                 'm.kind','m.protocol','m.group_epoch','e.created_at'])
             ->orderByDesc('e.created_at')->orderByDesc('e.id')
-            ->cursorPaginate(min(max(1,$limit),(int)config('orbit_messaging.page_max',100)));
+            ->cursorPaginate(min(max(1,$limit),(int)config('orbit_messaging.sync_max',200)));
         return ['items'=>$records->items(),'next_cursor'=>$records->nextCursor()?->encode(),
             'ciphertext_only'=>true];
     }
@@ -231,10 +232,17 @@ final class MessagingEnvelopeService
             ->whereNotNull('e.read_at')->pluck('d.user_id')->unique()->all();
         $allowed=array_reduce($read,fn(int $n,string $id):int=>
             $n+($this->access->readReceiptsAllowed($id)?1:0),0);
+        $visibleReadRecipients=[];
+        foreach($read as $recipient) {
+            if($this->access->readReceiptsAllowed((string)$recipient)){
+                $visibleReadRecipients[]=(string)$recipient;
+            }
+        }
         return ['message_id'=>$message,
             'recipient_devices'=>(int)($counts->total??0),
             'delivered_devices'=>(int)($counts->delivered??0),
-            'read_users'=>$allowed];
+            'read_users'=>$allowed,
+            'read_recipient_ids'=>$visibleReadRecipients];
     }
 
     public function redact(object $conversation,string $sender,string $id): array
@@ -253,7 +261,7 @@ final class MessagingEnvelopeService
     }
 
     public function report(object $conversation,string $reporter,?string $message,
-        string $reason): array
+        string $reason,?string $evidence=null): array
     {
         $this->access->assertConversation($conversation,$reporter);
         if($message!==null){
@@ -273,9 +281,11 @@ final class MessagingEnvelopeService
             'id'=>$id,'conversation_id'=>$conversation->id,
             'message_id'=>$message,'reporter_id'=>$reporter,
             'reason'=>$reason,'status'=>'pending','created_at'=>now(),
+            'evidence_shared'=>$evidence!==null,
+            'evidence_enc'=>$evidence===null?null:Crypt::encryptString($evidence),
         ]);
         return ['report_id'=>$id,'received'=>true,
-            'private_message_content_shared'=>false];
+            'private_message_content_shared'=>$evidence!==null];
     }
 
     public function prune(): int
