@@ -175,6 +175,8 @@ final class OrbitMessagingTest extends TestCase
         $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
             array_merge($payload,['text'=>'secret']))->assertUnprocessable();
         $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            array_merge($payload,['kind'=>'system']))->assertUnprocessable();
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
             $this->payload([$da],1))->assertStatus(409);
         $sent=$this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
             $payload)->assertCreated()->assertJsonPath('data.accepted',true)

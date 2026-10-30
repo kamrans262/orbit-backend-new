@@ -144,7 +144,7 @@ final class MessagingController extends Controller
             422,'Only opaque encrypted-envelope fields are accepted.');
         $input=$r->validate([
             'client_id'=>['required','uuid'],
-            'kind'=>['required',Rule::in(['text','emoji','image','video','voice','file','reaction','reply','system'])],
+            'kind'=>['required',Rule::in(['text','emoji','image','video','voice','file','reaction','reply'])],
             'protocol'=>['required','string','min:3','max:48','regex:/^[a-z0-9._-]+$/D'],
             'group_epoch'=>['required','integer','between:1,2147483647'],
             'envelopes'=>['required','array','min:1','max:128'],
