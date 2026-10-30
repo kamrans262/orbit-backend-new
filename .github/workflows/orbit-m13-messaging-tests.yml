@@ -9,6 +9,8 @@ on:
       - 'app/Modules/Media/Services/MediaPolicy.php'
       - 'config/orbit_messaging.php'
       - 'database/migrations/2026_10_30_000004_create_orbit_messaging.php'
+      - 'database/migrations/2026_10_31_000013_create_messaging_redaction_tombstones.php'
+      - 'routes/console.php'
       - 'tests/Feature/OrbitMessagingTest.php'
       - 'routes/api.php'
       - 'routes/admin.php'
@@ -68,6 +70,8 @@ jobs:
           php -l config/orbit_messaging.php
           php -l config/orbit_circle.php
           php -l database/migrations/2026_10_30_000004_create_orbit_messaging.php
+          php -l database/migrations/2026_10_31_000013_create_messaging_redaction_tombstones.php
+          php -l routes/console.php
           php -l app/Modules/Media/Http/Controllers/MediaController.php
           php -l app/Modules/Media/Services/MediaPolicy.php
           php -l routes/api.php
