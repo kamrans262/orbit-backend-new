@@ -328,6 +328,77 @@ final class OrbitMessagingTest extends TestCase
         $this->assertDatabaseCount('messaging_envelopes',0);
     }
 
+    public function test_user_shared_report_evidence_is_encrypted_and_moderator_only(): void
+    {
+        [$a,$ta,$da,$b,$tb,$db,$thread]=$this->setupDirect();
+        $msg=$this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            $this->payload([$da,$db]))->assertCreated()->json('data.id');
+        $evidence='Reporter selected this message as abusive.';
+        $endpoint='/api/v1/conversations/'.$thread.'/reports';
+        $data=[
+            'message_id'=>$msg,'reason'=>'abuse',
+            'share_evidence'=>true,'evidence_text'=>$evidence,
+        ];
+        $this->withToken($tb)->postJson($endpoint,$data)->assertUnprocessable();
+        $data['confirm_evidence_share']=true;
+        $report=$this->withToken($tb)->postJson($endpoint,$data)->assertCreated()
+            ->assertJsonPath('data.private_message_content_shared',true)
+            ->assertDontSee($evidence)->json('data.report_id');
+        $row=DB::table('messaging_reports')->where('id',$report)->first();
+        $this->assertNotEquals($evidence,$row->evidence_enc);
+        $this->assertTrue((bool)$row->evidence_shared);
+        $role=AdminRole::create(['name'=>'Restricted evidence reviewer',
+            'permissions'=>['config.manage']]);
+        $admin=AdminUser::create([
+            'name'=>'Evidence reviewer','email'=>'evidence@example.test',
+            'password'=>'StrongPassword123!',
+            'totp_secret'=>(new Totp())->generateSecret(),'status'=>'active',
+        ]);
+        $admin->roles()->attach($role->id);
+        $this->actingAs($admin,'admin')->get('/admin/messaging')
+            ->assertOk()->assertDontSee($evidence);
+        $this->actingAs($admin,'admin')->post('/admin/messaging/reports/'.$report.'/evidence',
+            ['confirm'=>true])->assertForbidden();
+        $role->update(['permissions'=>['messages.moderate']]);
+        $this->actingAs($admin,'admin')->get('/admin/messaging/reports')
+            ->assertOk()->assertSee('User Messaging Reports')->assertDontSee($evidence);
+        $this->actingAs($admin,'admin')->post('/admin/messaging/reports/'.$report.'/evidence',
+            ['confirm'=>true])->assertOk()->assertSee($evidence);
+        $this->assertDatabaseHas('messaging_report_audits',[
+            'report_id'=>$report,'action'=>'view_user_evidence','admin_user_id'=>$admin->id,
+        ]);
+        $this->actingAs($admin,'admin')->post('/admin/messaging/reports/'.$report.'/action',
+            ['action'=>'reviewed'])->assertRedirect();
+        $this->assertDatabaseHas('messaging_reports',[
+            'id'=>$report,'status'=>'reviewed','reviewed_by'=>$admin->id,
+        ]);
+    }
+
+    public function test_envelope_pagination_prefereces_and_privacy_redaction(): void
+    {
+        [$a,$ta,$da,$b,$tb,$db,$thread]=$this->setupDirect();
+        for($i=0;$i<3;$i++){
+            $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+                $this->payload([$da,$db]))->assertCreated();
+        }
+        $page1=$this->withToken($tb)->getJson('/api/v1/conversations/'.$thread.
+            '/envelopes?limit=1')->assertOk()->assertJsonCount(1,'data.items')->json('data');
+        $this->assertNotNull($page1['next_cursor']);
+        $page2=$this->withToken($tb)->getJson('/api/v1/conversations/'.$thread.
+            '/envelopes?limit=1&cursor='.urlencode($page1['next_cursor']))
+            ->assertOk()->assertJsonCount(1,'data.items')->json('data');
+        $this->assertNotEquals($page1['items'][0]['message_id'],
+            $page2['items'][0]['message_id']);
+        $this->withToken($tb)->putJson('/api/v1/conversations/'.$thread.'/preferences',[
+            'mute'=>true])->assertOk()->assertJsonPath('data.muted',true);
+        $this->withToken($tb)->putJson('/api/v1/conversations/'.$thread.'/preferences',[
+            'archive'=>true])->assertOk()->assertJsonPath('data.muted',true)
+            ->assertJsonPath('data.archived',true);
+        $this->privacy($b,'Nobody');
+        $this->withToken($tb)->getJson('/api/v1/conversations/'.$thread.'/envelopes')
+            ->assertNotFound();
+    }
+
     public function test_admin_rbac_and_aggregate_only_review(): void
     {
         [$a,$ta,$da,$b,$tb,$db,$thread]=$this->setupDirect();
