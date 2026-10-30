@@ -78,29 +78,32 @@ final class MessagingKeyService
             if($rotation) {
                 DB::table('messaging_one_time_prekeys')->where('device_id',$device)->delete();
             }
-            $remaining=DB::table('messaging_one_time_prekeys')
-                ->where('device_id',$device)->whereNull('claimed_at')->count();
-            abort_if($remaining+count($new)>(int)config('orbit_messaging.max_one_time_prekeys',100),
-                422,'Too many unclaimed device prekeys.');
+            $toCreate=[];
             foreach($new as $item) {
                 $existing=DB::table('messaging_one_time_prekeys')
                     ->where('device_id',$device)->where('key_id',$item['key_id'])
                     ->lockForUpdate()->first();
                 // An ambiguous HTTPS response may cause the same signed
                 // public prekey registration to be retried after a recipient
-                // has claimed it. Identical key bytes are an idempotent
-                // no-op: NEVER unset claimed_at or publish the key again.
-                // A reused key ID with DIFFERENT bytes is rejected.
+                // has claimed it. Identical bytes are a no-op: never reset
+                // claimed_at, and never count this existing key as NEW.
                 abort_if($existing &&
                     $existing->public_x25519!==$item['public_x25519'],409,
                     'One-time prekey ID is already bound to another key.');
-                if(!$existing){
-                    DB::table('messaging_one_time_prekeys')->insert([
-                        'id'=>(string)Str::uuid(),'device_id'=>$device,
-                        'key_id'=>$item['key_id'],'public_x25519'=>$item['public_x25519'],
-                        'created_at'=>now(),
-                    ]);
-                }
+                if(!$existing)$toCreate[]=$item;
+            }
+            $remaining=DB::table('messaging_one_time_prekeys')
+                ->where('device_id',$device)->whereNull('claimed_at')->count();
+            abort_if($remaining+count($toCreate)>
+                (int)config('orbit_messaging.max_one_time_prekeys',100),
+                422,'Too many unclaimed device prekeys.');
+            foreach($toCreate as $item){
+                DB::table('messaging_one_time_prekeys')->insert([
+                    'id'=>(string)Str::uuid(),'device_id'=>$device,
+                    'key_id'=>$item['key_id'],
+                    'public_x25519'=>$item['public_x25519'],
+                    'created_at'=>now(),
+                ]);
             }
             return ['device_id'=>$device,'key_version'=>$version,
                 'fingerprint'=>hash('sha256',$input['identity_ed25519']),
