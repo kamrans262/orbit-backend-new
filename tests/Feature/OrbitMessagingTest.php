@@ -424,6 +424,9 @@ final class OrbitMessagingTest extends TestCase
         $this->withToken($tb)->putJson('/api/v1/conversations/'.$thread.'/preferences',[
             'archive'=>true])->assertOk()->assertJsonPath('data.muted',true)
             ->assertJsonPath('data.archived',true);
+        $this->withToken($tb)->postJson('/api/v1/conversations/'.$thread.'/leave')
+            ->assertOk()->assertJsonPath('data.archived',true)
+            ->assertJsonPath('data.left_circle',false);
         $this->privacy($b,'Nobody');
         $this->withToken($tb)->getJson('/api/v1/conversations/'.$thread.'/envelopes')
             ->assertNotFound();

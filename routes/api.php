@@ -87,6 +87,8 @@ Route::prefix('v1')->group(function (): void {
             [MessagingController::class,'receipts'])->whereUuid('conversation')->whereUuid('message');
         Route::delete('/conversations/{conversation}/messages/{message}',
             [MessagingController::class,'redact'])->whereUuid('conversation')->whereUuid('message');
+        Route::post('/conversations/{conversation}/leave',[MessagingController::class,'leave'])
+            ->whereUuid('conversation');
         Route::put('/conversations/{conversation}/preferences',[MessagingController::class,'preferences'])
             ->whereUuid('conversation');
         Route::post('/conversations/{conversation}/reports',[MessagingController::class,'report'])

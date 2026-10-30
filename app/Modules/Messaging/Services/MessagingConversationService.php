@@ -148,9 +148,11 @@ final class MessagingConversationService
                         DB::table('circle_members')->where('user_id',$viewer)
                             ->whereNull('removed_at')->select('circle_id'));
                 });
-            })->orderByDesc('c.updated_at')->limit(50)->get(['c.*']);
+            })->orderByDesc('c.updated_at')->orderByDesc('c.id')
+                ->offset(($page-1)*25)->limit(26)->get(['c.*']);
         $items=[];
-        foreach($records as $row){
+        $hasMore=$records->count()>25;
+        foreach($records->take(25) as $row){
             try{$this->access->assertConversation($row,$viewer);}
             catch(\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface){continue;}
             $record=$this->present($row,$viewer);
@@ -166,9 +168,7 @@ final class MessagingConversationService
             $record['archived']=$prefs?->archived_at!==null;
             $items[]=$record;
         }
-        $offset=($page-1)*20;
-        return ['items'=>array_slice($items,$offset,20),'page'=>$page,
-            'has_more'=>count($items)>$offset+20];
+        return ['items'=>$items,'page'=>$page,'has_more'=>$hasMore];
     }
 
     public function preferences(object $row,string $viewer,array $prefs): array

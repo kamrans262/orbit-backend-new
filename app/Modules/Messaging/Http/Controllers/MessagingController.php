@@ -102,7 +102,7 @@ final class MessagingController extends Controller
     public function listing(Request $r): JsonResponse
     {
         $session=$this->session($r);
-        $p=$r->validate(['page'=>['sometimes','integer','between:1,3']]);
+        $p=$r->validate(['page'=>['sometimes','integer','between:1,100']]);
         return $this->response($this->conversations->listing(
             (string)$session->user_id,(string)$session->device_id,(int)($p['page']??1)));
     }
@@ -282,6 +282,23 @@ final class MessagingController extends Controller
         return $this->response($this->messages->redact($thread,
             (string)$session->user_id,$message));
     }
+    public function leave(Request $r,string $conversation): JsonResponse
+    {
+        $session=$this->session($r);
+        $user=(string)$session->user_id;
+        $thread=$this->conversations->get($conversation,$user);
+        if($thread->kind==='circle') {
+            // Leaving a Circle chat invokes M5 Circle leave rather than
+            // simulating departure while retaining access to the group.
+            app(\App\Modules\Circle\Services\CircleService::class)
+                ->leave((string)$thread->circle_id,$user);
+            return $this->response(['left'=>true,'left_circle'=>true]);
+        }
+        $this->conversations->preferences($thread,$user,['archive'=>true]);
+        return $this->response(['left'=>true,'archived'=>true,
+            'left_circle'=>false]);
+    }
+
     public function preferences(Request $r,string $conversation): JsonResponse
     {
         $session=$this->session($r);
