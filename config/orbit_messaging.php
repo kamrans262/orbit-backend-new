@@ -6,10 +6,15 @@ return [
     'https_enabled'=>true,
     // Safety barrier: only a separately security-reviewed client release may
     // enable encrypted sends. HTTPS mailbox availability is not E2EE proof.
-    'e2ee_client_verified'=>false,
-    // No production protocol is approved yet. Keep empty until a vetted
-    // Double Ratchet + sender-key build passes cross-device acceptance.
-    'approved_protocols'=>[],
+    // Default stays OFF until mobile source review, signed native library
+    // and two-device Olm/Megolm rotation tests pass. Never set for debugging.
+    'e2ee_client_verified'=>(bool) env(
+        'ORBIT_MESSAGING_E2EE_CLIENT_VERIFIED',false),
+    // Only the pinned audited vodozemac protocol can be advertised. The
+    // verified flag is necessary but not sufficient: the mobile app also
+    // has its compile-time source release certification barrier.
+    'approved_protocols'=>(bool)env('ORBIT_MESSAGING_E2EE_CLIENT_VERIFIED',false)
+        ?['orbit-m13-olm-megolm-v1']:[],
     'realtime_enabled'=>false, // Hostinger Redis/WSS not provisioned
     'push_enabled'=>false, // Firebase credentials not provisioned
     'typing_http_enabled'=>true,
