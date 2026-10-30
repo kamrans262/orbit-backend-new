@@ -1,0 +1,316 @@
+<?php
+namespace Tests\Feature;
+
+use App\Models\AdminRole;
+use App\Models\AdminUser;
+use App\Models\OrbitDevice;
+use App\Models\OrbitUser;
+use App\Modules\Config\Services\Totp;
+use App\Modules\Identity\Services\TokenService;
+use App\Modules\Messaging\Services\MessagingEnvelopeService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Tests\TestCase;
+
+final class OrbitMessagingTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config([
+            'orbit_messaging.enabled'=>true,
+            'orbit_messaging.per_minute_send'=>200,
+            'orbit_circle.enabled'=>true,
+            'orbit_circle.consumer_enabled.message'=>true,
+        ]);
+    }
+    private function person(string $label): array
+    {
+        $u=OrbitUser::create(['display_name'=>$label,'username'=>strtolower(Str::random(12)),
+            'status'=>'active']);
+        $d=OrbitDevice::create([
+            'user_id'=>$u->id,'device_public_id'=>(string)Str::uuid(),
+            'name'=>'Test phone','platform'=>'android',
+            'public_key'=>base64_encode(random_bytes(32)),
+            'trust_state'=>'trusted','attestation_state'=>'verified','approved_at'=>now(),
+        ]);
+        $token=app(TokenService::class)->issue($u,$d,null)['access_token'];
+        return [$u,$token,$d];
+    }
+    private function privacy(OrbitUser $u,string $kind,bool $read=false): void
+    {
+        DB::table('orbit_user_preferences')->updateOrInsert(['user_id'=>$u->id],[
+            'privacy'=>json_encode(['message_eligibility'=>$kind,
+                'read_receipts_enabled'=>$read]),
+            'notifications'=>'{}','created_at'=>now(),'updated_at'=>now(),
+        ]);
+    }
+    private function friend(OrbitUser $a,OrbitUser $b): void
+    {
+        $ids=[$a->id,$b->id];sort($ids,SORT_STRING);
+        DB::table('friendships')->insert(['user_low_id'=>$ids[0],
+            'user_high_id'=>$ids[1],'created_at'=>now()]);
+    }
+    private function keys(string $token,OrbitDevice $device,bool $oneTime=false): array
+    {
+        $pair=sodium_crypto_sign_keypair();
+        $public=base64_encode(sodium_crypto_sign_publickey($pair));
+        $secret=sodium_crypto_sign_secretkey($pair);
+        $prekey=random_bytes(32);
+        $signature=sodium_crypto_sign_detached(
+            'orbit-m13-signed-prekey-v1|'.$device->id.'|7|'.$prekey,$secret);
+        $payload=[
+            'identity_ed25519'=>$public,'signed_prekey_x25519'=>base64_encode($prekey),
+            'signed_prekey_signature'=>base64_encode($signature),
+            'signed_prekey_id'=>7,
+            'one_time_prekeys'=>$oneTime?[
+                ['key_id'=>101,'public_x25519'=>base64_encode(random_bytes(32))]
+            ]:[],
+        ];
+        $this->withToken($token)->postJson('/api/v1/me/messaging/keys',$payload)
+            ->assertOk()->assertJsonPath('data.registered',true);
+        return $payload;
+    }
+    private function envelope(OrbitDevice $device): array
+    {
+        return [
+            'device_id'=>$device->id,
+            'ciphertext_b64'=>base64_encode(random_bytes(64)),
+            'protocol_header_b64'=>base64_encode(random_bytes(64)),
+        ];
+    }
+    private function payload(array $devices,int $epoch=1,?string $client=null): array
+    {
+        return [
+            'client_id'=>$client??(string)Str::uuid(),
+            'kind'=>'text','protocol'=>'ratchet.v1','group_epoch'=>$epoch,
+            'envelopes'=>array_map(fn($d)=>$this->envelope($d),$devices),
+        ];
+    }
+    private function setupDirect(): array
+    {
+        [$a,$ta,$da]=$this->person('A');
+        [$b,$tb,$db]=$this->person('B');
+        $this->privacy($a,'Friends');
+        $this->privacy($b,'Friends');
+        $this->friend($a,$b);
+        $this->keys($ta,$da);
+        $this->keys($tb,$db);
+        $thread=$this->withToken($ta)->postJson('/api/v1/conversations/direct',[
+            'recipient_id'=>$b->id])->assertOk()->json('data.id');
+        return [$a,$ta,$da,$b,$tb,$db,$thread];
+    }
+
+    public function test_capabilities_trusted_session_and_no_fake_e2ee_or_push(): void
+    {
+        $this->getJson('/api/v1/messaging/capabilities')->assertUnauthorized();
+        [$a,$ta,$device]=$this->person('A');
+        $this->withToken($ta)->getJson('/api/v1/messaging/capabilities')->assertOk()
+            ->assertJsonPath('data.available',true)
+            ->assertJsonPath('data.https_ciphertext_mailbox',true)
+            ->assertJsonPath('data.e2ee_client_verified',false)
+            ->assertJsonPath('data.realtime_available',false)
+            ->assertJsonPath('data.push_available',false);
+        config(['orbit_messaging.enabled'=>false]);
+        $this->withToken($ta)->getJson('/api/v1/messaging/capabilities')
+            ->assertJsonPath('data.available',false);
+        $this->withToken($ta)->postJson('/api/v1/me/messaging/keys',[])
+            ->assertStatus(503);
+        config(['orbit_messaging.enabled'=>true]);
+        $device->update(['trust_state'=>'pending']);
+        $this->withToken($ta)->getJson('/api/v1/me/messaging/devices')->assertForbidden();
+    }
+
+    public function test_signed_device_key_bundle_is_verified_and_private_keys_are_rejected(): void
+    {
+        [$a,$ta,$da]=$this->person('A');
+        $pair=sodium_crypto_sign_keypair();
+        $invalid=[
+            'identity_ed25519'=>base64_encode(sodium_crypto_sign_publickey($pair)),
+            'signed_prekey_x25519'=>base64_encode(random_bytes(32)),
+            'signed_prekey_signature'=>base64_encode(random_bytes(64)),
+            'signed_prekey_id'=>7,
+        ];
+        $this->withToken($ta)->postJson('/api/v1/me/messaging/keys',$invalid)
+            ->assertUnprocessable();
+        $good=$this->keys($ta,$da,true);
+        $this->withToken($ta)->getJson('/api/v1/me/messaging/devices')
+            ->assertJsonPath('data.devices.0.messaging_keys_registered',true);
+        $this->withToken($ta)->postJson('/api/v1/me/messaging/keys',
+            array_merge($good,['private_key'=>'secret']))->assertOk();
+        // No private key is persisted, returned or exposed in admin operations.
+        $this->assertDatabaseCount('messaging_device_keys',1);
+        $this->assertDatabaseCount('messaging_one_time_prekeys',1);
+    }
+
+    public function test_key_directory_requires_current_mutual_privacy_and_claims_once(): void
+    {
+        [$a,$ta,$da]=$this->person('A');
+        [$b,$tb,$db]=$this->person('B');
+        $this->keys($tb,$db,true);
+        $this->withToken($ta)->getJson('/api/v1/messaging/keys/'.$b->id)->assertNotFound();
+        $this->privacy($a,'Friends');$this->privacy($b,'Friends');$this->friend($a,$b);
+        $this->withToken($ta)->getJson('/api/v1/messaging/keys/'.$b->id)->assertOk()
+            ->assertJsonPath('data.devices.0.one_time_prekey.key_id',101);
+        $this->withToken($ta)->getJson('/api/v1/messaging/keys/'.$b->id)->assertOk()
+            ->assertJsonPath('data.devices.0.one_time_prekey',null);
+        DB::table('blocks')->insert([
+            'blocker_id'=>$b->id,'blocked_id'=>$a->id,'created_at'=>now(),
+        ]);
+        $this->withToken($ta)->getJson('/api/v1/messaging/keys/'.$b->id)->assertNotFound();
+        $this->withToken($tb)->getJson('/api/v1/messaging/keys/'.$a->id)->assertNotFound();
+    }
+
+    public function test_direct_send_requires_exact_device_envelopes_is_idempotent_and_never_plaintext(): void
+    {
+        [$a,$ta,$da,$b,$tb,$db,$thread]=$this->setupDirect();
+        $same=$this->withToken($ta)->postJson('/api/v1/conversations/direct',[
+            'recipient_id'=>$b->id])->assertOk()->json('data.id');
+        $this->assertSame($thread,$same);
+        $client=(string)Str::uuid();
+        $payload=$this->payload([$da,$db],1,$client);
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            array_merge($payload,['text'=>'secret']))->assertUnprocessable();
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            $this->payload([$da],1))->assertStatus(409);
+        $sent=$this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            $payload)->assertCreated()->assertJsonPath('data.accepted',true)
+            ->assertJsonPath('data.delivered',false)->json('data.id');
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            $payload)->assertOk()->assertJsonPath('data.id',$sent);
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            $this->payload([$da,$db],1,$client))->assertStatus(409);
+        $this->assertDatabaseCount('messaging_messages',1);
+        $this->assertDatabaseCount('messaging_envelopes',2);
+        $this->withToken($tb)->getJson('/api/v1/conversations/'.$thread.'/envelopes')
+            ->assertOk()->assertJsonCount(1,'data.items')
+            ->assertJsonPath('data.ciphertext_only',true)->assertDontSee('secret');
+    }
+
+    public function test_receipts_require_specific_recipient_device_dwell_and_privacy(): void
+    {
+        [$a,$ta,$da,$b,$tb,$db,$thread]=$this->setupDirect();
+        $msg=$this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            $this->payload([$da,$db]))->assertCreated()->json('data.id');
+        $env=DB::table('messaging_envelopes')->where('message_id',$msg)
+            ->where('recipient_device_id',$db->id)->value('id');
+        $this->withToken($ta)->postJson(
+            '/api/v1/conversations/'.$thread.'/envelopes/'.$env.'/delivered',[])
+            ->assertNotFound();
+        $this->withToken($tb)->postJson(
+            '/api/v1/conversations/'.$thread.'/envelopes/'.$env.'/delivered',[])
+            ->assertOk()->assertJsonPath('data.delivered',true);
+        $this->withToken($tb)->postJson(
+            '/api/v1/conversations/'.$thread.'/envelopes/'.$env.'/read',
+            ['visible_dwell_ms'=>600])->assertForbidden();
+        $this->privacy($b,'Friends',true);
+        $this->withToken($tb)->postJson(
+            '/api/v1/conversations/'.$thread.'/envelopes/'.$env.'/read',
+            ['visible_dwell_ms'=>599])->assertUnprocessable();
+        $this->withToken($tb)->postJson(
+            '/api/v1/conversations/'.$thread.'/envelopes/'.$env.'/read',
+            ['visible_dwell_ms'=>600])->assertOk()->assertJsonPath('data.read',true);
+        $this->withToken($ta)->getJson(
+            '/api/v1/conversations/'.$thread.'/messages/'.$msg.'/receipts')
+            ->assertOk()->assertJsonPath('data.delivered_devices',1)
+            ->assertJsonPath('data.read_users',1);
+    }
+
+    public function test_circle_requires_individual_consent_and_rotates_epoch_after_membership_change(): void
+    {
+        [$a,$ta,$da]=$this->person('A');
+        [$b,$tb,$db]=$this->person('B');
+        $id=(string)Str::uuid();
+        DB::table('circles')->insert(['id'=>$id,'owner_id'=>$a->id,
+            'name'=>'Private Circle','revision'=>1,'created_at'=>now(),'updated_at'=>now()]);
+        foreach([$a,$b] as $user)DB::table('circle_members')->insert([
+            'circle_id'=>$id,'user_id'=>$user->id,'role'=>'member',
+            'joined_at'=>now(),'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->privacy($a,'My Circle');$this->privacy($b,'My Circle');
+        $this->keys($ta,$da);$this->keys($tb,$db);
+        $this->withToken($ta)->getJson('/api/v1/circles/'.$id.'/messages')
+            ->assertNotFound();
+        foreach([[$ta,$a],[$tb,$b]] as [$token,$member]){
+            $this->withToken($token)->putJson('/api/v1/me/messaging/circles/'.$id.'/consent',
+                ['enabled'=>true,'confirm'=>true])->assertOk()
+                ->assertJsonPath('data.enabled',true);
+        }
+        $info=$this->withToken($ta)->getJson('/api/v1/circles/'.$id.'/messages/conversation')
+            ->assertOk()->json('data');
+        $msg=$this->withToken($ta)->postJson('/api/v1/circles/'.$id.'/messages',
+            $this->payload([$da,$db],$info['group_epoch']))->assertCreated()
+            ->json('data.id');
+        $this->withToken($tb)->getJson('/api/v1/circles/'.$id.'/messages')
+            ->assertOk()->assertJsonCount(1,'data.items');
+        DB::table('circle_members')->where('circle_id',$id)
+            ->where('user_id',$b->id)->update(['role'=>'restricted']);
+        $this->withToken($ta)->postJson('/api/v1/circles/'.$id.'/messages',
+            $this->payload([$da,$db],$info['group_epoch']))->assertStatus(409);
+        $this->withToken($tb)->getJson('/api/v1/circles/'.$id.'/messages')
+            ->assertNotFound();
+        $this->withToken($tb)->getJson('/api/v1/conversations/'.$info['id'].'/envelopes')
+            ->assertNotFound();
+        $this->withToken($ta)->putJson('/api/v1/me/messaging/circles/'.$id.'/consent',
+            ['enabled'=>false])->assertOk()->assertJsonPath('data.enabled',false);
+        $this->withToken($ta)->getJson('/api/v1/circles/'.$id.'/messages')
+            ->assertNotFound();
+    }
+
+    public function test_sync_reporting_redaction_and_revoked_device_are_private(): void
+    {
+        [$a,$ta,$da,$b,$tb,$db,$thread]=$this->setupDirect();
+        $msg=$this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            $this->payload([$da,$db]))->assertCreated()->json('data.id');
+        $envelope=DB::table('messaging_envelopes')->where('message_id',$msg)
+            ->where('recipient_device_id',$db->id)->value('id');
+        $this->withToken($tb)->postJson('/api/v1/conversations/'.$thread.'/sync',[
+            'delivered_envelope_ids'=>[$envelope]])->assertOk()->assertJsonCount(1,'data.items');
+        $this->withToken($tb)->postJson('/api/v1/conversations/'.$thread.'/reports',[
+            'message_id'=>$msg,'reason'=>'spam',
+            'evidence_text'=>'Do not silently send plaintext!',
+        ])->assertUnprocessable();
+        $this->withToken($tb)->postJson('/api/v1/conversations/'.$thread.'/reports',[
+            'message_id'=>$msg,'reason'=>'spam',
+        ])->assertCreated()->assertJsonPath('data.private_message_content_shared',false);
+        $this->withToken($tb)->deleteJson('/api/v1/conversations/'.$thread.'/messages/'.$msg)
+            ->assertNotFound();
+        $this->withToken($ta)->deleteJson('/api/v1/conversations/'.$thread.'/messages/'.$msg)
+            ->assertOk()->assertJsonPath('data.redacted',true);
+        $this->assertDatabaseCount('messaging_envelopes',0);
+        $db->update(['revoked_at'=>now()]);
+        $this->withToken($tb)->getJson('/api/v1/conversations/'.$thread.'/envelopes')
+            ->assertForbidden();
+    }
+
+    public function test_prune_removes_expired_ciphertext_without_exposing_content(): void
+    {
+        [$a,$ta,$da,$b,$tb,$db,$thread]=$this->setupDirect();
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            $this->payload([$da,$db]))->assertCreated();
+        DB::table('messaging_messages')->update(['expires_at'=>now()->subMinute()]);
+        $this->assertSame(1,app(MessagingEnvelopeService::class)->prune());
+        $this->assertDatabaseCount('messaging_messages',0);
+        $this->assertDatabaseCount('messaging_envelopes',0);
+    }
+
+    public function test_admin_rbac_and_aggregate_only_review(): void
+    {
+        [$a,$ta,$da,$b,$tb,$db,$thread]=$this->setupDirect();
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/envelopes',
+            $this->payload([$da,$db]))->assertCreated();
+        $role=AdminRole::create(['name'=>'Messaging operations','permissions'=>['config.manage']]);
+        $admin=AdminUser::create(['name'=>'Ops','email'=>'messaging@example.test',
+            'password'=>'StrongPassword123!',
+            'totp_secret'=>(new Totp())->generateSecret(),'status'=>'active']);
+        $admin->roles()->attach($role->id);
+        $this->actingAs($admin,'admin')->get('/admin/messaging')->assertOk()
+            ->assertSee('Messaging Operations')->assertSee('Accepted encrypted sends')
+            ->assertDontSee('ciphertext_b64')->assertDontSee('secret_key');
+        $role->update(['permissions'=>['users.read']]);
+        $this->actingAs($admin,'admin')->get('/admin/messaging')->assertForbidden();
+    }
+}
