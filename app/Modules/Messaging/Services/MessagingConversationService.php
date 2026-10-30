@@ -15,7 +15,9 @@ final class MessagingConversationService
             && \Illuminate\Support\Facades\Schema::hasTable('messaging_conversations')
             && \Illuminate\Support\Facades\Schema::hasTable('messaging_envelopes')
             && \Illuminate\Support\Facades\Schema::hasTable('messaging_device_keys')
-            && \Illuminate\Support\Facades\Schema::hasTable('messaging_redactions');
+            && \Illuminate\Support\Facades\Schema::hasTable('messaging_redactions')
+            && \Illuminate\Support\Facades\Schema::hasTable('messaging_sender_key_batches')
+            && \Illuminate\Support\Facades\Schema::hasTable('messaging_sender_key_envelopes');
     }
     public function assertReady(): void
     {
