@@ -14,7 +14,8 @@ final class MessagingConversationService
         return config('orbit_messaging.enabled')===true
             && \Illuminate\Support\Facades\Schema::hasTable('messaging_conversations')
             && \Illuminate\Support\Facades\Schema::hasTable('messaging_envelopes')
-            && \Illuminate\Support\Facades\Schema::hasTable('messaging_device_keys');
+            && \Illuminate\Support\Facades\Schema::hasTable('messaging_device_keys')
+            && \Illuminate\Support\Facades\Schema::hasTable('messaging_redactions');
     }
     public function assertReady(): void
     {
