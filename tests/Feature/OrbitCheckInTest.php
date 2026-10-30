@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\AdminRole;
+use App\Models\AdminUser;
 use App\Models\OrbitDevice;
 use App\Models\OrbitUser;
 use App\Modules\Identity\Services\TokenService;
+use App\Modules\Config\Services\Totp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -212,5 +215,37 @@ final class OrbitCheckInTest extends TestCase
             'enabled'=>false,
         ])->assertOk()->assertJsonPath('data.enabled',false);
         $this->withToken($tb)->getJson('/api/v1/check-ins/'.$id)->assertNotFound();
+    }
+
+    public function test_new_friend_never_inherits_historical_audience_without_new_owner_revision(): void
+    {
+        [$a,$ta]=$this->person('A');
+        [$b,$tb]=$this->person('B');
+        $this->privacy($a,'Friends');
+        $id=$this->withToken($ta)->postJson('/api/v1/check-ins',
+            $this->payload([['type'=>'friends']]))->assertCreated()->json('data.id');
+        $this->friend($a,$b);
+        $this->withToken($tb)->getJson('/api/v1/check-ins/'.$id)->assertNotFound();
+        $this->withToken($ta)->putJson('/api/v1/check-ins/'.$id.'/audience',[
+            'expected_revision'=>1,'audience'=>[['type'=>'friends']],
+        ])->assertOk()->assertJsonPath('data.audience_revision',2);
+        $this->withToken($tb)->getJson('/api/v1/check-ins/'.$id)->assertOk();
+    }
+
+    public function test_check_in_operations_is_role_gated_and_discloses_no_private_data(): void
+    {
+        $role=AdminRole::create(['name'=>'Check-In operator','permissions'=>['config.manage']]);
+        $admin=AdminUser::create([
+            'name'=>'Operations','email'=>'checkin-operator@example.test',
+            'password'=>'StrongPassword123!','totp_secret'=>(new Totp())->generateSecret(),
+            'status'=>'active',
+        ]);
+        $admin->roles()->attach($role->id);
+        $this->actingAs($admin,'admin')->get('/admin/check-in')->assertOk()
+            ->assertSee('Check-In Operations')->assertSee('Accepted Check-Ins')
+            ->assertSee('Rejected publishing requests')
+            ->assertDontSee('recipient_user_id')->assertDontSee('place_ref');
+        $role->update(['permissions'=>['users.read']]);
+        $this->actingAs($admin,'admin')->get('/admin/check-in')->assertForbidden();
     }
 }
