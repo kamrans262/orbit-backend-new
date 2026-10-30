@@ -62,7 +62,11 @@ final class MessagingEnvelopeService
         if($old){
             abort_unless(hash_equals((string)$old->payload_hash,$hash),409,
                 'Encrypted message request ID conflict.');
-            $this->access->assertConversation($conversation,$sender);
+            $current=$this->conversations->refreshEpoch($conversation);
+            abort_unless((int)$current->group_epoch===
+                (int)$payload['group_epoch'],409,
+                'Message epoch was revoked; old ciphertext cannot be resent.');
+            $this->access->assertConversation($current,$sender);
             abort_unless($old->conversation_id===$conversation->id,409,'Message request ID conflict.');
             return [$this->present($old),false];
         }
@@ -78,6 +82,20 @@ final class MessagingEnvelopeService
             $this->access->assertConversation($row,$sender);
             abort_unless((int)$payload['group_epoch']===(int)$row->group_epoch,
                 409,'Conversation key epoch changed; rotate group sender key.');
+            if($row->kind==='circle' &&
+                $payload['protocol']==='orbit-m13-olm-megolm-v1'){
+                // Before accepting a Megolm ciphertext, the server must have
+                // durably stored the sender's new Olm-wrapped group key for
+                // the exact current Circle epoch and trusted device roster.
+                // The server does NOT and cannot decrypt that sender key.
+                abort_unless(DB::table('messaging_sender_key_batches')
+                    ->where('conversation_id',$row->id)
+                    ->where('sender_device_id',$device)
+                    ->where('group_epoch',$row->group_epoch)
+                    ->where('protocol',$payload['protocol'])
+                    ->exists(),409,
+                    'Current Circle sender key must be distributed first.');
+            }
             $recipients=$this->access->recipients($row,$sender);
             // Each authorized recipient device AND all sender devices need a
             // separate opaque envelope. One own copy supports local history
