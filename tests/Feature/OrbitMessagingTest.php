@@ -274,6 +274,13 @@ final class OrbitMessagingTest extends TestCase
         $msg=$this->withToken($ta)->postJson('/api/v1/circles/'.$id.'/messages',
             $this->payload([$da,$db],$info['group_epoch']))->assertCreated()
             ->json('data.id');
+        // Global Ghost Mode suppresses typing but must not block ciphertext.
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$info['id'].'/typing',[
+            'active'=>true,
+        ])->assertForbidden();
+        $this->withToken($ta)->putJson('/api/v1/me/messaging/circles/'.$id.'/typing',[
+            'enabled'=>false,
+        ])->assertOk()->assertJsonPath('data.message_consent_unchanged',true);
         $this->withToken($tb)->getJson('/api/v1/circles/'.$id.'/messages')
             ->assertOk()->assertJsonCount(1,'data.items');
         DB::table('circle_members')->where('circle_id',$id)
@@ -326,6 +333,29 @@ final class OrbitMessagingTest extends TestCase
         $this->assertSame(1,app(MessagingEnvelopeService::class)->prune());
         $this->assertDatabaseCount('messaging_messages',0);
         $this->assertDatabaseCount('messaging_envelopes',0);
+    }
+
+    public function test_https_typing_is_ephemeral_throttled_and_permission_checked(): void
+    {
+        [$a,$ta,$da,$b,$tb,$db,$thread]=$this->setupDirect();
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/typing',[
+            'active'=>true,
+        ])->assertOk()->assertJsonPath('data.accepted',true)
+            ->assertJsonPath('data.expires_in',5);
+        $this->withToken($tb)->getJson('/api/v1/conversations/'.$thread.'/typing')
+            ->assertOk()->assertJsonPath('data.typing_user_ids.0',$a->id)
+            ->assertJsonPath('data.transport','foreground_https');
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/typing',[
+            'active'=>true,
+        ])->assertOk()->assertJsonPath('data.accepted',false);
+        $this->withToken($ta)->postJson('/api/v1/conversations/'.$thread.'/typing',[
+            'active'=>false,
+        ])->assertOk()->assertJsonPath('data.expires_in',0);
+        $this->withToken($tb)->getJson('/api/v1/conversations/'.$thread.'/typing')
+            ->assertOk()->assertJsonCount(0,'data.typing_user_ids');
+        $this->privacy($a,'Nobody');
+        $this->withToken($tb)->getJson('/api/v1/conversations/'.$thread.'/typing')
+            ->assertNotFound();
     }
 
     public function test_user_shared_report_evidence_is_encrypted_and_moderator_only(): void
