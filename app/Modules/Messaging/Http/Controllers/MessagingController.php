@@ -100,11 +100,13 @@ final class MessagingController extends Controller
         $this->conversations->assertReady();
         $options=$r->validate([
             'claim_one_time_prekey'=>['sometimes','boolean'],
+            'device_id'=>['sometimes','uuid'],
         ]);
         $claim=!array_key_exists('claim_one_time_prekey',$options)
             || (bool)$options['claim_one_time_prekey'];
         return $this->response($this->keys->discover(
-            (string)$session->user_id,$recipient,$claim));
+            (string)$session->user_id,$recipient,$claim,
+            $options['device_id']??null));
     }
 
     public function listing(Request $r): JsonResponse
