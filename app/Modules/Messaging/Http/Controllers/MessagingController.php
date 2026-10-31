@@ -41,7 +41,7 @@ final class MessagingController extends Controller
 
     public function capabilities(Request $r): JsonResponse
     {
-        $this->session($r);
+        $session=$this->session($r);
         return $this->response([
             'available'=>$this->conversations->ready(),
             'https_ciphertext_mailbox'=>$this->conversations->ready(),
@@ -50,6 +50,8 @@ final class MessagingController extends Controller
             'circle_enabled'=>$this->conversations->ready()
                 && config('orbit_circle.consumer_enabled.message')===true,
             'e2ee_client_verified'=>config('orbit_messaging.e2ee_client_verified')===true,
+            'can_send_messages'=>!app(\App\Modules\Messaging\Services\MessagingSendRestrictionService::class)
+                ->isRestricted((string)$session->user_id),
             'realtime_available'=>false,'push_available'=>false,
             'typing_http_available'=>app(\App\Modules\Messaging\Services\MessagingAdminControls::class)->typingEnabled(),
             'server_content_readable'=>false,
