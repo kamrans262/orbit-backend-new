@@ -64,8 +64,13 @@ final class AdminIdentityController extends Controller
         // The last ten identity security event types are sufficient for support;
         // never expose OTP challenges, codes, tokens or contact identifiers.
         $identityEvents = DB::table('orbit_identity_events')
-            ->where('user_id', $user->id)->orderByDesc('created_at')
-            ->limit(10)->get(['action', 'created_at']);
+            ->where('user_id', $user->id)
+            ->where(function ($q): void {
+                $q->where('action', 'like', 'auth.%')
+                  ->orWhere('action', 'like', 'device.%')
+                  ->orWhere('action', 'like', 'session.%');
+            })->orderByDesc('created_at')->limit(10)
+            ->get(['action', 'created_at']);
         // Support can inspect non-sensitive account metadata but never raw
         // notification/privacy values, precise location, or private bio.
         $preferences = DB::table('orbit_user_preferences')->where('user_id', $user->id)
@@ -120,6 +125,9 @@ final class AdminIdentityController extends Controller
         abort_unless($actor?->canPerform('users.manage'), 403);
         abort_unless($device->user_id === $user->id, 404);
         DB::transaction(function () use ($actor, $user, $device, $tokens, $data): void {
+            // Serialize revocations for this user so two concurrent requests
+            // cannot each revoke one of the final two trusted devices.
+            OrbitUser::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
             $target = OrbitDevice::query()->whereKey($device->id)
                 ->lockForUpdate()->firstOrFail();
             abort_unless($target->user_id === $user->id, 404);
