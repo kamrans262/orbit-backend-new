@@ -72,9 +72,11 @@ final class AdminMessagingController extends Controller
     public function settings(MessagingAdminControls $controls): Response
     {
         $audits=$controls->provisioned()
-            ?DB::table('messaging_admin_activity')
-                ->orderByDesc('id')->limit(35)
-                ->get(['action','details','created_at'])
+            ?DB::table('messaging_admin_activity as audit')
+                ->leftJoin('admin_users as actor','actor.id','=','audit.admin_user_id')
+                ->orderByDesc('audit.id')->limit(35)
+                ->get(['audit.action','audit.details','audit.created_at',
+                    'actor.name as actor_name'])
             :collect();
         return response()->view('orbit-admin.messaging-settings',[
             'ready'=>$controls->provisioned(),
@@ -160,9 +162,12 @@ final class AdminMessagingController extends Controller
             'created_at','reviewed_at','reviewed_by',
         ]);
         abort_unless($row,404,'Report unavailable.');
-        $history=DB::table('messaging_report_audits')->where('report_id',$report)
-            ->orderByDesc('created_at')->limit(35)
-            ->get(['action','created_at','admin_user_id']);
+        $history=DB::table('messaging_report_audits as audit')
+            ->leftJoin('admin_users as actor','actor.id','=','audit.admin_user_id')
+            ->where('audit.report_id',$report)
+            ->orderByDesc('audit.created_at')->limit(35)
+            ->get(['audit.action','audit.created_at',
+                'actor.name as actor_name']);
         return response()->view('orbit-admin.messaging-report-detail',[
             'report'=>$row,'history'=>$history,
             'note'=>$row->moderator_note_enc
