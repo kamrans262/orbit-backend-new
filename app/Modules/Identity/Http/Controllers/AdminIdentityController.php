@@ -59,6 +59,8 @@ final class AdminIdentityController extends Controller
             ->where('expires_at', '>', now())->groupBy('device_id')
             ->select('device_id')->selectRaw('COUNT(*) as active_sessions')
             ->pluck('active_sessions', 'device_id');
+        $trustedDevicesCount = OrbitDevice::query()->where('user_id', $user->id)
+            ->where('trust_state', 'trusted')->whereNull('revoked_at')->count();
         // The last ten identity security event types are sufficient for support;
         // never expose OTP challenges, codes, tokens or contact identifiers.
         $identityEvents = DB::table('orbit_identity_events')
@@ -78,6 +80,7 @@ final class AdminIdentityController extends Controller
             'deletionRecord' => $deletion,
             'activeSessionsByDevice' => $activeSessionsByDevice,
             'identityEvents' => $identityEvents,
+            'trustedDevicesCount' => $trustedDevicesCount,
         ])->header('Cache-Control', 'private, no-store');
     }
 
@@ -121,6 +124,16 @@ final class AdminIdentityController extends Controller
                 ->lockForUpdate()->firstOrFail();
             abort_unless($target->user_id === $user->id, 404);
             abort_if($target->revoked_at !== null, 409, 'Device already revoked.');
+            // The existing recovery flow requires an enrolled trusted
+            // device. Do not strand a user by revoking their final one.
+            if ($target->trust_state === 'trusted') {
+                $otherTrusted = OrbitDevice::query()->where('user_id', $user->id)
+                    ->where('id', '!=', $target->id)
+                    ->where('trust_state', 'trusted')->whereNull('revoked_at')
+                    ->exists();
+                abort_unless($otherTrusted, 409,
+                    'Cannot revoke the only trusted device. Use account suspension when necessary.');
+            }
             // This existing service revokes ALL sessions for the device and
             // triggers the established identity/presence integrity hooks.
             $tokens->revokeDevice($target, 'admin_revoke');
