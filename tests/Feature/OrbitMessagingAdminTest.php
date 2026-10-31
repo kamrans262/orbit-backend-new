@@ -6,6 +6,7 @@ use App\Models\AdminUser;
 use App\Models\OrbitUser;
 use App\Modules\Config\Services\Totp;
 use App\Modules\Messaging\Services\MessagingAdminControls;
+use App\Modules\Messaging\Services\MessagingSendRestrictionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -120,4 +121,45 @@ final class OrbitMessagingAdminTest extends TestCase
             'report_id'=>$reportId,'action'=>'view_user_evidence',
         ]);
     }
+    public function test_message_moderation_is_rbac_gated_scoped_and_audited(): void
+    {
+        $account=OrbitUser::create([
+            'display_name'=>'Restricted Member',
+            'username'=>'member_'.Str::random(8),'status'=>'active',
+        ]);
+        $operator=$this->admin(['config.manage'],'OperationsOnly');
+        $moderator=$this->admin(['messages.moderate'],'SafetyTeam');
+        $endpoint='/admin/messaging/restrictions/'.$account->id;
+        $this->actingAs($operator,'admin')
+            ->get('/admin/messaging/restrictions')->assertForbidden();
+        $this->actingAs($operator,'admin')
+            ->post($endpoint,['action'=>'suspend','duration'=>'24h',
+                'reason'=>'spam'])->assertForbidden();
+        $this->actingAs($moderator,'admin')
+            ->get('/admin/messaging/restrictions?query='.$account->id)
+            ->assertOk()->assertSee($account->id);
+        $this->actingAs($moderator,'admin')->post($endpoint,[
+            'action'=>'suspend','duration'=>'24h','reason'=>'spam',
+        ])->assertRedirect();
+        $policy=app(MessagingSendRestrictionService::class);
+        $this->assertTrue($policy->isRestricted($account->id));
+        $this->assertDatabaseHas('messaging_send_restrictions',[
+            'user_id'=>$account->id,'reason'=>'spam',
+        ]);
+        DB::table('messaging_send_restrictions')
+            ->where('user_id',$account->id)
+            ->update(['ends_at'=>now()->subMinute()]);
+        $this->assertFalse($policy->isRestricted($account->id));
+        $this->actingAs($moderator,'admin')->post($endpoint,[
+            'action'=>'restore',
+        ])->assertRedirect();
+        $this->assertDatabaseMissing('messaging_send_restrictions',[
+            'user_id'=>$account->id,
+        ]);
+        $this->assertDatabaseCount('messaging_send_restriction_audits',2);
+        $this->assertDatabaseHas('orbit_users',[
+            'id'=>$account->id,'status'=>'active',
+        ]);
+    }
+
 }
