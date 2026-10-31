@@ -56,11 +56,23 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
 
         Route::get('/messaging', [AdminMessagingController::class,'index'])
             ->middleware(RequireAdminPermission::class.':config.manage')->name('messaging.index');
+        Route::get('/messaging/settings',[AdminMessagingController::class,'settings'])
+            ->middleware(RequireAdminPermission::class.':config.manage')
+            ->name('messaging.settings');
+        Route::post('/messaging/settings',[AdminMessagingController::class,'saveSettings'])
+            ->middleware([RequireAdminPermission::class.':config.manage','throttle:8,1'])
+            ->name('messaging.settings.save');
+        Route::post('/messaging/maintenance/prune',[AdminMessagingController::class,'prune'])
+            ->middleware([RequireAdminPermission::class.':config.manage','throttle:2,1'])
+            ->name('messaging.maintenance.prune');
         Route::get('/messaging/reports',[AdminMessagingController::class,'reports'])
             ->middleware(RequireAdminPermission::class.':messages.moderate')->name('messaging.reports');
         Route::post('/messaging/reports/{report}/evidence',[AdminMessagingController::class,'evidence'])
             ->whereUuid('report')->middleware([RequireAdminPermission::class.':messages.moderate','throttle:10,1'])
             ->name('messaging.reports.evidence');
+        Route::get('/messaging/reports/{report}',[AdminMessagingController::class,'report'])
+            ->whereUuid('report')->middleware(RequireAdminPermission::class.':messages.moderate')
+            ->name('messaging.reports.show');
         Route::post('/messaging/reports/{report}/action',[AdminMessagingController::class,'action'])
             ->whereUuid('report')->middleware([RequireAdminPermission::class.':messages.moderate','throttle:10,1'])
             ->name('messaging.reports.action');
