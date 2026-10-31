@@ -56,6 +56,20 @@
     deleteForm?.reset();
     syncDelete();
   });
+  // Compact Module 2 device security confirmation. No new admin screen.
+  document.querySelectorAll('[data-open-device-revoke]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const dialog = document.getElementById('revoke-device-' + button.dataset.openDeviceRevoke);
+      if (dialog?.showModal) {
+        dialog.showModal();
+        dialog.querySelector('textarea[name="reason"]')?.focus();
+      }
+    });
+  });
+  document.querySelectorAll('.admin-confirm-dialog[id^="revoke-device-"]').forEach((dialog) => {
+    dialog.querySelector('[data-close-device-revoke]')?.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('close', () => dialog.querySelector('form')?.reset());
+  });
   const json = document.querySelector('textarea[name="value_json"]');
   json?.addEventListener('blur', () => {
     try { JSON.parse(json.value); json.setCustomValidity(''); }
