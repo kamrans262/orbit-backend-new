@@ -182,6 +182,8 @@ final class MessagingController extends Controller
                 422,'Sender-key envelope cannot include private key material.');
         }
         $thread=$this->conversations->get($conversation,(string)$session->user_id);
+        app(\App\Modules\Messaging\Services\MessagingSendRestrictionService::class)
+            ->assertMaySend((string)$session->user_id);
         [$result,$created]=$this->senderKeys->publish(
             $thread,(string)$session->user_id,(string)$session->device_id,
             $input);
@@ -290,6 +292,10 @@ final class MessagingController extends Controller
         $session=$this->session($r);
         abort_unless(app(\App\Modules\Messaging\Services\MessagingAdminControls::class)->typingEnabled(),503);
         $input=$r->validate(['active'=>['required','boolean']]);
+        if((bool)$input['active']){
+            app(\App\Modules\Messaging\Services\MessagingSendRestrictionService::class)
+                ->assertMaySend((string)$session->user_id);
+        }
         $thread=$this->conversations->get($conversation,(string)$session->user_id);
         return $this->response($this->typing->update(
             $thread,(string)$session->user_id,(bool)$input['active']));
