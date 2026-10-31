@@ -137,6 +137,61 @@ final class AdminMessagingController extends Controller
             ->with('status','Expired ciphertext maintenance completed and audited.');
     }
 
+    public function restrictions(Request $r,
+        \App\Modules\Messaging\Services\MessagingSendRestrictionService $policy): Response
+    {
+        abort_unless($policy->provisioned(),503,
+            'Messaging moderation migration is required.');
+        $input=$r->validate([
+            'query'=>['sometimes','nullable','string','max:60',
+                'regex:/^[a-zA-Z0-9_-]+$/'],
+        ]);
+        $search=trim((string)($input['query']??''));
+        $query=DB::table('orbit_users as u')
+            ->leftJoin('messaging_send_restrictions as restriction',
+                'restriction.user_id','=','u.id')
+            ->select('u.id','u.username','u.display_name','u.status',
+                'restriction.reason','restriction.ends_at');
+        if($search!==''){
+            $query->where(function($q)use($search):void {
+                $q->where('u.username','like',$search.'%');
+                if(Str::isUuid($search))$q->orWhere('u.id',$search);
+            });
+        }else{
+            // Default to sanctioned accounts; do not enumerate ordinary
+            // private-chat participants in a moderation operations view.
+            $query->whereNotNull('restriction.user_id');
+        }
+        $users=$query->orderBy('u.username')->paginate(20)->withQueryString();
+        $audit=DB::table('messaging_send_restriction_audits as a')
+            ->leftJoin('admin_users as actor',
+                'actor.id','=','a.admin_user_id')
+            ->orderByDesc('a.id')->limit(25)
+            ->get(['a.action','a.user_id','a.reason','a.ends_at',
+                'a.created_at','actor.name as actor_name']);
+        return response()->view('orbit-admin.messaging-restrictions',[
+            'users'=>$users,'search'=>$search,'audit'=>$audit,
+        ])->header('Cache-Control','private, no-store');
+    }
+
+    public function updateRestriction(Request $r,string $user,
+        \App\Modules\Messaging\Services\MessagingSendRestrictionService $policy): RedirectResponse
+    {
+        $input=$r->validate([
+            'action'=>['required',Rule::in(['suspend','restore'])],
+            'duration'=>['sometimes','required_if:action,suspend',
+                Rule::in(['1h','24h','7d','30d','indefinite'])],
+            'reason'=>['sometimes','required_if:action,suspend',
+                Rule::in(['spam','harassment','fraud','abuse','other'])],
+        ]);
+        $actor=auth()->guard('admin')->user();
+        abort_unless($actor,403);
+        $policy->update($user,$actor->id,$input);
+        return redirect()->route('orbit.admin.messaging.restrictions',[
+            'query'=>$user])->with('status',
+            'Messaging access updated; the action was audited.');
+    }
+
     public function reports(Request $r): Response
     {
         abort_unless(Schema::hasTable('messaging_reports'),503,'Messaging schema required.');
