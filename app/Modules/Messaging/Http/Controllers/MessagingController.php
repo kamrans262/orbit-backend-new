@@ -51,11 +51,11 @@ final class MessagingController extends Controller
                 && config('orbit_circle.consumer_enabled.message')===true,
             'e2ee_client_verified'=>config('orbit_messaging.e2ee_client_verified')===true,
             'realtime_available'=>false,'push_available'=>false,
-            'typing_http_available'=>config('orbit_messaging.typing_http_enabled')===true,
+            'typing_http_available'=>app(\App\Modules\Messaging\Services\MessagingAdminControls::class)->typingEnabled(),
             'server_content_readable'=>false,
             'delivery_transport'=>'foreground_https',
             'one_time_prekeys'=>true,'per_device_envelopes'=>true,
-            'message_retention_days'=>(int)config('orbit_messaging.undelivered_retention_days',30),
+            'message_retention_days'=>app(\App\Modules\Messaging\Services\MessagingAdminControls::class)->retentionDays(),
             'client_local_history_required'=>true,
         ]);
     }
@@ -264,7 +264,7 @@ final class MessagingController extends Controller
     public function typing(Request $r,string $conversation): JsonResponse
     {
         $session=$this->session($r);
-        abort_unless(config('orbit_messaging.typing_http_enabled')===true,503);
+        abort_unless(app(\App\Modules\Messaging\Services\MessagingAdminControls::class)->typingEnabled(),503);
         $input=$r->validate(['active'=>['required','boolean']]);
         $thread=$this->conversations->get($conversation,(string)$session->user_id);
         return $this->response($this->typing->update(
@@ -274,7 +274,7 @@ final class MessagingController extends Controller
     public function currentTyping(Request $r,string $conversation): JsonResponse
     {
         $session=$this->session($r);
-        abort_unless(config('orbit_messaging.typing_http_enabled')===true,503);
+        abort_unless(app(\App\Modules\Messaging\Services\MessagingAdminControls::class)->typingEnabled(),503);
         $thread=$this->conversations->get($conversation,(string)$session->user_id);
         return $this->response($this->typing->current(
             $thread,(string)$session->user_id));
