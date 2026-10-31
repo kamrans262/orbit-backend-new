@@ -66,7 +66,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/conversations/{conversation}/envelopes',[MessagingController::class,'envelopes'])
             ->whereUuid('conversation')->middleware(MessagingOperationalTelemetry::class);
         Route::post('/conversations/{conversation}/envelopes',[MessagingController::class,'send'])
-            ->whereUuid('conversation')->middleware(['throttle:50,1',MessagingOperationalTelemetry::class]);
+            ->whereUuid('conversation')->middleware(['throttle:140,1',MessagingOperationalTelemetry::class]);
         Route::get('/conversations/{conversation}/sent/{clientId}',
             [MessagingController::class,'publishedClientId'])
             ->whereUuid('conversation')->whereUuid('clientId')
@@ -117,7 +117,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/circles/{circle}/messages',[MessagingController::class,'circleEnvelopes'])
             ->whereUuid('circle')->middleware(MessagingOperationalTelemetry::class);
         Route::post('/circles/{circle}/messages',[MessagingController::class,'circleSend'])
-            ->whereUuid('circle')->middleware([MessagingOperationalTelemetry::class,'throttle:50,1']);
+            ->whereUuid('circle')->middleware([MessagingOperationalTelemetry::class,'throttle:140,1']);
 
         // Check-In: private, device-bound publication and authorized reading.
         Route::get('/check-ins/capabilities', [CheckInController::class,'capabilities']);
