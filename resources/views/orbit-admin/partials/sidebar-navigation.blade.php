@@ -7,7 +7,7 @@
   if ($navUser?->canPerform('config.manage')) {
     $navGroups[] = [
       'title' => 'Configurations', 'icon' => 'settings',
-      'patterns' => ['orbit.admin.dashboard','orbit.admin.flags.*','orbit.admin.config.*','orbit.admin.rollback','orbit.admin.home-dashboard.*','orbit.admin.presence.*','orbit.admin.location.*','orbit.admin.ping.*','orbit.admin.check-in.*','orbit.admin.messaging.*'],
+      'patterns' => ['orbit.admin.dashboard','orbit.admin.flags.*','orbit.admin.config.*','orbit.admin.rollback','orbit.admin.home-dashboard.*','orbit.admin.presence.*','orbit.admin.location.*','orbit.admin.ping.*','orbit.admin.check-in.*'],
       'children' => [
         ['title'=>'Overview','route'=>'orbit.admin.dashboard','patterns'=>['orbit.admin.dashboard']],
         ['title'=>'Feature Flags','route'=>'orbit.admin.flags.index','patterns'=>['orbit.admin.flags.*']],
@@ -22,11 +22,37 @@
           'patterns'=>['orbit.admin.location.*']],
         ['title'=>'Ping Operations','route'=>'orbit.admin.ping.index',
           'patterns'=>['orbit.admin.ping.*']],
-        ['title'=>'Messaging Operations','route'=>'orbit.admin.messaging.index',
-          'patterns'=>['orbit.admin.messaging.*']],
         ['title'=>'Check-In Operations','route'=>'orbit.admin.check-in.index',
           'patterns'=>['orbit.admin.check-in.*']],
       ],
+    ];
+  }
+
+  // Messaging is a first-class operations area, separate from general
+  // configurations. Permissions match the existing Laravel route guards.
+  $messagingChildren = [];
+  if ($navUser?->canPerform('config.manage')) {
+    $messagingChildren[] = [
+      'title'=>'Messaging Overview','route'=>'orbit.admin.messaging.index',
+      'patterns'=>['orbit.admin.messaging.index'],
+    ];
+    $messagingChildren[] = [
+      'title'=>'Operations & Settings','route'=>'orbit.admin.messaging.settings',
+      'patterns'=>['orbit.admin.messaging.settings','orbit.admin.messaging.settings.save',
+        'orbit.admin.messaging.maintenance.*'],
+    ];
+  }
+  if ($navUser?->canPerform('messages.moderate')) {
+    $messagingChildren[] = [
+      'title'=>'User Reports','route'=>'orbit.admin.messaging.reports',
+      'patterns'=>['orbit.admin.messaging.reports*'],
+    ];
+  }
+  if ($messagingChildren !== []) {
+    $navGroups[] = [
+      'title'=>'Messaging','icon'=>'messages',
+      'patterns'=>['orbit.admin.messaging.*'],
+      'children'=>$messagingChildren,
     ];
   }
 
