@@ -25,6 +25,10 @@ final class MessagingSendRestrictionService
 
     public function assertMaySend(string $user): void
     {
+        // Never silently bypass safety restrictions when an app release was
+        // deployed before its moderation tables were migrated.
+        abort_unless($this->provisioned(),503,
+            'Messaging moderation storage must be initialized first.');
         abort_if($this->isRestricted($user),403,
             'Messaging has been temporarily restricted for this account.');
     }
