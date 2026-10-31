@@ -65,6 +65,12 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
         Route::post('/messaging/maintenance/prune',[AdminMessagingController::class,'prune'])
             ->middleware([RequireAdminPermission::class.':config.manage','throttle:2,1'])
             ->name('messaging.maintenance.prune');
+        Route::get('/messaging/restrictions',[AdminMessagingController::class,'restrictions'])
+            ->middleware(RequireAdminPermission::class.':messages.moderate')
+            ->name('messaging.restrictions');
+        Route::post('/messaging/restrictions/{user}',[AdminMessagingController::class,'updateRestriction'])
+            ->whereUuid('user')->middleware([RequireAdminPermission::class.':messages.moderate','throttle:10,1'])
+            ->name('messaging.restrictions.update');
         Route::get('/messaging/reports',[AdminMessagingController::class,'reports'])
             ->middleware(RequireAdminPermission::class.':messages.moderate')->name('messaging.reports');
         Route::post('/messaging/reports/{report}/evidence',[AdminMessagingController::class,'evidence'])
