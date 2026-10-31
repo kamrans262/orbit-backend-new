@@ -38,6 +38,9 @@
 <div class="kv"><small>Reports waiting</small><strong>{{ $stats['aggregate_reports_pending'] }}</strong></div>
 <div class="kv"><small>Cases escalated</small><strong>{{ $stats['aggregate_reports_escalated'] }}</strong></div>
 <div class="kv"><small>Rejected requests, 24 hours</small><strong>{{ $stats['rejections_24h'] ?? 'Unavailable' }}</strong></div>
+@foreach($stats['message_kinds_24h'] as $kind=>$total)
+<div class="kv"><small>{{ ucfirst($kind) }} activity (24h)</small><strong>{{ $total }}</strong></div>
+@endforeach
 </div>
 @else
 <div class="admin-guidance">Messaging tables are not yet provisioned. Apply the existing messaging migrations before using live operations.</div>
