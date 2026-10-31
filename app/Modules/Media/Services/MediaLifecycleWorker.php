@@ -132,8 +132,7 @@ final class MediaLifecycleWorker
                     // Chat attachments are ciphertext-only and expire with
                     // the 30-day remote mailbox. Local E2EE text history is
                     // intentionally independent and stays on the device.
-                    'message'=>now()->addDays((int)config(
-                        'orbit_messaging.undelivered_retention_days',30)),
+                    'message'=>now()->addDays(app(\App\Modules\Messaging\Services\MessagingAdminControls::class)->retentionDays()),
                     default=>null,
                 };
                 DB::transaction(function()use($m,$u,$deadline,$variant):void {
