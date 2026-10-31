@@ -3,9 +3,11 @@
 namespace App\Modules\Identity\Http\Controllers;
 
 use App\Models\OrbitUser;
+use App\Models\OrbitDevice;
 use App\Models\OrbitSession;
 use App\Models\AdminUser;
 use App\Modules\Identity\Services\DeleteOrbitUser;
+use App\Modules\Identity\Services\TokenService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -18,6 +20,7 @@ final class AdminIdentityController extends Controller
         $filters = $request->validate([
             'query' => ['nullable', 'string', 'max:60', 'regex:/^[A-Za-z0-9_-]+$/D'],
             'status' => ['nullable', 'in:active,suspended'],
+            'device_status' => ['nullable', 'in:pending,trusted,revoked'],
         ]);
         $users = OrbitUser::query()->withCount(['identities','devices','sessions']);
         if (!empty($filters['query'])) {
@@ -30,6 +33,16 @@ final class AdminIdentityController extends Controller
         if (!empty($filters['status'])) {
             $users->where('status', $filters['status']);
         }
+        if (!empty($filters['device_status'])) {
+            $deviceStatus = $filters['device_status'];
+            $users->whereHas('devices', function ($q) use ($deviceStatus): void {
+                if ($deviceStatus === 'revoked') {
+                    $q->whereNotNull('revoked_at');
+                } else {
+                    $q->where('trust_state', $deviceStatus)->whereNull('revoked_at');
+                }
+            });
+        }
         $users = $users->orderByDesc('created_at')->paginate(25)->withQueryString();
         return view('orbit-admin.users', [
             'users' => $users,
@@ -41,6 +54,16 @@ final class AdminIdentityController extends Controller
     public function show(OrbitUser $user)
     {
         $user->load(['identities','devices']);
+        $activeSessionsByDevice = OrbitSession::query()
+            ->where('user_id', $user->id)->whereNull('revoked_at')
+            ->where('expires_at', '>', now())->groupBy('device_id')
+            ->select('device_id')->selectRaw('COUNT(*) as active_sessions')
+            ->pluck('active_sessions', 'device_id');
+        // The last ten identity security event types are sufficient for support;
+        // never expose OTP challenges, codes, tokens or contact identifiers.
+        $identityEvents = DB::table('orbit_identity_events')
+            ->where('user_id', $user->id)->orderByDesc('created_at')
+            ->limit(10)->get(['action', 'created_at']);
         // Support can inspect non-sensitive account metadata but never raw
         // notification/privacy values, precise location, or private bio.
         $preferences = DB::table('orbit_user_preferences')->where('user_id', $user->id)
@@ -53,6 +76,8 @@ final class AdminIdentityController extends Controller
         return response()->view('orbit-admin.user-detail', [
             'orbitUser' => $user, 'preferenceRecord' => $preferences,
             'deletionRecord' => $deletion,
+            'activeSessionsByDevice' => $activeSessionsByDevice,
+            'identityEvents' => $identityEvents,
         ])->header('Cache-Control', 'private, no-store');
     }
 
@@ -78,6 +103,46 @@ final class AdminIdentityController extends Controller
         );
         return redirect()->route('orbit.admin.users.index')
             ->with('status', 'User account and current database-linked devices, sessions and identities permanently deleted. Audit entry recorded.');
+    }
+
+    /** A safety operator may revoke compromised devices, never approve new ones. */
+    public function revokeDevice(Request $request, OrbitUser $user,
+        OrbitDevice $device, TokenService $tokens)
+    {
+        $data = $request->validate([
+            'confirmation' => ['required', 'in:REVOKE'],
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+        $actor = auth()->guard('admin')->user();
+        abort_unless($actor?->canPerform('users.manage'), 403);
+        abort_unless($device->user_id === $user->id, 404);
+        DB::transaction(function () use ($actor, $user, $device, $tokens, $data): void {
+            $target = OrbitDevice::query()->whereKey($device->id)
+                ->lockForUpdate()->firstOrFail();
+            abort_unless($target->user_id === $user->id, 404);
+            abort_if($target->revoked_at !== null, 409, 'Device already revoked.');
+            // This existing service revokes ALL sessions for the device and
+            // triggers the established identity/presence integrity hooks.
+            $tokens->revokeDevice($target, 'admin_revoke');
+            $last = DB::table('admin_audit_log')->orderByDesc('created_at')
+                ->lockForUpdate()->first();
+            $prev = $last?->event_hash;
+            $beforeHash = hash('sha256', $target->trust_state);
+            $afterHash = hash('sha256', 'revoked');
+            $eventHash = hash('sha256', implode('|', [$prev ?? '', $actor->id,
+                'devices.revoke', $target->id, $beforeHash, $afterHash, $data['reason']]));
+            DB::table('admin_audit_log')->insert([
+                'id' => (string) Str::uuid7(), 'actor_id' => $actor->id,
+                'action' => 'devices.revoke', 'target' => 'device:'.$target->id,
+                'reason' => $data['reason'], 'ip_address' => request()->ip(),
+                'request_id' => request()->header('X-Request-ID', (string) Str::uuid7()),
+                'before_hash' => $beforeHash, 'after_hash' => $afterHash,
+                'previous_hash' => $prev, 'event_hash' => $eventHash,
+                'created_at' => now(),
+            ]);
+        });
+        return redirect()->route('orbit.admin.users.show', $user)
+            ->with('status', 'Device and its active sessions revoked. Action audited.');
     }
 
     public function updateStatus(Request $request, OrbitUser $user)
