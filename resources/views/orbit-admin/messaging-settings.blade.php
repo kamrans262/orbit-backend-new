@@ -17,7 +17,7 @@
 @else
 <form method="post" action="{{ route('orbit.admin.messaging.settings.save') }}">
 @csrf
-<div class="admin-kv">
+<div class="admin-kv form-grid">
 <div class="kv"><label for="retention_days">Server ciphertext retention (1–30 days)</label>
 <input id="retention_days" name="retention_days" type="number" min="1" max="30" required value="{{ old('retention_days',$values['retention_days']) }}" /></div>
 <div class="kv"><label for="send_rate_per_minute">Send limit per trusted device (5–120/min)</label>
@@ -28,7 +28,7 @@
 <option value="0" @selected((string)old('typing_http_enabled',$values['typing_http_enabled']?'1':'0')==='0')>Disabled</option>
 </select></div>
 </div>
-<button type="submit" class="btn btn-primary">Save Messaging Settings</button>
+<button type="submit" class="btn primary">Save Messaging Settings</button>
 </form>
 @endif
 <p>Messages and attachments sent under earlier deadlines keep their existing expiry. New retention applies to new ciphertext only; local encrypted history remains device-owned.</p>
@@ -49,7 +49,7 @@
 <form method="post" action="{{ route('orbit.admin.messaging.maintenance.prune') }}">
 @csrf
 <input type="hidden" name="confirm" value="PRUNE" />
-<button type="submit" class="btn btn-secondary">Run Expired Ciphertext Cleanup</button>
+<button type="submit" class="btn secondary">Run Expired Ciphertext Cleanup</button>
 </form>
 @endif
 </section>
