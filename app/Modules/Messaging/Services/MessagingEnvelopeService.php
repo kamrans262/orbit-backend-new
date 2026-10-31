@@ -335,10 +335,15 @@ final class MessagingEnvelopeService
                     ->where('e.message_id',$message)->where('d.user_id',$reporter)->exists();
             abort_unless($visible,404,'Message unavailable.');
         }
+        $subject=$message===null?null:
+            DB::table('messaging_messages')->where('id',$message)
+                ->where('conversation_id',$conversation->id)
+                ->value('sender_id');
         $id=(string)Str::uuid();
         DB::table('messaging_reports')->insert([
             'id'=>$id,'conversation_id'=>$conversation->id,
             'message_id'=>$message,'reporter_id'=>$reporter,
+            'subject_user_id'=>$subject,
             'reason'=>$reason,'status'=>'pending','created_at'=>now(),
             'evidence_shared'=>$evidence!==null,
             'evidence_enc'=>$evidence===null?null:Crypt::encryptString($evidence),
