@@ -82,6 +82,7 @@ final class MessagingEnvelopeService
             abort_unless($row,404,'Conversation unavailable.');
             $row=$this->conversations->refreshEpoch($row);
             $this->access->assertConversation($row,$sender);
+            app(MessagingSendRestrictionService::class)->assertMaySend($sender);
             abort_unless((int)$payload['group_epoch']===(int)$row->group_epoch,
                 409,'Conversation key epoch changed; rotate group sender key.');
             if($row->kind==='circle' &&
