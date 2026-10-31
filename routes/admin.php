@@ -99,6 +99,9 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
             ->middleware(RequireAdminPermission::class.':users.read')->name('users.show');
         Route::post('/users/{user}/status', [AdminIdentityController::class, 'updateStatus'])
             ->middleware(RequireAdminPermission::class.':users.manage')->name('users.status');
+        Route::post('/users/{user}/devices/{device}/revoke', [AdminIdentityController::class, 'revokeDevice'])
+            ->whereUuid('device')->middleware([RequireAdminPermission::class.':users.manage', 'throttle:6,1'])
+            ->name('users.devices.revoke');
         Route::delete('/users/{user}', [AdminIdentityController::class, 'destroy'])
             ->middleware([RequireAdminPermission::class.':users.delete', 'throttle:6,1'])->name('users.destroy');
     });
