@@ -3,6 +3,7 @@ namespace App\Modules\Messaging\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Messaging\Services\MessagingAdminControls;
+use App\Modules\Messaging\Services\MessagingConversationService;
 use App\Modules\Messaging\Services\MessagingEnvelopeService;
 use App\Modules\Messaging\Services\MessagingSenderKeyService;
 use Illuminate\Http\Request;
@@ -108,7 +109,7 @@ final class AdminMessagingController extends Controller
         $r->validate(['confirm'=>['required','in:PRUNE']]);
         $actor=auth()->guard('admin')->user();
         abort_unless($actor,403);
-        abort_unless(Schema::hasTable('messaging_messages')
+        abort_unless(app(MessagingConversationService::class)->ready()
             && $controls->provisioned(),503,'Messaging schema required.');
         $expired=0;
         $senderKeys=0;
