@@ -218,7 +218,7 @@ final class AdminMessagingController extends Controller
     {
         $row=DB::table('messaging_reports')->where('id',$report)->first([
             'id','reason','status','evidence_shared','moderator_note_enc',
-            'created_at','reviewed_at','reviewed_by',
+            'subject_user_id','created_at','reviewed_at','reviewed_by',
         ]);
         abort_unless($row,404,'Report unavailable.');
         $history=DB::table('messaging_report_audits as audit')
