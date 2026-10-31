@@ -41,6 +41,10 @@ final class AdminMessagingController extends Controller
                     ->where('d.trust_state','trusted')->whereNull('d.revoked_at')->count(),
                 'accepted_messages_24h'=>DB::table('messaging_messages')
                     ->where('created_at','>=',$since)->count(),
+                'message_kinds_24h'=>DB::table('messaging_messages')
+                    ->where('created_at','>=',$since)->select('kind')
+                    ->selectRaw('COUNT(*) as total')->groupBy('kind')
+                    ->pluck('total','kind')->all(),
                 'pending_envelopes'=>DB::table('messaging_envelopes as e')
                     ->join('messaging_messages as m','m.id','=','e.message_id')
                     ->whereNull('e.delivered_at')->where('m.expires_at','>',now())->count(),
