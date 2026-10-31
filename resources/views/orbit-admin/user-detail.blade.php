@@ -11,9 +11,60 @@
 @elseif($identity->provider==='phone')••••{{ substr($identity->phone_e164 ?? '', -4) }}
 @else••••••@endif
 </td></tr>@endforeach</tbody></table></div></section>
-<section class="panel"><div class="panel-head"><div><h2>Registered devices</h2><p>Device approval remains a consumer-side trusted-device action.</p></div></div><div class="table-scroll"><table><thead><tr><th>DEVICE</th><th>PLATFORM</th><th>TRUST</th><th>REVOKED</th></tr></thead><tbody>
-@foreach($orbitUser->devices as $device)<tr><td>{{ $device->name }}</td><td>{{ $device->platform }}</td><td>{{ $device->trust_state }}</td><td>{{ $device->revoked_at ? 'Yes' : 'No' }}</td></tr>@endforeach
-</tbody></table></div></section></div>
+<section class="panel">
+  <div class="panel-head"><div><h2>Registered devices</h2><p>Review account devices and revoke compromised access. Approval remains with trusted Orbit devices.</p></div></div>
+  <div class="table-scroll"><table><thead><tr><th>DEVICE</th><th>ACCESS</th><th>SESSIONS</th><th>ACTION</th></tr></thead><tbody>
+    @forelse($orbitUser->devices as $device)
+    @php
+      $revoked = $device->revoked_at !== null;
+      $onlyTrusted = !$revoked && $device->trust_state === 'trusted' && $trustedDevicesCount < 2;
+    @endphp
+    <tr>
+      <td><strong>{{ $device->name }}</strong><small>{{ strtoupper($device->platform) }} · Last seen {{ $device->last_seen_at?->format('Y-m-d H:i') ?: 'Never' }} UTC</small></td>
+      <td><span class="pill {{ $revoked ? 'neutral' : ($device->trust_state === 'trusted' ? 'success' : 'neutral') }}">{{ $revoked ? 'Revoked' : ucfirst($device->trust_state) }}</span></td>
+      <td>{{ $activeSessionsByDevice[$device->id] ?? 0 }} active</td>
+      <td>
+        @if($revoked)<span class="subtle">No access</span>
+        @elseif($onlyTrusted)<span class="subtle" title="Protects against irreversible device lockout">Only trusted device</span>
+        @elseif(auth()->guard('admin')->user()->canPerform('users.manage'))
+          <button type="button" class="btn secondary" data-open-device-revoke="{{ $device->id }}" aria-label="Revoke {{ $device->name }}">Revoke</button>
+        @else<span class="subtle">View only</span>@endif
+      </td>
+    </tr>
+    @empty<tr><td colspan="4">No registered devices.</td></tr>@endforelse
+  </tbody></table></div>
+  <div style="padding:18px 22px 20px">
+    <h3>Recent sign-in and device activity</h3>
+    <div class="table-scroll"><table><thead><tr><th>EVENT</th><th>DATE (UTC)</th></tr></thead><tbody>
+      @forelse($identityEvents as $event)
+        <tr><td>{{ ucwords(str_replace(['.', '_'], ' ', $event->action)) }}</td><td>{{ $event->created_at }}</td></tr>
+      @empty<tr><td colspan="2">No recent authentication events.</td></tr>@endforelse
+    </tbody></table></div>
+  </div>
+</section></div>
+@if(auth()->guard('admin')->user()->canPerform('users.manage'))
+  @foreach($orbitUser->devices as $device)
+    @if(!$device->revoked_at && !($device->trust_state === 'trusted' && $trustedDevicesCount < 2))
+    <dialog class="admin-confirm-dialog" id="revoke-device-{{ $device->id }}" aria-labelledby="revoke-device-title-{{ $device->id }}">
+      <form method="post" action="{{ route('orbit.admin.users.devices.revoke',['user'=>$orbitUser,'device'=>$device]) }}">
+        @csrf
+        <h2 id="revoke-device-title-{{ $device->id }}">Revoke device access?</h2>
+        <p>This will revoke <strong>{{ $device->name }}</strong> and sign out its active sessions. This device cannot be reapproved from the admin panel.</p>
+        <label>Reason (10–500 characters)
+          <textarea name="reason" rows="3" minlength="10" maxlength="500" required placeholder="Security incident or support ticket reference"></textarea>
+        </label>
+        <label>Type <strong>REVOKE</strong> to confirm
+          <input name="confirmation" type="text" required pattern="REVOKE" maxlength="6" autocomplete="off" spellcheck="false" placeholder="REVOKE">
+        </label>
+        <div class="confirm-actions">
+          <button type="button" class="btn secondary" data-close-device-revoke>Cancel</button>
+          <button type="submit" class="btn danger">Revoke device</button>
+        </div>
+      </form>
+    </dialog>
+    @endif
+  @endforeach
+@endif
 <div class="two-col" style="margin-top:20px">
   <section class="panel">
     <div class="panel-head"><div><p class="eyebrow">PROFILE / ACCOUNT INFORMATION</p><h2>Account profile metadata</h2>
