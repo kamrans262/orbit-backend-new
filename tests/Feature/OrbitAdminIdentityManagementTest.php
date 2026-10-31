@@ -50,6 +50,7 @@ final class OrbitAdminIdentityManagementTest extends TestCase
                 'platform' => 'android',
                 'trust_state' => 'trusted',
                 'approved_at' => now(),
+                'public_key' => base64_encode(random_bytes(32)),
             ]);
         }
         $session = OrbitSession::create([
