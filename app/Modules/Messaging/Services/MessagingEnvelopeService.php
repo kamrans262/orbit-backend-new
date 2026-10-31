@@ -71,6 +71,7 @@ final class MessagingEnvelopeService
             abort_unless($old->conversation_id===$conversation->id,409,'Message request ID conflict.');
             return [$this->present($old),false];
         }
+        app(MessagingSendRestrictionService::class)->assertMaySend($sender);
         abort_if(RateLimiter::tooManyAttempts($key,
             app(MessagingAdminControls::class)->sendLimit()),
             429,'Too many messages; please try again.');
