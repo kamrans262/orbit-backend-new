@@ -72,7 +72,7 @@ final class MessagingEnvelopeService
             return [$this->present($old),false];
         }
         abort_if(RateLimiter::tooManyAttempts($key,
-            max(1,(int)config('orbit_messaging.per_minute_send',45))),
+            app(MessagingAdminControls::class)->sendLimit()),
             429,'Too many messages; please try again.');
         $result=DB::transaction(function() use($conversation,$sender,$device,
             $payload,$sorted,$hash):array {
@@ -141,8 +141,7 @@ final class MessagingEnvelopeService
             }
             $id=(string)Str::uuid();
             $now=now();
-            $expiry=$now->copy()->addDays((int)config(
-                'orbit_messaging.undelivered_retention_days',30));
+            $expiry=$now->copy()->addDays(app(MessagingAdminControls::class)->retentionDays());
             DB::table('messaging_messages')->insert([
                 'id'=>$id,'conversation_id'=>$row->id,'sender_id'=>$sender,
                 'sender_device_id'=>$device,'client_id'=>$payload['client_id'],
