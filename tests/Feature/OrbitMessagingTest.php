@@ -302,6 +302,24 @@ final class OrbitMessagingTest extends TestCase
             ->assertJsonPath('data.ciphertext_only',true)->assertDontSee('secret');
     }
 
+    public function test_stickers_are_opaque_per_device_envelopes_and_not_plaintext(): void
+    {
+        [$sender,$senderToken,$senderDevice,$friend,$friendToken,$friendDevice,$thread]
+            =$this->setupDirect();
+        $payload=$this->payload([$senderDevice,$friendDevice]);
+        $payload['kind']='sticker';
+        $this->withToken($senderToken)->postJson(
+            '/api/v1/conversations/'.$thread.'/envelopes',$payload
+        )->assertCreated()->assertJsonPath('data.kind','sticker');
+        $this->withToken($friendToken)->getJson(
+            '/api/v1/conversations/'.$thread.'/envelopes'
+        )->assertOk()->assertJsonPath('data.items.0.kind','sticker')
+            ->assertJsonPath('data.ciphertext_only',true)
+            ->assertDontSee('orbit_m13_sticker')
+            ->assertDontSee('orbit-heart');
+        $this->assertDatabaseHas('messaging_messages',['kind'=>'sticker']);
+    }
+
     public function test_approved_recipient_without_keys_is_not_silently_dropped(): void
     {
         [$a,$ta,$da]=$this->person('A');
