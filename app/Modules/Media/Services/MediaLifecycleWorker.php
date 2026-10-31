@@ -129,6 +129,11 @@ final class MediaLifecycleWorker
                 $deadline=match($m->purpose) {
                     'moment'=>now()->addDays((int)config('orbit_media.moments_purge_days')),
                     'sos'=>now()->addDays((int)config('orbit_media.sos_retention_days')),
+                    // Chat attachments are ciphertext-only and expire with
+                    // the 30-day remote mailbox. Local E2EE text history is
+                    // intentionally independent and stays on the device.
+                    'message'=>now()->addDays((int)config(
+                        'orbit_messaging.undelivered_retention_days',30)),
                     default=>null,
                 };
                 DB::transaction(function()use($m,$u,$deadline,$variant):void {
