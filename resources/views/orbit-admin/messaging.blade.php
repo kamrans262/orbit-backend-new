@@ -43,9 +43,9 @@
 <div class="admin-guidance">Messaging tables are not yet provisioned. Apply the existing messaging migrations before using live operations.</div>
 @endif
 <p><strong>Privacy boundary:</strong> Admin access cannot decrypt direct or Circle messages. Moderators may read only evidence a reporting user deliberately submits and every evidence access is audited.</p>
-<p><a href="{{ route('orbit.admin.messaging.settings') }}" class="btn btn-secondary">Manage delivery and retention settings</a>
+<p><a href="{{ route('orbit.admin.messaging.settings') }}" class="btn secondary">Manage delivery and retention settings</a>
 @if(auth()->guard('admin')->user()?->canPerform('messages.moderate'))
-<a href="{{ route('orbit.admin.messaging.reports') }}" class="btn btn-primary">Open moderation queue</a>
+<a href="{{ route('orbit.admin.messaging.reports') }}" class="btn primary">Open moderation queue</a>
 @endif
 </p>
 @if(!$controlsReady)
