@@ -63,6 +63,7 @@
 <div class="admin-kv">
 <div class="kv"><small>Action</small><strong>{{ $audit->action }}</strong></div>
 <div class="kv"><small>When</small><strong>{{ $audit->created_at }}</strong></div>
+<div class="kv"><small>Administrator</small><strong>{{ $audit->actor_name ?? 'Former administrator' }}</strong></div>
 </div>
 @endforeach
 @endif
