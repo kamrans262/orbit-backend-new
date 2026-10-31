@@ -60,7 +60,8 @@ final class AdminIdentityController extends Controller
             ->select('device_id')->selectRaw('COUNT(*) as active_sessions')
             ->pluck('active_sessions', 'device_id');
         $trustedDevicesCount = OrbitDevice::query()->where('user_id', $user->id)
-            ->where('trust_state', 'trusted')->whereNull('revoked_at')->count();
+            ->where('trust_state', 'trusted')->whereNull('revoked_at')
+            ->whereNotNull('public_key')->count();
         // The last ten identity security event types are sufficient for support;
         // never expose OTP challenges, codes, tokens or contact identifiers.
         $identityEvents = DB::table('orbit_identity_events')
@@ -138,7 +139,7 @@ final class AdminIdentityController extends Controller
                 $otherTrusted = OrbitDevice::query()->where('user_id', $user->id)
                     ->where('id', '!=', $target->id)
                     ->where('trust_state', 'trusted')->whereNull('revoked_at')
-                    ->exists();
+                    ->whereNotNull('public_key')->exists();
                 abort_unless($otherTrusted, 409,
                     'Cannot revoke the only trusted device. Use account suspension when necessary.');
             }
