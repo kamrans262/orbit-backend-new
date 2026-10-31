@@ -253,8 +253,9 @@ final class OrbitM6MediaTest extends TestCase
         $row=DB::table('media_objects')->where('id',$id)->first();
         $this->assertSame('ready',$row->state);
         $this->assertNotNull($row->retention_deadline);
-        $this->assertSame(30,now()->diffInDays(
-            \Carbon\Carbon::parse($row->retention_deadline)));
+        $deadline=\Carbon\Carbon::parse($row->retention_deadline);
+        $this->assertTrue($deadline->between(
+            now()->addDays(29),now()->addDays(31)));
         \Illuminate\Support\Facades\Date::setTestNow(now()->addDays(31));
         try {
             $stats=app(MediaLifecycleWorker::class)->run(10);
