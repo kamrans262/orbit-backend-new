@@ -17,11 +17,11 @@ return new class extends Migration {
         });
         Schema::create('messaging_admin_activity', function(Blueprint $t): void {
             $t->bigIncrements('id');
-            $t->uuid('admin_user_id');
+            $t->uuid('admin_user_id')->nullable();
             $t->string('action',64);
             $t->json('details')->nullable(); // Whitelisted aggregate operations only.
             $t->timestamp('created_at')->useCurrent()->index();
-            $t->foreign('admin_user_id')->references('id')->on('admin_users')->cascadeOnDelete();
+            $t->foreign('admin_user_id')->references('id')->on('admin_users')->nullOnDelete();
         });
         Schema::table('messaging_reports', function(Blueprint $t): void {
             $t->text('moderator_note_enc')->nullable();
