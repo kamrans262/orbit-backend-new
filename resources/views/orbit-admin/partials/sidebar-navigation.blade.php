@@ -47,6 +47,11 @@
       'title'=>'User Reports','route'=>'orbit.admin.messaging.reports',
       'patterns'=>['orbit.admin.messaging.reports*'],
     ];
+    $messagingChildren[] = [
+      'title'=>'Account Messaging Access',
+      'route'=>'orbit.admin.messaging.restrictions',
+      'patterns'=>['orbit.admin.messaging.restrictions*'],
+    ];
   }
   if ($messagingChildren !== []) {
     $navGroups[] = [
