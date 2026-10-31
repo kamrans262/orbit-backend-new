@@ -242,6 +242,32 @@ final class OrbitM6MediaTest extends TestCase
         $this->withToken($ta)->getJson('/api/v1/media/'.$media['media_id'])->assertNotFound();
         $this->assertDatabaseHas('media_objects',['id'=>$media['media_id'],'state'=>'ready']);
     }
+    public function test_chat_ciphertext_media_expires_at_messaging_mailbox_boundary():void
+    {
+        config()->set('orbit_messaging.undelivered_retention_days',30);
+        [$user,$token]=$this->person('message');
+        $media=$this->init($token,null,['purpose'=>'message']);
+        $id=$media['media_id'];
+        $this->finalize($token,$media['upload_id']);
+        $this->assertSame(1,app(MediaLifecycleWorker::class)->run(10)['verified']);
+        $row=DB::table('media_objects')->where('id',$id)->first();
+        $this->assertSame('ready',$row->state);
+        $this->assertNotNull($row->retention_deadline);
+        $this->assertSame(30,now()->diffInDays(
+            \Carbon\Carbon::parse($row->retention_deadline)));
+        \Illuminate\Support\Facades\Date::setTestNow(now()->addDays(31));
+        try {
+            $stats=app(MediaLifecycleWorker::class)->run(10);
+            $this->assertSame(1,$stats['queued_deletions']);
+            $this->assertSame(1,$stats['purged']);
+            $this->assertDatabaseHas('media_objects',[
+                'id'=>$id,'state'=>'deleted',
+            ]);
+        }finally{
+            \Illuminate\Support\Facades\Date::setTestNow();
+        }
+    }
+
     public function test_admin_read_only_permission_and_no_secret_fields():void
     {
         $role=AdminRole::create(['name'=>'M6 media auditor','permissions'=>['media.read']]);
