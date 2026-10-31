@@ -17,6 +17,11 @@
 <div class="kv"><small>Submitted</small><strong>{{ $report->created_at }}</strong></div>
 <div class="kv"><small>Last resolution</small><strong>{{ $report->reviewed_at ?? 'Not yet reviewed' }}</strong></div>
 <div class="kv"><small>Reporter evidence</small><strong>{{ $report->evidence_shared ? 'Explicitly shared' : 'Not shared' }}</strong></div>
+@if($report->subject_user_id)
+<div class="kv"><small>Account explicitly reported</small>
+<strong><a href="{{ route('orbit.admin.messaging.restrictions',['query'=>$report->subject_user_id]) }}">
+Review messaging access for reported account</a></strong></div>
+@endif
 </div>
 @if($note)
 <p><strong>Restricted moderator note</strong></p>
