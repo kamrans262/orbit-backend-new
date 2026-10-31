@@ -26,7 +26,7 @@
 <form method="post" action="{{ route('orbit.admin.messaging.reports.evidence',$report->id) }}">
 @csrf
 <input type="hidden" name="confirm" value="1" />
-<button type="submit" class="btn btn-secondary">View Explicit User-Shared Evidence (Audited)</button>
+<button type="submit" class="btn secondary">View Explicit User-Shared Evidence (Audited)</button>
 </form>
 @endif
 </section>
@@ -35,7 +35,7 @@
 <p>A case action updates the report record and creates an administrator audit entry. Notes are encrypted at rest.</p></div></div>
 <form method="post" action="{{ route('orbit.admin.messaging.reports.action',$report->id) }}">
 @csrf
-<div class="admin-kv">
+<div class="admin-kv form-grid">
 <div class="kv"><label for="moderation_action">Case decision</label>
 <select id="moderation_action" name="action" required>
 <option value="reviewed">Mark reviewed</option>
@@ -45,7 +45,7 @@
 <div class="kv"><label for="moderator_note">Internal moderator note (optional)</label>
 <textarea id="moderator_note" name="note" rows="3" maxlength="1000" placeholder="Private operational notes — do not paste unrelated private chats.">{{ old('note') }}</textarea></div>
 </div>
-<button type="submit" class="btn btn-primary">Save Case Decision</button>
+<button type="submit" class="btn primary">Save Case Decision</button>
 </form>
 </section>
 <section class="panel">
@@ -59,6 +59,6 @@
 </div>
 @endforeach
 @endif
-<p><a class="btn btn-secondary" href="{{ route('orbit.admin.messaging.reports') }}">Back to Reports</a></p>
+<p><a class="btn secondary" href="{{ route('orbit.admin.messaging.reports') }}">Back to Reports</a></p>
 </section>
 @endsection
