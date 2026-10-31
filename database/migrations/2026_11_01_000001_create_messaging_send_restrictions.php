@@ -6,6 +6,13 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
+        Schema::table('messaging_reports', function(Blueprint $t): void {
+            // Only the sender of the message EXPLICITLY chosen for a user
+            // report; never enumerate unrelated chat participant identities.
+            $t->uuid('subject_user_id')->nullable()->index();
+            $t->foreign('subject_user_id')->references('id')
+                ->on('orbit_users')->nullOnDelete();
+        });
         // Moderation applies only to future sends. Existing device-owned
         // ciphertext remains private and is not decrypted or deleted.
         Schema::create('messaging_send_restrictions', function(Blueprint $t): void {
@@ -32,6 +39,10 @@ return new class extends Migration {
 
     public function down(): void
     {
+        Schema::table('messaging_reports', function(Blueprint $t): void {
+            $t->dropForeign(['subject_user_id']);
+            $t->dropColumn('subject_user_id');
+        });
         Schema::dropIfExists('messaging_send_restriction_audits');
         Schema::dropIfExists('messaging_send_restrictions');
     }
