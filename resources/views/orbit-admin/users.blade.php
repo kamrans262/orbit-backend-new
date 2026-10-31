@@ -12,6 +12,12 @@
 <form class="admin-filters" method="get" action="{{ route('orbit.admin.users.index') }}">
 <label>Username or Orbit ID <input name="query" type="search" maxlength="60" pattern="[A-Za-z0-9_-]+" value="{{ request('query') }}" placeholder="Search account"></label>
 <label>Status <select name="status"><option value="">All</option><option value="active" {{ request('status') === 'active' ? 'selected' : '' }}>Active</option><option value="suspended" {{ request('status') === 'suspended' ? 'selected' : '' }}>Suspended</option></select></label>
+<label>Device access <select name="device_status">
+<option value="">All devices</option>
+<option value="pending" {{ request('device_status') === 'pending' ? 'selected' : '' }}>Pending approval</option>
+<option value="trusted" {{ request('device_status') === 'trusted' ? 'selected' : '' }}>Trusted</option>
+<option value="revoked" {{ request('device_status') === 'revoked' ? 'selected' : '' }}>Revoked</option>
+</select></label>
 <button class="btn primary" type="submit">Search</button>
 <a class="btn secondary" href="{{ route('orbit.admin.users.index') }}">Reset</a>
 </form>
