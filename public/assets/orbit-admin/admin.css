@@ -264,3 +264,14 @@ footer{padding-top:34px;padding-bottom:12px;font-size:10px;line-height:1.6}
   .panel > .admin-kv { padding:4px 18px 20px; }
   .panel > .stat-grid { margin:0 18px 20px; }
 }
+
+
+/* Messaging administration uses the existing Orbit v2 form dimensions. */
+.admin-kv.form-grid .kv label{display:block;font-size:11px;color:#48536c;font-weight:700}
+.admin-kv.form-grid .kv :is(input,select,textarea){
+  display:block;width:100%;border:1px solid #dfe4ed;border-radius:9px;
+  margin-top:8px;padding:11px 12px;color:#22304a;background:#fff;outline:none;
+}
+.admin-kv.form-grid .kv :is(input,select,textarea):focus{
+  border-color:#9787eb;box-shadow:0 0 0 3px #eeeaff;
+}
