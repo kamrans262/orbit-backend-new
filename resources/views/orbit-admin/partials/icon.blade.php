@@ -2,6 +2,9 @@
 @case('settings')
 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.5 1.5 0 0 0 .3 1.65l-1.8 3.1a1.5 1.5 0 0 0-1.57-.56 1.5 1.5 0 0 0-1.09 1.28h-3.59a1.5 1.5 0 0 0-1.1-1.28 1.5 1.5 0 0 0-1.57.56l-1.8-3.1A1.5 1.5 0 0 0 7.5 15a1.5 1.5 0 0 0-1.4-1H4.3v-4h1.8a1.5 1.5 0 0 0 1.4-1 1.5 1.5 0 0 0-.3-1.65l1.8-3.1a1.5 1.5 0 0 0 1.57.56 1.5 1.5 0 0 0 1.1-1.28h3.59a1.5 1.5 0 0 0 1.09 1.28 1.5 1.5 0 0 0 1.57-.56l1.8 3.1A1.5 1.5 0 0 0 19.4 9a1.5 1.5 0 0 0 1.4 1h.9v4h-.9a1.5 1.5 0 0 0-1.4 1Z"/></svg>
 @break
+@case('messages')
+<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-3.8-.8L3 20l.9-4.4A8.5 8.5 0 1 1 20 11.5Z"/><path d="M8 11.5h8m-8 3h5"/></svg>
+@break
 @case('users')
 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
 @break
