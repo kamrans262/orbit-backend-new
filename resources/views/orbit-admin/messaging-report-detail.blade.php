@@ -56,6 +56,7 @@
 <div class="admin-kv">
 <div class="kv"><small>Action</small><strong>{{ str_replace('_',' ',ucfirst($item->action)) }}</strong></div>
 <div class="kv"><small>Timestamp</small><strong>{{ $item->created_at }}</strong></div>
+<div class="kv"><small>Moderator</small><strong>{{ $item->actor_name ?? 'Former administrator' }}</strong></div>
 </div>
 @endforeach
 @endif
