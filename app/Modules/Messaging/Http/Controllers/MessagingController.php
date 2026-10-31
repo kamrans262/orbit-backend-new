@@ -215,6 +215,28 @@ final class MessagingController extends Controller
         return $this->response($result,$created?201:200);
     }
 
+    /**
+     * Crash-recovery acknowledgement for an opaque sender-created UUID.
+     * Returns only the current trusted device's own publication state.
+     * No recipient IDs, ciphertext, messages or attachment keys are exposed.
+     */
+    public function publishedClientId(Request $r,string $conversation,
+        string $clientId): JsonResponse
+    {
+        $session=$this->session($r);
+        $this->conversations->get($conversation,(string)$session->user_id);
+        $already=\Illuminate\Support\Facades\DB::table('messaging_messages')
+            ->where('conversation_id',$conversation)
+            ->where('sender_id',(string)$session->user_id)
+            ->where('sender_device_id',(string)$session->device_id)
+            ->where('client_id',$clientId)
+            ->where('expires_at','>',now())
+            ->exists();
+        return $this->response([
+            'published'=>$already,'ciphertext_only'=>true,
+        ]);
+    }
+
     public function send(Request $r,string $conversation): JsonResponse
     {
         $session=$this->session($r);
