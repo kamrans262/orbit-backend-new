@@ -31,7 +31,7 @@
 <div class="kv"><small>Direct conversations</small><strong>{{ $stats['direct_conversations'] }}</strong></div>
 <div class="kv"><small>Circle conversations</small><strong>{{ $stats['circle_conversations'] }}</strong></div>
 <div class="kv"><small>Trusted devices with keys</small><strong>{{ $stats['trusted_registered_devices'] }}</strong></div>
-<div class="kv"><small>Encrypted sends, last 24 hours</small><strong>{{ $stats['accepted_messages_24h'] }}</strong></div>
+<div class="kv"><small>Accepted encrypted sends (24h)</small><strong>{{ $stats['accepted_messages_24h'] }}</strong></div>
 <div class="kv"><small>Pending device envelopes</small><strong>{{ $stats['pending_envelopes'] }}</strong></div>
 <div class="kv"><small>Delivered envelopes, 24 hours</small><strong>{{ $stats['delivered_envelopes_24h'] }}</strong></div>
 <div class="kv"><small>Read envelopes, 24 hours</small><strong>{{ $stats['read_envelopes_24h'] }}</strong></div>
