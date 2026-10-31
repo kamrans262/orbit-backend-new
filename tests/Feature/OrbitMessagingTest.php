@@ -443,6 +443,10 @@ final class OrbitMessagingTest extends TestCase
         $this->withToken($tb)->postJson('/api/v1/conversations/'.$thread.'/reports',[
             'message_id'=>$msg,'reason'=>'spam',
         ])->assertCreated()->assertJsonPath('data.private_message_content_shared',false);
+        $this->assertDatabaseHas('messaging_reports',[
+            'message_id'=>$msg,'subject_user_id'=>$a->id,
+            'reporter_id'=>$b->id,
+        ]);
         $this->withToken($tb)->deleteJson('/api/v1/conversations/'.$thread.'/messages/'.$msg)
             ->assertNotFound();
         $this->withToken($ta)->deleteJson('/api/v1/conversations/'.$thread.'/messages/'.$msg)
@@ -452,6 +456,27 @@ final class OrbitMessagingTest extends TestCase
         // Revocation invalidates the bearer session at the identity middleware.
         $this->withToken($tb)->getJson('/api/v1/conversations/'.$thread.'/envelopes')
             ->assertUnauthorized();
+    }
+
+    public function test_private_sender_receipt_is_device_scoped_and_ciphertext_free(): void
+    {
+        [$sender,$senderToken,$senderDevice,$friend,$friendToken,$friendDevice,$thread]
+            =$this->setupDirect();
+        $payload=$this->payload([$senderDevice,$friendDevice]);
+        $clientId=$payload['client_id'];
+        $this->withToken($senderToken)->postJson(
+            '/api/v1/conversations/'.$thread.'/envelopes',$payload
+        )->assertCreated();
+        $route='/api/v1/conversations/'.$thread.'/sent/'.$clientId;
+        $this->withToken($senderToken)->getJson($route)
+            ->assertOk()->assertJsonPath('data.published',true)
+            ->assertJsonPath('data.ciphertext_only',true)
+            ->assertDontSee('ciphertext_b64')->assertDontSee('recipient_device_id');
+        $this->withToken($friendToken)->getJson($route)
+            ->assertOk()->assertJsonPath('data.published',false);
+        $this->withToken($senderToken)->getJson(
+            '/api/v1/conversations/'.$thread.'/sent/'.Str::uuid()
+        )->assertOk()->assertJsonPath('data.published',false);
     }
 
     public function test_prune_removes_expired_ciphertext_without_exposing_content(): void
