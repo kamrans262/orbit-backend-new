@@ -18,7 +18,7 @@
 <div class="kv"><small>Dismissed</small><strong>{{ $counts['dismissed'] ?? 0 }}</strong></div>
 </div>
 <form method="get" action="{{ route('orbit.admin.messaging.reports') }}">
-<div class="admin-kv">
+<div class="admin-kv form-grid">
 <div class="kv"><label for="report_status">Status</label>
 <select id="report_status" name="status">
 <option value="">All statuses</option>
@@ -31,8 +31,8 @@
 <div class="kv"><label for="report_ref">Report ID</label>
 <input id="report_ref" name="reference" type="text" maxlength="36" value="{{ $filters['reference']??'' }}" placeholder="Optional UUID reference" /></div>
 </div>
-<button type="submit" class="btn btn-secondary">Filter Reports</button>
-<a href="{{ route('orbit.admin.messaging.reports') }}" class="btn btn-secondary">Clear Filters</a>
+<button type="submit" class="btn secondary">Filter Reports</button>
+<a href="{{ route('orbit.admin.messaging.reports') }}" class="btn secondary">Clear Filters</a>
 </form>
 </section>
 <section class="panel">
@@ -47,14 +47,14 @@
 <div class="kv"><small>Submitted</small><strong>{{ $report->created_at }}</strong></div>
 <div class="kv"><small>User evidence</small><strong>{{ $report->evidence_shared ? 'Shared by reporter' : 'Not shared' }}</strong></div>
 </div>
-<p><a href="{{ route('orbit.admin.messaging.reports.show',$report->id) }}" class="btn btn-secondary">Open Case</a></p>
+<p><a href="{{ route('orbit.admin.messaging.reports.show',$report->id) }}" class="btn secondary">Open Case</a></p>
 <hr>
 @endforeach
 <div class="admin-kv">
 <div class="kv"><small>Results</small><strong>{{ $reports->total() }} total · Page {{ $reports->currentPage() }} of {{ $reports->lastPage() }}</strong></div>
 </div>
-@if($reports->previousPageUrl())<a class="btn btn-secondary" href="{{ $reports->previousPageUrl() }}">Previous page</a>@endif
-@if($reports->nextPageUrl())<a class="btn btn-secondary" href="{{ $reports->nextPageUrl() }}">Next page</a>@endif
+@if($reports->previousPageUrl())<a class="btn secondary" href="{{ $reports->previousPageUrl() }}">Previous page</a>@endif
+@if($reports->nextPageUrl())<a class="btn secondary" href="{{ $reports->nextPageUrl() }}">Next page</a>@endif
 @endif
 </section>
 @endsection
