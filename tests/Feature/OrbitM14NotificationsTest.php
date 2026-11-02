@@ -320,6 +320,24 @@ final class OrbitM14NotificationsTest extends TestCase
             ->where('device_id',$device->id)->value('disabled_at'));
     }
 
+    public function test_context_mutes_are_owner_scoped_and_need_current_membership(): void
+    {
+        [$user,$device,$token]=$this->principal();
+        $this->withToken($token)->getJson(
+            '/api/v1/me/notifications/context-mutes?category=messages'
+        )->assertOk()->assertJsonPath('data.items',[]);
+        $missing=(string)Str::uuid();
+        $this->withToken($token)->putJson(
+            '/api/v1/me/notifications/context-mutes/messages/conversation/'.$missing,
+            ['muted'=>true]
+        )->assertNotFound();
+        $this->withToken($token)->putJson(
+            '/api/v1/me/notifications/context-mutes/moments/circle/'.$missing,
+            ['muted'=>true]
+        )->assertNotFound();
+        $this->assertDatabaseCount('notification_context_mutes',0);
+    }
+
     public function test_reprojection_is_idempotent_without_fake_source_records(): void
     {
         $service=app(NotificationProjector::class);
