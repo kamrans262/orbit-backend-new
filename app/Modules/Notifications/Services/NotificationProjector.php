@@ -12,7 +12,7 @@ final class NotificationProjector
 
     public function run(int $limit=75): array
     {
-        $stats=['moments'=>0,'pings'=>0,'check_ins'=>0,'messages'=>0,'friends'=>0,'circles'=>0,'errors'=>0];
+        $stats=['moments'=>0,'pings'=>0,'check_ins'=>0,'messages'=>0,'friends'=>0,'circles'=>0,'security'=>0,'errors'=>0];
         if(config('orbit_notifications.enabled')!==true || !$this->policy->installed())return $stats;
         $limit=max(1,min(100,$limit));$since=now()->subDays(7);
         // Stage 2 bridges existing durable source records; no fake events and
@@ -133,6 +133,24 @@ final class NotificationProjector
                     $stats['circles']+=$this->notices->publish('circle_acceptance',$row->id,
                         'circles','circle.joined',$row->id,[$row->inviter_id],
                         'circle:'.$row->circle_id);
+                }catch(\Throwable){$stats['errors']++;}
+            }
+        }
+        if(Schema::hasTable('orbit_identity_events')){
+            $events=DB::table('orbit_identity_events as i')
+                ->where('i.created_at','>=',$since)
+                ->whereNotNull('i.user_id')
+                ->whereIn('i.action',[
+                    'auth.password_reset','auth.logout_all','device.approved',
+                    'device.recovery_completed','session.revoked',
+                ])
+                ->whereNotExists(fn($q)=>$q->selectRaw('1')->from('notification_events as e')
+                    ->where('e.source_type','identity_event')->whereColumn('e.source_id','i.id'))
+                ->orderBy('i.created_at')->limit($limit)->get(['i.*']);
+            foreach($events as $event){
+                try{
+                    $stats['security']+=$this->notices->publish('identity_event',$event->id,
+                        'security','security.notice',$event->id,[$event->user_id]);
                 }catch(\Throwable){$stats['errors']++;}
             }
         }

@@ -130,6 +130,14 @@ final class NotificationPolicy
                 && $access->canCirclePair((string) $conversation->circle_id,
                     (string) $row->sender_id, $user);
         }
+        if ($category === 'security') {
+            $event=DB::table('orbit_identity_events')->where('id',$target)
+                ->where('user_id',$user)->first();
+            return $event!==null && in_array($event->action,[
+                'auth.password_reset','auth.logout_all','device.approved',
+                'device.recovery_completed','session.revoked',
+            ],true);
+        }
         if ($category === 'friends') {
             $request=DB::table('friend_requests')->where('id',$target)->first();
             if(!$request)return false;

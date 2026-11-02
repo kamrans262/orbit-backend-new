@@ -22,6 +22,7 @@ final class NotificationService
             'moments'=>'moments.available', 'pings'=>'pings.received',
             'check_ins'=>'check_ins.available', 'messages'=>'messages.available',
             'friends'=>'friends.updated', 'circles'=>'circles.updated',
+            'security'=>'security.notice',
         ][$category] ?? null;
         if ($template === null) return 0; // No unreviewed producer or broadcast.
         if (!DB::table('notification_templates')->where('key', $template)
