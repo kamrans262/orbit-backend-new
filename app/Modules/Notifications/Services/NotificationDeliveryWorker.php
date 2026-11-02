@@ -19,7 +19,8 @@ final class NotificationDeliveryWorker
         $limit=max(1,min(100,$limit));
         $notices=DB::table('notification_inbox')->whereNull('invalidated_at')
             ->whereNull('read_at')
-            ->where('created_at','>=',now()->subDays((int)config('orbit_notifications.retention_days',7)))
+            ->where('created_at','>=',now()->subMinutes(
+                (int)config('orbit_notifications.push_max_age_minutes',30)))
             ->orderByDesc('created_at')->limit($limit*5)->get();
         foreach($notices as $notice){
             if($stats['created']>=$limit)break;

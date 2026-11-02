@@ -12,7 +12,8 @@ final class NotificationService
 
     public function publish(string $sourceType, string $sourceId, string $category,
                             string $type, string $targetId, array $recipients,
-                            ?string $context = null, ?string $expiresAt = null): int
+                            ?string $context = null, ?string $expiresAt = null,
+                            ?string $occurredAt = null): int
     {
         if (config('orbit_notifications.enabled') !== true || !$this->policy->installed()) return 0;
         if (!in_array($category, config('orbit_notifications.categories', []), true)
@@ -28,14 +29,18 @@ final class NotificationService
         if (!DB::table('notification_templates')->where('key', $template)
             ->where('enabled', true)->exists()) return 0;
         $created = 0;
-        // One event is created once, with an idempotent per-owner inbox entry.
+        // Preserve the actual source event time. Projected backfill must not
+        // look new, nor become eligible for a new-device push months later.
+        $eventTime = $occurredAt !== null
+            ? Carbon::parse($occurredAt)->toDateTimeString() : now();
         DB::transaction(function () use ($sourceType, $sourceId, $category, $type,
-            $targetId, $recipients, $context, $expiresAt, $template, &$created): void {
+            $targetId, $recipients, $context, $expiresAt, $eventTime,
+            $template, &$created): void {
             $eventId = (string) Str::uuid();
             DB::table('notification_events')->insertOrIgnore([
                 'id'=>$eventId, 'source_type'=>$sourceType, 'source_id'=>$sourceId,
                 'category'=>$category, 'type'=>$type, 'target_id'=>$targetId,
-                'created_at'=>now(),
+                'created_at'=>$eventTime,
             ]);
             $eventId = (string) DB::table('notification_events')
                 ->where('source_type', $sourceType)->where('source_id', $sourceId)->value('id');
@@ -47,7 +52,7 @@ final class NotificationService
                     'id'=>(string) Str::uuid(), 'event_id'=>$eventId,
                     'recipient_user_id'=>$user, 'category'=>$category, 'type'=>$type,
                     'target_id'=>$targetId, 'context_id'=>$context, 'template_key'=>$template,
-                    'created_at'=>now(), 'expires_at'=>$expiresAt,
+                    'created_at'=>$eventTime, 'expires_at'=>$expiresAt,
                 ]);
             }
         }, 3);

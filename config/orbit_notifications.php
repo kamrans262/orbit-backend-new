@@ -9,6 +9,8 @@ return [
     'dispatch_batch' => 40,
     'max_attempts' => 8,
     'worker_lease_seconds' => 120,
+    // Never awaken old backfilled activity as a new OS push.
+    'push_max_age_minutes' => 30,
     // Seven-day compatibility with existing Moment inbox. Product-wide
     // retention remains configurable and requires approval before release.
     'retention_days' => max(1, min(30, (int) env('ORBIT_NOTIFICATIONS_RETENTION_DAYS', 7))),

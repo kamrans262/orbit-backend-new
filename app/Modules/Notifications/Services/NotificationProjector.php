@@ -27,7 +27,7 @@ final class NotificationProjector
                 try{
                     $stats['moments']+=$this->notices->publish('moment_notice',$row->id,
                         'moments','moment.available',$row->moment_id,[$row->recipient_user_id],
-                        $row->context_id);
+                        $row->context_id,null,$row->created_at);
                 }catch(\Throwable){$stats['errors']++;}
             }
         }
@@ -41,7 +41,7 @@ final class NotificationProjector
                     $context=$row->context_type==='circle' && $row->context_id
                         ? 'circle:'.$row->context_id:null;
                     $stats['pings']+=$this->notices->publish('ping',$row->id,'pings',
-                        'ping.received',$row->id,[$row->recipient_id],$context);
+                        'ping.received',$row->id,[$row->recipient_id],$context,null,$row->created_at);
                 }catch(\Throwable){$stats['errors']++;}
             }
         }
@@ -59,7 +59,7 @@ final class NotificationProjector
                         ->whereNull('revoked_at')->limit(1000)->pluck('recipient_user_id')->all();
                     $stats['check_ins']+=$this->notices->publish('check_in',$row->id,
                         'check_ins','check_in.available',$row->id,$recipients,
-                        null,$row->expires_at);
+                        null,$row->expires_at,$row->created_at);
                 }catch(\Throwable){$stats['errors']++;}
             }
         }
@@ -82,7 +82,7 @@ final class NotificationProjector
                         && $conversation->circle_id ? 'circle:'.$conversation->circle_id : null;
                     $stats['messages']+=$this->notices->publish('message',$row->id,
                         'messages','message.available',$row->id,$recipients,
-                        $context,$row->expires_at);
+                        $context,$row->expires_at,$row->created_at);
                 }catch(\Throwable){$stats['errors']++;}
             }
         }
@@ -95,7 +95,7 @@ final class NotificationProjector
             foreach($pending as $row){
                 try{
                     $stats['friends']+=$this->notices->publish('friend_request',$row->id,
-                        'friends','friend.requested',$row->id,[$row->recipient_id]);
+                        'friends','friend.requested',$row->id,[$row->recipient_id],null,null,$row->created_at);
                 }catch(\Throwable){$stats['errors']++;}
             }
             $accepted=DB::table('friend_requests as f')->where('f.status','accepted')
@@ -106,7 +106,7 @@ final class NotificationProjector
             foreach($accepted as $row){
                 try{
                     $stats['friends']+=$this->notices->publish('friend_acceptance',$row->id,
-                        'friends','friend.accepted',$row->id,[$row->sender_id]);
+                        'friends','friend.accepted',$row->id,[$row->sender_id],null,null,$row->responded_at);
                 }catch(\Throwable){$stats['errors']++;}
             }
         }
@@ -120,7 +120,7 @@ final class NotificationProjector
                 try{
                     $stats['circles']+=$this->notices->publish('circle_invite',$row->id,
                         'circles','circle.invited',$row->id,[$row->invitee_id],
-                        'circle:'.$row->circle_id,$row->expires_at);
+                        'circle:'.$row->circle_id,$row->expires_at,$row->created_at);
                 }catch(\Throwable){$stats['errors']++;}
             }
             $joined=DB::table('circle_invites as c')->where('c.status','accepted')
@@ -132,7 +132,7 @@ final class NotificationProjector
                 try{
                     $stats['circles']+=$this->notices->publish('circle_acceptance',$row->id,
                         'circles','circle.joined',$row->id,[$row->inviter_id],
-                        'circle:'.$row->circle_id);
+                        'circle:'.$row->circle_id,null,$row->resolved_at);
                 }catch(\Throwable){$stats['errors']++;}
             }
         }
@@ -150,7 +150,7 @@ final class NotificationProjector
             foreach($events as $event){
                 try{
                     $stats['security']+=$this->notices->publish('identity_event',$event->id,
-                        'security','security.notice',$event->id,[$event->user_id]);
+                        'security','security.notice',$event->id,[$event->user_id],null,null,$event->created_at);
                 }catch(\Throwable){$stats['errors']++;}
             }
         }
