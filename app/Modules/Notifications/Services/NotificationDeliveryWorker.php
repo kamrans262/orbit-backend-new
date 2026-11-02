@@ -27,8 +27,7 @@ final class NotificationDeliveryWorker
             // Existing M7 transport owns Moment push during compatibility
             // cutover; never generate two pushes for one Moment.
             if($notice->category==='moments')continue;
-            if(!$this->policy->canView($notice,$notice->recipient_user_id)
-                || !$this->policy->categoryEnabled($notice->recipient_user_id,$notice->category,true))continue;
+            if(!$this->policy->pushAllowed($notice,$notice->recipient_user_id))continue;
             $devices=DB::table('notification_device_tokens as t')
                 ->join('devices as d','d.id','=','t.device_id')
                 ->where('t.user_id',$notice->recipient_user_id)
@@ -72,8 +71,7 @@ final class NotificationDeliveryWorker
             $token=DB::table('notification_device_tokens')->where('device_id',$claimed->device_id)
                 ->whereNull('disabled_at')->first();
             $valid=$notice && $token && $token->user_id===$notice->recipient_user_id
-                && $this->policy->canView($notice,$notice->recipient_user_id)
-                && $this->policy->categoryEnabled($notice->recipient_user_id,$notice->category,true)
+                && $this->policy->pushAllowed($notice,$notice->recipient_user_id)
                 && DB::table('devices')->where('id',$claimed->device_id)
                     ->where('user_id',$notice->recipient_user_id)->where('trust_state','trusted')
                     ->whereNotNull('approved_at')->whereNull('revoked_at')->exists()
@@ -87,14 +85,47 @@ final class NotificationDeliveryWorker
                 $stats['suppressed']++;continue;
             }
             try{
-                $ok=$this->transport->send(Crypt::decryptString($token->token_ciphertext));
-            }catch(\Throwable){$ok=false;}
-            $attempt=$claimed->attempts+1;
-            $state=$ok?'accepted':($attempt>=(int)config('orbit_notifications.max_attempts',8)
-                ?'failed':'retry');
-            $this->finish($id,$state,$ok?null:'provider_unavailable',
-                $state==='retry'?now()->addSeconds(min(86400,30*2**min($attempt,10))):null);
-            $stats[$ok?'accepted':($state==='retry'?'retry':'terminal')]++;
+                $outcome=$this->transport->send(
+                    Crypt::decryptString($token->token_ciphertext),
+                    $notice->category);
+            }catch(\Throwable) {
+                $outcome=['status'=>'retry','code'=>'local_transport_failure'];
+            }
+            $attempt=(int)$claimed->attempts+1;
+            $status=$outcome['status']??'retry';
+            if($status==='invalid_token'){
+                // Unregistered tokens may not continue retrying. A later
+                // verified token refresh can register the new token.
+                DB::table('notification_device_tokens')
+                    ->where('device_id',$claimed->device_id)
+                    ->where('user_id',$notice->recipient_user_id)
+                    ->whereNull('disabled_at')
+                    ->update(['disabled_at'=>now(),'updated_at'=>now()]);
+                $this->finish($id,'failed','token_rejected',null);
+                $stats['terminal']++;
+                continue;
+            }
+            if($status==='accepted'){
+                $this->finish($id,'accepted',null,null);
+                $stats['accepted']++;
+                continue;
+            }
+            $terminal=$status==='terminal'
+                || $attempt>=(int)config('orbit_notifications.max_attempts',8);
+            $next=null;
+            if(!$terminal){
+                $base=min(86400,30*2**min($attempt,10));
+                $jitter=random_int(0,max(1,min(60,intdiv($base,5))));
+                $provider=(int)($outcome['retry_after']??0);
+                $next=now()->addSeconds(max($provider,$base+$jitter));
+            }
+            $error=in_array($outcome['code']??'',[
+                'provider_off','network_or_oauth','transient_provider',
+                'provider_rejected','category_unsupported',
+                'local_transport_failure',
+            ],true)?$outcome['code']:'provider_failure';
+            $this->finish($id,$terminal?'failed':'retry',$error,$next);
+            $stats[$terminal?'terminal':'retry']++;
         }
         return $stats;
     }

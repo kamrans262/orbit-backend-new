@@ -22,9 +22,10 @@ final class NotificationPushTransport
         ]));
     }
 
-    public function send(string $token): bool
+    public function send(string $token,string $category): array
     {
-        return $this->enabled()
-            && app(MomentFcmTransport::class)->sendOperationalGeneric($token);
+        if(!$this->enabled())return ['status'=>'retry','code'=>'provider_off'];
+        return app(MomentFcmTransport::class)
+            ->sendOperationalResult($token,$category);
     }
 }

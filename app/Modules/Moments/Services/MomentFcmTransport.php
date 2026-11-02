@@ -87,24 +87,80 @@ final class MomentFcmTransport
      * receiving app fetches its authenticated inbox after rechecking access.
      * FCM acceptance is NOT an on-device display/open/read receipt.
      */
+    /**
+     * M14 generic data-only provider event; no personal content or target ID.
+     * Only reviewed social categories share a stable collapse key. Safety
+     * priority and SOS/APNs critical entitlements remain a later milestone.
+     *
+     * Return sanitized outcome only: never expose token, provider request,
+     * OAuth response, sender/recipient or untrusted provider error message.
+     */
+    public function sendOperationalResult(string $fcmToken,string $category): array
+    {
+        if(!$this->enabled())return ['status'=>'retry','code'=>'provider_off'];
+        $allowed=['pings','check_ins','messages','friends','circles','security'];
+        if(!in_array($category,$allowed,true))
+            return ['status'=>'terminal','code'=>'category_unsupported'];
+
+        $project=(string)config('orbit_moments.fcm.project_id');
+        $collapse='orbit_'.$category;
+        try{
+            $response=Http::withToken($this->accessToken())->acceptJson()
+                ->timeout(8)->post('https://fcm.googleapis.com/v1/projects/'
+                    .$project.'/messages:send',[
+                    'message'=>[
+                        'token'=>$fcmToken,
+                        'data'=>['type'=>'notification_available'],
+                        'android'=>[
+                            'priority'=>'NORMAL',
+                            'collapse_key'=>$collapse,
+                        ],
+                        'apns'=>[
+                            'headers'=>[
+                                'apns-priority'=>'5',
+                                'apns-collapse-id'=>$collapse,
+                            ],
+                            'payload'=>['aps'=>['content-available'=>1]],
+                        ],
+                    ],
+                ]);
+        }catch(\Throwable) {
+            return ['status'=>'retry','code'=>'network_or_oauth'];
+        }
+        if($response->successful()
+            && is_string($response->json('name'))
+            && str_starts_with($response->json('name'),
+                'projects/'.$project.'/messages/')){
+            return ['status'=>'accepted','code'=>null];
+        }
+        $details=$response->json('error.details');
+        $fcmError=null;
+        if(is_array($details))foreach($details as $detail){
+            if(is_array($detail) &&
+                ($detail['@type']??null)==='type.googleapis.com/google.firebase.fcm.v1.FcmError'
+                && is_string($detail['errorCode']??null)){
+                $fcmError=$detail['errorCode'];break;
+            }
+        }
+        if(in_array($fcmError,['UNREGISTERED','SENDER_ID_MISMATCH','INVALID_ARGUMENT'],true)){
+            return ['status'=>'invalid_token','code'=>'token_rejected'];
+        }
+        $http=$response->status();
+        if($http===429 || $http===500 || $http===502 ||
+            $http===503 || $http===504){
+            // No Retry-After raw value is logged, stored or sent to clients.
+            $after=filter_var($response->header('Retry-After'),
+                FILTER_VALIDATE_INT);
+            return ['status'=>'retry','code'=>'transient_provider',
+                'retry_after'=>$after!==false ? max(0,min(3600,$after)) : null];
+        }
+        return ['status'=>'terminal','code'=>'provider_rejected'];
+    }
+
     public function sendOperationalGeneric(string $fcmToken): bool
     {
-        if(!$this->enabled()) return false;
-        $project=(string)config('orbit_moments.fcm.project_id');
-        $response=Http::withToken($this->accessToken())->acceptJson()
-            ->timeout(8)->post('https://fcm.googleapis.com/v1/projects/'
-                .$project.'/messages:send',[
-                'message'=>[
-                    'token'=>$fcmToken,
-                    'data'=>['type'=>'notification_available'],
-                    'android'=>['priority'=>'NORMAL'],
-                    'apns'=>['headers'=>['apns-priority'=>'5'],
-                        'payload'=>['aps'=>['content-available'=>1]]],
-                ],
-            ]);
-        return $response->successful()
-            && is_string($response->json('name'))
-            && str_starts_with($response->json('name'),'projects/'.$project.'/messages/');
+        return $this->sendOperationalResult($fcmToken,'messages')['status']
+            ==='accepted';
     }
 
     /** FCM acceptance is not device display/read receipt. */
