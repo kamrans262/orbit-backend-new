@@ -37,6 +37,35 @@ final class NotificationController extends Controller
             (int)($data['limit']??20),$data['cursor']??null,$data['category']??null));
     }
 
+    /** Optional settings deliberately separate from M3's seven legacy keys. */
+    public function categoryPreferences(Request $request): JsonResponse
+    {
+        [$user] = $this->policy->actor($request);
+        return $this->response([
+            'messages' => $this->policy->optionalCategoryPreference($user, 'messages'),
+            'friends' => $this->policy->optionalCategoryPreference($user, 'friends'),
+            'security_required' => true,
+        ]);
+    }
+
+    public function setCategoryPreference(Request $request, string $category): JsonResponse
+    {
+        [$user] = $this->policy->actor($request);
+        abort_unless(in_array($category, ['messages', 'friends'], true), 422,
+            'Only optional social categories may be updated.');
+        abort_unless(Schema::hasTable('notification_category_preferences'), 503,
+            'Notification settings schema is unavailable.');
+        $values = $request->validate(['enabled' => ['required', 'boolean']]);
+        DB::table('notification_category_preferences')->updateOrInsert(
+            ['user_id' => $user, 'category' => $category],
+            ['enabled' => (bool) $values['enabled'], 'updated_at' => now()]
+        );
+        return $this->response([
+            'category' => $category,
+            'enabled' => (bool) $values['enabled'],
+        ]);
+    }
+
     public function unread(Request $request): JsonResponse
     {
         [$user]=$this->policy->actor($request);

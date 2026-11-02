@@ -57,6 +57,20 @@ final class NotificationPolicy
         return is_array($pref) ? (($pref[$key] ?? $default) === true) : $default;
     }
 
+    /**
+     * Supplemental opt-out for categories absent from M3's seven-key legacy
+     * settings. Account security cannot be disabled through this endpoint.
+     * Default true maintains compatibility for existing accounts.
+     */
+    public function optionalCategoryPreference(string $user, string $category): bool
+    {
+        if (!in_array($category, ['messages', 'friends'], true)) return true;
+        if (!Schema::hasTable('notification_category_preferences')) return true;
+        $state = DB::table('notification_category_preferences')
+            ->where('user_id', $user)->where('category', $category)->value('enabled');
+        return $state === null ? true : (bool) $state;
+    }
+
     public function categoryEnabled(string $user, string $category, bool $push = false): bool
     {
         if (!$this->enabled('channel.'.($push?'push':'in_app')))return false;
@@ -69,7 +83,8 @@ final class NotificationPolicy
             'circles', 'check_ins' => $this->preference($user, 'circle_updates_enabled'),
             // Existing seven-key M3 preferences have no separate message or
             // friend switches; a new preference must be designed in Stage 3.
-            'messages', 'friends', 'security' => true,
+            'messages', 'friends' => $this->optionalCategoryPreference($user, $category),
+            'security' => true,
             default => false,
         };
     }
