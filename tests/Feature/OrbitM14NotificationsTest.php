@@ -146,7 +146,7 @@ final class OrbitM14NotificationsTest extends TestCase
     {
         $service=app(NotificationProjector::class);
         $one=$service->run(5);$two=$service->run(5);
-        foreach(['moments','pings','check_ins','messages'] as $category){
+        foreach(['moments','pings','check_ins','messages','friends','circles'] as $category){
             $this->assertSame(0,$one[$category]);
             $this->assertSame(0,$two[$category]);
         }

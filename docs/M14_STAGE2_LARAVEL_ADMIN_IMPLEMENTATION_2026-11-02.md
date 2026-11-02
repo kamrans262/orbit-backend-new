@@ -11,8 +11,8 @@
 - GET /api/v1/me/notifications/push-bootstrap, POST /api/v1/me/notifications/push-devices, DELETE /api/v1/me/notifications/push-devices/current.
 - Existing M3 seven-key GET/PATCH preferences are unchanged.
 - Existing M7 Moments notification and push-token APIs are unchanged. The new shared worker skips Moment FCM sends to prevent double notification during cutover.
-- Source projection: existing M7 private Moment notices, M11 Pings, M12 Check-Ins, M13 encrypted message envelope metadata. No private contents, coordinates or sender names are copied into the notification schema.
-- Module 4 Friends and Module 5 Circles require event-specific access verifiers before their notifications can be projected; the policy fails closed for these types. No unreviewed producer or fake notices are created.
+- Source projection: existing M7 private Moment notices, M4 pending/accepted friend requests, M5 Circle invitations/acceptances, M11 Pings, M12 Check-Ins, M13 encrypted message envelope metadata. No private contents, coordinates or sender names are copied into the notification schema.
+- M4/M5 notifications use event-specific live access checks for friend requests/acceptances and Circle invitations/acceptances. Account security requires an independently verified event source; it remains fail-closed rather than simulating notices.
 
 ## Admin: standalone sidebar
 Notifications is its own RBAC-protected group, not inside Accounts or Configurations. Six pages:

@@ -21,6 +21,7 @@ final class NotificationService
         $template = [
             'moments'=>'moments.available', 'pings'=>'pings.received',
             'check_ins'=>'check_ins.available', 'messages'=>'messages.available',
+            'friends'=>'friends.updated', 'circles'=>'circles.updated',
         ][$category] ?? null;
         if ($template === null) return 0; // No unreviewed producer or broadcast.
         if (!DB::table('notification_templates')->where('key', $template)
@@ -39,7 +40,7 @@ final class NotificationService
                 ->where('source_type', $sourceType)->where('source_id', $sourceId)->value('id');
             foreach (array_slice(array_unique(array_map('strval', $recipients)), 0, 1000) as $user) {
                 if (!Str::isUuid($user)
-                    || !$this->policy->targetAllowed($category, $targetId, $user, $context))
+                    || !$this->policy->targetAllowed($category, $targetId, $user, $context, $type))
                     continue;
                 $created += DB::table('notification_inbox')->insertOrIgnore([
                     'id'=>(string) Str::uuid(), 'event_id'=>$eventId,

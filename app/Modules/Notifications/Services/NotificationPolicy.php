@@ -75,7 +75,7 @@ final class NotificationPolicy
     }
 
     public function targetAllowed(string $category, string $target, string $user,
-                                  ?string $context = null): bool
+                                  ?string $context = null, ?string $type = null): bool
     {
         if (!$this->categoryEnabled($user, $category)) return false;
         if ($context && str_starts_with($context, 'circle:')) {
@@ -130,6 +130,39 @@ final class NotificationPolicy
                 && $access->canCirclePair((string) $conversation->circle_id,
                     (string) $row->sender_id, $user);
         }
+        if ($category === 'friends') {
+            $request=DB::table('friend_requests')->where('id',$target)->first();
+            if(!$request)return false;
+            $social=app(\App\Modules\Social\Services\SocialGraphService::class);
+            if($social->isBlockedEitherWay((string)$request->sender_id,
+                (string)$request->recipient_id))return false;
+            if($type==='friend.requested')return $request->status==='pending'
+                && $request->recipient_id===$user;
+            if($type==='friend.accepted')return $request->status==='accepted'
+                && $request->sender_id===$user
+                && $social->isFriend((string)$request->sender_id,(string)$request->recipient_id);
+            return false;
+        }
+        if ($category === 'circles') {
+            if(config('orbit_circle.targeted_invites_enabled')!==true)return false;
+            $invite=DB::table('circle_invites')->where('id',$target)->first();
+            if(!$invite)return false;
+            $circle=DB::table('circles')->where('id',$invite->circle_id)
+                ->whereNull('archived_at')->first();
+            if(!$circle)return false;
+            $social=app(\App\Modules\Social\Services\SocialGraphService::class);
+            $access=app(\App\Modules\Circle\Services\CircleAccessPolicy::class);
+            if(!$access->isMember($invite->circle_id,$invite->inviter_id)
+                || $social->isBlockedEitherWay($invite->inviter_id,$invite->invitee_id))return false;
+            if($type==='circle.invited')return $invite->status==='pending'
+                && $invite->invitee_id===$user
+                && $invite->expires_at && now()->lt($invite->expires_at)
+                && $social->isFriend($invite->inviter_id,$invite->invitee_id);
+            if($type==='circle.joined')return $invite->status==='accepted'
+                && $invite->inviter_id===$user
+                && $access->isMember($invite->circle_id,$invite->invitee_id);
+            return false;
+        }
         // Other categories are available only when an audited producer/policy
         // is added, never inferred from a guessed client supplied object ID.
         return false;
@@ -143,6 +176,7 @@ final class NotificationPolicy
             ->where('key', $notice->template_key)->first();
         return $template && $template->enabled
             && $this->targetAllowed((string) $notice->category,
-                (string) $notice->target_id, $user, $notice->context_id);
+                (string) $notice->target_id, $user, $notice->context_id,
+                (string) $notice->type);
     }
 }

@@ -12,7 +12,7 @@ final class NotificationProjector
 
     public function run(int $limit=75): array
     {
-        $stats=['moments'=>0,'pings'=>0,'check_ins'=>0,'messages'=>0,'errors'=>0];
+        $stats=['moments'=>0,'pings'=>0,'check_ins'=>0,'messages'=>0,'friends'=>0,'circles'=>0,'errors'=>0];
         if(config('orbit_notifications.enabled')!==true || !$this->policy->installed())return $stats;
         $limit=max(1,min(100,$limit));$since=now()->subDays(7);
         // Stage 2 bridges existing durable source records; no fake events and
@@ -83,6 +83,56 @@ final class NotificationProjector
                     $stats['messages']+=$this->notices->publish('message',$row->id,
                         'messages','message.available',$row->id,$recipients,
                         $context,$row->expires_at);
+                }catch(\Throwable){$stats['errors']++;}
+            }
+        }
+        if(Schema::hasTable('friend_requests')){
+            $pending=DB::table('friend_requests as f')->where('f.status','pending')
+                ->where('f.created_at','>=',$since)
+                ->whereNotExists(fn($q)=>$q->selectRaw('1')->from('notification_events as e')
+                    ->where('e.source_type','friend_request')->whereColumn('e.source_id','f.id'))
+                ->orderBy('f.created_at')->limit($limit)->get(['f.*']);
+            foreach($pending as $row){
+                try{
+                    $stats['friends']+=$this->notices->publish('friend_request',$row->id,
+                        'friends','friend.requested',$row->id,[$row->recipient_id]);
+                }catch(\Throwable){$stats['errors']++;}
+            }
+            $accepted=DB::table('friend_requests as f')->where('f.status','accepted')
+                ->where('f.responded_at','>=',$since)
+                ->whereNotExists(fn($q)=>$q->selectRaw('1')->from('notification_events as e')
+                    ->where('e.source_type','friend_acceptance')->whereColumn('e.source_id','f.id'))
+                ->orderBy('f.responded_at')->limit($limit)->get(['f.*']);
+            foreach($accepted as $row){
+                try{
+                    $stats['friends']+=$this->notices->publish('friend_acceptance',$row->id,
+                        'friends','friend.accepted',$row->id,[$row->sender_id]);
+                }catch(\Throwable){$stats['errors']++;}
+            }
+        }
+        if(Schema::hasTable('circle_invites')){
+            $invited=DB::table('circle_invites as c')->where('c.status','pending')
+                ->where('c.created_at','>=',$since)->where('c.expires_at','>',now())
+                ->whereNotExists(fn($q)=>$q->selectRaw('1')->from('notification_events as e')
+                    ->where('e.source_type','circle_invite')->whereColumn('e.source_id','c.id'))
+                ->orderBy('c.created_at')->limit($limit)->get(['c.*']);
+            foreach($invited as $row){
+                try{
+                    $stats['circles']+=$this->notices->publish('circle_invite',$row->id,
+                        'circles','circle.invited',$row->id,[$row->invitee_id],
+                        'circle:'.$row->circle_id,$row->expires_at);
+                }catch(\Throwable){$stats['errors']++;}
+            }
+            $joined=DB::table('circle_invites as c')->where('c.status','accepted')
+                ->where('c.resolved_at','>=',$since)
+                ->whereNotExists(fn($q)=>$q->selectRaw('1')->from('notification_events as e')
+                    ->where('e.source_type','circle_acceptance')->whereColumn('e.source_id','c.id'))
+                ->orderBy('c.resolved_at')->limit($limit)->get(['c.*']);
+            foreach($joined as $row){
+                try{
+                    $stats['circles']+=$this->notices->publish('circle_acceptance',$row->id,
+                        'circles','circle.joined',$row->id,[$row->inviter_id],
+                        'circle:'.$row->circle_id);
                 }catch(\Throwable){$stats['errors']++;}
             }
         }
