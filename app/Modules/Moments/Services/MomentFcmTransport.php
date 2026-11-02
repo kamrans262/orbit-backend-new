@@ -107,7 +107,7 @@ final class MomentFcmTransport
     public function sendOperationalResult(string $fcmToken,string $category): array
     {
         if(!$this->notificationsReady())return ['status'=>'retry','code'=>'provider_off'];
-        $allowed=['pings','check_ins','messages','friends','circles','security'];
+        $allowed=['moments','pings','check_ins','messages','friends','circles','security'];
         if(!in_array($category,$allowed,true))
             return ['status'=>'terminal','code'=>'category_unsupported'];
 
