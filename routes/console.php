@@ -130,8 +130,12 @@ Artisan::command('orbit:notifications:dispatch', function () {
 Schedule::command('orbit:notifications:dispatch')->everyMinute()->withoutOverlapping();
 
 Artisan::command('orbit:notifications:expire', function () {
-    $count=app(\App\Modules\Notifications\Services\NotificationService::class)->invalidateExpired(500);
-    $this->info('Expired notifications invalidated: '.$count);
+    $service=app(\App\Modules\Notifications\Services\NotificationService::class);
+    $invalidated=$service->invalidateExpired(500);
+    $purged=$service->purgeInvalidated(500);
+    $this->info('Notification expiry: '.json_encode([
+        'invalidated'=>$invalidated,'purged'=>$purged,
+    ]));
 })->purpose('Hide notices beyond approved retention without purging M7 legacy source');
 Schedule::command('orbit:notifications:expire')->hourly()->withoutOverlapping();
 

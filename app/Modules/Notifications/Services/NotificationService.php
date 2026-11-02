@@ -188,6 +188,36 @@ final class NotificationService
         return $updated;
     }
 
+    /**
+     * Bounded irreversible purge after a separate seven-day invalidation
+     * grace. Cascading FKs remove push/email jobs and provider-attempt
+     * metadata. Existing M7 inbox is never touched by this cleanup.
+     */
+    public function purgeInvalidated(int $limit=500): array
+    {
+        $stats=['inbox'=>0,'events'=>0];
+        if(!$this->policy->installed())return $stats;
+        $ids=DB::table('notification_inbox')
+            ->whereNotNull('invalidated_at')
+            ->where('invalidated_at','<',now()->subDays(7))
+            ->orderBy('invalidated_at')
+            ->limit(max(1,min(500,$limit)))->pluck('id');
+        if($ids->isNotEmpty()) $stats['inbox']=DB::table('notification_inbox')
+            ->whereIn('id',$ids)->delete();
+
+        // Event IDs do not contain payloads, but should not become permanent
+        // history after all corresponding private recipients are purged.
+        $events=DB::table('notification_events as e')
+            ->where('e.created_at','<',now()->subDays(30))
+            ->whereNotExists(fn($q)=>$q->selectRaw('1')
+                ->from('notification_inbox as n')
+                ->whereColumn('n.event_id','e.id'))
+            ->orderBy('e.created_at')->limit(500)->pluck('e.id');
+        if($events->isNotEmpty())$stats['events']=DB::table('notification_events')
+            ->whereIn('id',$events)->delete();
+        return $stats;
+    }
+
     public function invalidateExpired(int $limit=500): int
     {
         if(!$this->policy->installed())return 0;

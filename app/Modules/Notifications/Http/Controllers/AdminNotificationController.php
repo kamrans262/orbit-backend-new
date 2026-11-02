@@ -188,7 +188,10 @@ final class AdminNotificationController extends Controller
         $result=match($operation){
             'project'=>app(NotificationProjector::class)->run(30),
             'dispatch'=>app(NotificationDeliveryWorker::class)->run(20),
-            'expire'=>['invalidated'=>app(NotificationService::class)->invalidateExpired(200)],
+            'expire'=>[
+                'invalidated'=>app(NotificationService::class)->invalidateExpired(200),
+                'purged'=>app(NotificationService::class)->purgeInvalidated(200),
+            ],
         };
         $this->audit('maintenance.'.$operation,'worker',$operation,$data['reason']);
         return back()->with('status','Notification task completed: '.json_encode($result));
