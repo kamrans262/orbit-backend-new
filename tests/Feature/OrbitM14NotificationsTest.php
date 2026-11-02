@@ -407,6 +407,66 @@ final class OrbitM14NotificationsTest extends TestCase
             ->assertOk()->assertJsonPath('data.friends',true);
     }
 
+    public function test_existing_moment_read_state_survives_shared_inbox_cutover(): void
+    {
+        [$owner,$device,$ownerToken]=$this->principal();
+        [$creator,$creatorDevice,$creatorToken]=$this->principal();
+        $moment=(string)Str::uuid();
+        $legacy=(string)Str::uuid();
+        $legacyEvent=(string)Str::uuid();
+        $sharedEvent=(string)Str::uuid();
+        $sharedNotice=(string)Str::uuid();
+        $readAt=now()->subMinutes(3)->startOfSecond();
+        DB::table('moments')->insert([
+            'id'=>$moment,'creator_id'=>$creator->id,
+            'client_id'=>(string)Str::uuid(),
+            'request_key_hash'=>hash('sha256','moment-test-request'),
+            'request_payload_hash'=>hash('sha256','moment-test-payload'),
+            'audience_kind'=>'friends','published_at'=>now()->subHour(),
+            'rail_expires_at'=>now()->addHour(),
+            'view_expires_at'=>now()->addDay(),
+            'purge_due_at'=>now()->addDays(7),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('moment_events_outbox')->insert([
+            'id'=>$legacyEvent,'moment_id'=>$moment,
+            'event_type'=>'moment.published','audience_revision'=>1,
+            'created_at'=>now(),
+        ]);
+        DB::table('moment_notification_inbox')->insert([
+            'id'=>$legacy,'moment_id'=>$moment,'event_id'=>$legacyEvent,
+            'recipient_user_id'=>$owner->id,'context_id'=>'friend',
+            'created_at'=>now()->subHour(),'read_at'=>$readAt,
+        ]);
+        DB::table('notification_events')->insert([
+            'id'=>$sharedEvent,'source_type'=>'moment_notice','source_id'=>$legacy,
+            'category'=>'moments','type'=>'moment.available',
+            'target_id'=>$moment,'created_at'=>now()->subHour(),
+        ]);
+        DB::table('notification_inbox')->insert([
+            'id'=>$sharedNotice,'event_id'=>$sharedEvent,
+            'recipient_user_id'=>$owner->id,'category'=>'moments',
+            'type'=>'moment.available','target_id'=>$moment,
+            'context_id'=>'friend','template_key'=>'moments.available',
+            'created_at'=>now()->subHour(),
+        ]);
+        $synced=app(\App\Modules\Notifications\Services\NotificationService::class)
+            ->syncLegacyMomentReads($owner->id);
+        $this->assertSame(1,$synced);
+        $this->assertSame(
+            \Illuminate\Support\Carbon::parse($readAt)->toDateTimeString(),
+            \Illuminate\Support\Carbon::parse(
+                DB::table('notification_inbox')->where('id',$sharedNotice)
+                    ->value('read_at')
+            )->toDateTimeString()
+        );
+        $this->assertDatabaseHas('moment_notification_inbox',[
+            'id'=>$legacy,'recipient_user_id'=>$owner->id,
+        ]);
+        $this->assertSame(0,app(\App\Modules\Notifications\Services\NotificationService::class)
+            ->syncLegacyMomentReads($owner->id));
+    }
+
     public function test_reprojection_is_idempotent_without_fake_source_records(): void
     {
         $service=app(NotificationProjector::class);
