@@ -17,6 +17,9 @@ final class NotificationDeliveryWorker
         if(!$this->policy->installed() || !$this->transport->enabled()
             || !$this->policy->enabled('channel.push'))return $stats;
         $limit=max(1,min(100,$limit));
+        // Bridge previously authorized legacy Moment tokens only while the
+        // shared provider is independently enabled. Existing M7 records stay.
+        app(NotificationDeviceBridge::class)->bridge(min(50,$limit));
         $notices=DB::table('notification_inbox')->whereNull('invalidated_at')
             ->whereNull('read_at')
             ->where('created_at','>=',now()->subMinutes(

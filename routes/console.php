@@ -134,3 +134,13 @@ Artisan::command('orbit:notifications:expire', function () {
     $this->info('Expired notifications invalidated: '.$count);
 })->purpose('Hide notices beyond approved retention without purging M7 legacy source');
 Schedule::command('orbit:notifications:expire')->hourly()->withoutOverlapping();
+
+// Revoke encrypted push registrations when trust, session, account status or
+// global push preference changes. Runs with Firebase disabled as well.
+Artisan::command('orbit:notifications:devices-reconcile',function () {
+    $result=app(\App\Modules\Notifications\Services\NotificationDeviceBridge::class)
+        ->reconcile(100);
+    $this->info('Push device registration reconciliation: '.json_encode($result));
+})->purpose('Disable stale or untrusted M14 push registrations');
+Schedule::command('orbit:notifications:devices-reconcile')
+    ->everyFiveMinutes()->withoutOverlapping();

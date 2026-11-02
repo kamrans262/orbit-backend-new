@@ -11,6 +11,9 @@ return [
     'worker_lease_seconds' => 120,
     // Never awaken old backfilled activity as a new OS push.
     'push_max_age_minutes' => 30,
+    'security_email_enabled' => (bool) env('ORBIT_NOTIFICATIONS_SECURITY_EMAIL_ENABLED', false),
+    'verified_email_domain' => env('ORBIT_NOTIFICATIONS_VERIFIED_EMAIL_DOMAIN', ''),
+
     // Seven-day compatibility with existing Moment inbox. Product-wide
     // retention remains configurable and requires approval before release.
     'retention_days' => max(1, min(30, (int) env('ORBIT_NOTIFICATIONS_RETENTION_DAYS', 7))),
