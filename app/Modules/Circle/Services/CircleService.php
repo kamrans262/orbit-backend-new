@@ -469,6 +469,16 @@ final class CircleService
                 ->update(['role'=>$role,'updated_at'=>now()]);
             if (!$count) abort(404,'Member unavailable.');
             if ($role==='restricted' || $role==='member') $this->revokeInviterInvitations($id,$target);
+            if (\Illuminate\Support\Facades\Schema::hasTable('notification_circle_changes')) {
+                $noticeId=(string)Str::uuid7();
+                DB::table('notification_circle_changes')->insert([
+                    'id'=>$noticeId,'circle_id'=>$id,
+                    'recipient_user_id'=>$target,'change_type'=>'circle.role_changed',
+                    'created_at'=>now(),
+                ]);
+                app(\App\Modules\Notifications\Services\NotificationSourceOutbox::class)
+                    ->record('circle_policy',$noticeId);
+            }
             $this->change($id,'circle.role_changed');
         }, 3);
     }
@@ -484,6 +494,17 @@ final class CircleService
         return DB::transaction(function () use ($id,$user,$key): array {
             $this->circle($id,$user,false,true);
             app(CircleConsentPolicy::class)->revoke($id,$user,$key);
+            if (\Illuminate\Support\Facades\Schema::hasTable('notification_circle_changes')) {
+                $noticeId=(string)Str::uuid7();
+                DB::table('notification_circle_changes')->insert([
+                    'id'=>$noticeId,'circle_id'=>$id,
+                    'recipient_user_id'=>$user,
+                    'change_type'=>'circle.permission_revoked',
+                    'created_at'=>now(),
+                ]);
+                app(\App\Modules\Notifications\Services\NotificationSourceOutbox::class)
+                    ->record('circle_policy',$noticeId);
+            }
             $this->change($id,'circle.permission_revoked');
             return ['permission_key'=>$key,'enabled'=>false];
         }, 3);

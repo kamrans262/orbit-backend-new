@@ -137,6 +137,23 @@ final class NotificationProjector
                 }catch(\Throwable){$stats['errors']++;}
             }
         }
+        if(Schema::hasTable('notification_circle_changes')){
+            $changes=DB::table('notification_circle_changes as c')
+                ->where('c.created_at','>=',$since)
+                ->whereNotExists(fn($q)=>$q->selectRaw('1')
+                    ->from('notification_events as e')
+                    ->where('e.source_type','circle_policy')
+                    ->whereColumn('e.source_id','c.id'))
+                ->orderBy('c.created_at')->limit($limit)->get(['c.*']);
+            foreach($changes as $change){
+                try{
+                    $stats['circles']+=$this->notices->publish(
+                        'circle_policy',$change->id,'circles',$change->change_type,
+                        $change->circle_id,[$change->recipient_user_id],
+                        'circle:'.$change->circle_id,null,$change->created_at);
+                }catch(\Throwable){$stats['errors']++;}
+            }
+        }
         if(Schema::hasTable('orbit_identity_events')){
             $events=DB::table('orbit_identity_events as i')
                 ->where('i.created_at','>=',$since)

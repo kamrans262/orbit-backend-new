@@ -157,6 +157,12 @@ final class NotificationPolicy
             return false;
         }
         if ($category === 'circles') {
+            if(in_array($type,['circle.role_changed','circle.permission_revoked'],true)){
+                return DB::table('circles')->where('id',$target)
+                    ->whereNull('archived_at')->exists()
+                    && app(\App\Modules\Circle\Services\CircleAccessPolicy::class)
+                        ->isMember($target,$user);
+            }
             if(config('orbit_circle.targeted_invites_enabled')!==true)return false;
             $invite=DB::table('circle_invites')->where('id',$target)->first();
             if(!$invite)return false;

@@ -16,7 +16,7 @@ final class NotificationSourceOutbox
 {
     private const SOURCES = [
         'ping','check_in','message','friend_request','friend_acceptance',
-        'circle_invite','circle_acceptance',
+        'circle_invite','circle_acceptance','circle_policy',
     ];
 
     public function record(string $sourceType, string $sourceId): void
