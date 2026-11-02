@@ -82,6 +82,31 @@ final class MomentFcmTransport
         return $response->json('access_token');
     }
 
+    /**
+     * Shared M14 transport. Data-only, non-identifying generic trigger. The
+     * receiving app fetches its authenticated inbox after rechecking access.
+     * FCM acceptance is NOT an on-device display/open/read receipt.
+     */
+    public function sendOperationalGeneric(string $fcmToken): bool
+    {
+        if(!$this->enabled()) return false;
+        $project=(string)config('orbit_moments.fcm.project_id');
+        $response=Http::withToken($this->accessToken())->acceptJson()
+            ->timeout(8)->post('https://fcm.googleapis.com/v1/projects/'
+                .$project.'/messages:send',[
+                'message'=>[
+                    'token'=>$fcmToken,
+                    'data'=>['type'=>'notification_available'],
+                    'android'=>['priority'=>'NORMAL'],
+                    'apns'=>['headers'=>['apns-priority'=>'5'],
+                        'payload'=>['aps'=>['content-available'=>1]]],
+                ],
+            ]);
+        return $response->successful()
+            && is_string($response->json('name'))
+            && str_starts_with($response->json('name'),'projects/'.$project.'/messages/');
+    }
+
     /** FCM acceptance is not device display/read receipt. */
     public function sendGeneric(string $fcmToken):bool
     {
