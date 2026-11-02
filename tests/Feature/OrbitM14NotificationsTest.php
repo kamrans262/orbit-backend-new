@@ -142,6 +142,52 @@ final class OrbitM14NotificationsTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_friend_requests_are_private_idempotent_and_hidden_after_block(): void
+    {
+        [$sender,$senderDevice,$senderToken]=$this->principal();
+        [$recipient,$recipientDevice,$recipientToken]=$this->principal();
+        $id=(string)Str::uuid();
+        DB::table('friend_requests')->insert([
+            'id'=>$id,'sender_id'=>$sender->id,'recipient_id'=>$recipient->id,
+            'status'=>'pending','created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $first=app(NotificationProjector::class)->run(20);
+        $this->assertSame(1,$first['friends']);
+        $second=app(NotificationProjector::class)->run(20);
+        $this->assertSame(0,$second['friends']);
+        $this->assertDatabaseCount('notification_inbox',1);
+        $this->withToken($recipientToken)->getJson('/api/v1/me/notifications')
+            ->assertOk()->assertJsonPath('data.items.0.type','friend.requested');
+        $this->withToken($senderToken)->getJson('/api/v1/me/notifications')
+            ->assertOk()->assertJsonPath('data.items',[]);
+        // Revocation must be enforced at read, not just at publish time.
+        DB::table('blocks')->insert([
+            'blocker_id'=>$sender->id,'blocked_id'=>$recipient->id,'created_at'=>now(),
+        ]);
+        $this->withToken($recipientToken)->getJson('/api/v1/me/notifications')
+            ->assertOk()->assertJsonPath('data.items',[]);
+        $this->withToken($recipientToken)->getJson('/api/v1/me/notifications/unread')
+            ->assertOk()->assertJsonPath('data.count',0);
+    }
+
+    public function test_selected_security_event_projects_without_exposing_reason_or_device_details(): void
+    {
+        [$user,$device,$token]=$this->principal();
+        $event=(string)Str::uuid();
+        DB::table('orbit_identity_events')->insert([
+            'id'=>$event,'user_id'=>$user->id,'device_id'=>$device->id,
+            'action'=>'auth.password_reset','reason_code'=>'verified_otp',
+            'created_at'=>now(),
+        ]);
+        $stats=app(NotificationProjector::class)->run(20);
+        $this->assertSame(1,$stats['security']);
+        $response=$this->withToken($token)->getJson('/api/v1/me/notifications')->assertOk()
+            ->assertJsonPath('data.items.0.category','security')
+            ->assertJsonPath('data.items.0.type','security.notice');
+        $this->assertStringNotContainsString('verified_otp',$response->getContent());
+        $this->assertStringNotContainsString($device->id,$response->getContent());
+    }
+
     public function test_reprojection_is_idempotent_without_fake_source_records(): void
     {
         $service=app(NotificationProjector::class);
