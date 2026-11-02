@@ -467,6 +467,25 @@ final class OrbitM14NotificationsTest extends TestCase
             ->syncLegacyMomentReads($owner->id));
     }
 
+    public function test_legacy_device_audit_does_not_migrate_or_contact_firebase(): void
+    {
+        [$user,$device,$token]=$this->principal();
+        \Illuminate\Support\Facades\Http::fake();
+        DB::table('moment_push_devices')->insert([
+            'device_id'=>$device->id,'user_id'=>$user->id,
+            'platform'=>'android','token_digest'=>hash('sha256','legacy-push-value'),
+            'token_ciphertext'=>\Illuminate\Support\Facades\Crypt::encryptString('legacy-push-value'),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $bridge=app(\App\Modules\Notifications\Services\NotificationDeviceBridge::class);
+        $audit=$bridge->audit();
+        $this->assertSame(1,$audit['legacy_scanned']);
+        $this->assertFalse($audit['push_delivery_enabled']);
+        $this->assertSame(0,$bridge->bridge()['bridged']);
+        $this->assertDatabaseCount('notification_device_tokens',0);
+        \Illuminate\Support\Facades\Http::assertNothingSent();
+    }
+
     public function test_reprojection_is_idempotent_without_fake_source_records(): void
     {
         $service=app(NotificationProjector::class);

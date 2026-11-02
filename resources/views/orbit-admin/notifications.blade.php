@@ -130,6 +130,28 @@
       </tr>@empty<tr><td colspan="4">No provider attempts recorded.</td></tr>@endforelse</tbody></table></div>
 </section>
 @elseif($area==='devices')
+@if($legacyTokenAudit !== null)
+<section class="panel">
+  <div class="panel-head"><div><h2>Legacy Moment token migration readiness</h2>
+    <p>Read-only audit of up to 200 existing records; no token contents or account identifiers displayed.
+    Does not enable Firebase, trigger a push, or import tokens.</p></div></div>
+  <div class="stat-grid">
+    @foreach([
+      'Legacy records reviewed'=>$legacyTokenAudit['legacy_scanned'],
+      'Ready for approved cutover'=>$legacyTokenAudit['eligible_to_bridge'],
+      'Already registered'=>$legacyTokenAudit['existing_shared'],
+      'Ineligible / opt-out'=>$legacyTokenAudit['not_eligible'],
+      'Token conflicts'=>$legacyTokenAudit['token_conflicts']
+    ] as $label=>$value)
+    <article class="stat-card"><span class="stat-label">{{ $label }}</span>
+      <strong>{{ number_format($value) }}</strong></article>
+    @endforeach
+  </div>
+  <p><strong>Shared provider:</strong>
+    {{ $legacyTokenAudit['push_delivery_enabled']?'Enabled by server gate':'Disabled pending verified credentials' }}.
+    Existing M7 records remain intact, and migration requires current trusted-device consent.</p>
+</section>
+@endif
 <section class="panel"><div class="panel-head"><div><h2>Push device registrations</h2>
   <p>Device references and token fingerprint prefixes only; raw tokens and account information are hidden.</p></div></div>
   <div class="table-scroll"><table><thead><tr>

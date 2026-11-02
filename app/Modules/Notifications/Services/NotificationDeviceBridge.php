@@ -29,6 +29,52 @@ final class NotificationDeviceBridge
             && $this->policy->preference($user,'push_notifications_enabled');
     }
 
+    /**
+     * Read-only, bounded compatibility review while provider is still OFF.
+     * No token hashes, raw tokens, user IDs or device IDs leave the server.
+     * This does NOT constitute provider readiness or delivery acceptance.
+     */
+    public function audit(int $limit=200): array
+    {
+        $result=[
+            'legacy_scanned'=>0,'eligible_to_bridge'=>0,
+            'existing_shared'=>0,'not_eligible'=>0,'token_conflicts'=>0,
+            'provider_configured'=>false,'push_delivery_enabled'=>false,
+        ];
+        if(!$this->policy->installed() || !Schema::hasTable('moment_push_devices'))
+            return $result;
+        $result['provider_configured']=trim((string)config('orbit_moments.fcm.project_id',''))!=='';
+        $result['push_delivery_enabled']=$this->transport->enabled()
+            && $this->policy->enabled('channel.push');
+        $rows=DB::table('moment_push_devices as m')
+            ->whereNull('m.disabled_at')->orderBy('m.updated_at')
+            ->limit(max(1,min($limit,500)))
+            ->get(['m.device_id','m.user_id','m.platform','m.token_digest']);
+        foreach($rows as $row){
+            $result['legacy_scanned']++;
+            $shared=DB::table('notification_device_tokens')
+                ->where('device_id',$row->device_id)->first();
+            if($shared){
+                $result['existing_shared']++;
+                continue;
+            }
+            if(!in_array($row->platform,['android','ios'],true)
+                || !$this->active($row->user_id,$row->device_id)
+                || !DB::table('devices')->where('id',$row->device_id)
+                    ->where('platform',$row->platform)->exists()){
+                $result['not_eligible']++;
+                continue;
+            }
+            if(DB::table('notification_device_tokens')
+                ->where('token_digest',$row->token_digest)->exists()){
+                $result['token_conflicts']++;
+                continue;
+            }
+            $result['eligible_to_bridge']++;
+        }
+        return $result;
+    }
+
     public function bridge(int $limit=50): array
     {
         $result=['bridged'=>0,'skipped'=>0];
@@ -47,7 +93,9 @@ final class NotificationDeviceBridge
         $project=(string)config('orbit_moments.fcm.project_id','');
         if($project==='')return $result;
         foreach($rows as $row){
-            if(!$this->active($row->user_id,$row->device_id)){
+            if(!$this->active($row->user_id,$row->device_id)
+                || !DB::table('devices')->where('id',$row->device_id)
+                    ->where('platform',$row->platform)->exists()){
                 $result['skipped']++;continue;
             }
             $result['bridged']+=DB::table('notification_device_tokens')
