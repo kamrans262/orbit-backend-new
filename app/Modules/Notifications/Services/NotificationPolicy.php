@@ -219,10 +219,19 @@ final class NotificationPolicy
             ->where('user_id',$user)->whereNull('left_at')->first();
         if(!$member)return false;
         if($member->muted_until!==null && now()->lt($member->muted_until))return false;
-        return !DB::table('notification_context_mutes')
+        if(DB::table('notification_context_mutes')
             ->where('user_id',$user)->where('context_type','conversation')
             ->where('context_id',$message->conversation_id)
-            ->where('category','messages')->exists();
+            ->where('category','messages')->exists())return false;
+        $conversation=DB::table('messaging_conversations')
+            ->where('id',$message->conversation_id)->first();
+        if($conversation && $conversation->kind==='circle'
+            && $conversation->circle_id
+            && DB::table('notification_context_mutes')
+                ->where('user_id',$user)->where('context_type','circle')
+                ->where('context_id',$conversation->circle_id)
+                ->where('category','messages')->exists())return false;
+        return true;
     }
 
     public function canView(object $notice, string $user): bool
