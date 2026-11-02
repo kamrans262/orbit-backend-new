@@ -119,6 +119,12 @@ final class MomentFcmTransport
                     .$project.'/messages:send',[
                     'message'=>[
                         'token'=>$fcmToken,
+                        // Public, generic OS-visible alert; no recipient, location,
+                        // message text, Circle identity, or private target ID.
+                        'notification'=>[
+                            'title'=>'Orbit',
+                            'body'=>'You have a new notification.',
+                        ],
                         'data'=>['type'=>'notification_available'],
                         'android'=>[
                             'priority'=>'NORMAL',
@@ -182,6 +188,11 @@ final class MomentFcmTransport
                 .$project.'/messages:send',[
                 'message'=>[
                     'token'=>$fcmToken,
+                    // Preserve M7's generic, privacy-safe payload.
+                    'notification'=>[
+                        'title'=>'Orbit',
+                        'body'=>'You have a new notification.',
+                    ],
                     'data'=>['type'=>'moment_available'],
                     'android'=>['priority'=>'NORMAL'],
                     'apns'=>['headers'=>['apns-priority'=>'5'],
