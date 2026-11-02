@@ -259,6 +259,67 @@ final class OrbitM14NotificationsTest extends TestCase
         $this->assertDatabaseCount('notification_jobs',0);
     }
 
+    public function test_source_outbox_is_atomic_with_source_transactions(): void
+    {
+        $outbox=app(\App\Modules\Notifications\Services\NotificationSourceOutbox::class);
+        $source=(string)Str::uuid();
+        try {
+            DB::transaction(function()use($outbox,$source){
+                $outbox->record('ping',$source);
+                throw new \RuntimeException('source transaction rollback');
+            });
+        }catch(\RuntimeException){}
+        $this->assertDatabaseMissing('notification_source_outbox',[
+            'source_type'=>'ping','source_id'=>$source,
+        ]);
+        DB::transaction(function()use($outbox,$source){
+            $outbox->record('ping',$source);
+            $outbox->record('ping',$source);
+        });
+        $this->assertDatabaseCount('notification_source_outbox',1);
+        $outbox->record('invented_event',$source);
+        $this->assertDatabaseCount('notification_source_outbox',1);
+    }
+
+    public function test_security_mail_and_fcm_stay_inert_without_credentials(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $this->assertFalse(app(
+            \App\Modules\Notifications\Services\NotificationSecurityEmailTransport::class
+        )->enabled());
+        $stats=app(
+            \App\Modules\Notifications\Services\NotificationSecurityEmailDeliveryWorker::class
+        )->run(5);
+        $this->assertSame(0,$stats['accepted']);
+        \Illuminate\Support\Facades\Mail::assertNothingSent();
+        $this->assertDatabaseCount('notification_security_email_jobs',0);
+    }
+
+    public function test_revoked_device_token_is_disabled_without_contacting_fcm(): void
+    {
+        [$user,$device,$token]=$this->principal();
+        DB::table('notification_device_tokens')->insert([
+            'device_id'=>$device->id,'user_id'=>$user->id,
+            'platform'=>'android','project_id'=>'orbit-test',
+            'token_ciphertext'=>\Illuminate\Support\Facades\Crypt::encryptString(
+                'not-a-real-device-token'),
+            'token_digest'=>hash('sha256','not-a-real-device-token'),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('devices')->where('id',$device->id)->update([
+            'revoked_at'=>now(),'trust_state'=>'revoked',
+        ]);
+        $stats=app(
+            \App\Modules\Notifications\Services\NotificationDeviceBridge::class
+        )->reconcile(10);
+        $this->assertSame(1,$stats['disabled']);
+        $this->assertDatabaseHas('notification_device_tokens',[
+            'device_id'=>$device->id,
+        ]);
+        $this->assertNotNull(DB::table('notification_device_tokens')
+            ->where('device_id',$device->id)->value('disabled_at'));
+    }
+
     public function test_reprojection_is_idempotent_without_fake_source_records(): void
     {
         $service=app(NotificationProjector::class);
