@@ -27,9 +27,9 @@ final class NotificationDeliveryWorker
             ->orderByDesc('created_at')->limit($limit*5)->get();
         foreach($notices as $notice){
             if($stats['created']>=$limit)break;
-            // Existing M7 transport owns Moment push during compatibility
-            // cutover; never generate two pushes for one Moment.
-            if($notice->category==='moments')continue;
+            // M14 owns all notification categories, including Moments.
+            // Keep the legacy ORBIT_M7_FCM_ENABLED switch OFF to avoid
+            // duplicate sends through the older M7-only delivery worker.
             if(!$this->policy->pushAllowed($notice,$notice->recipient_user_id))continue;
             $devices=DB::table('notification_device_tokens as t')
                 ->join('devices as d','d.id','=','t.device_id')
@@ -81,7 +81,7 @@ final class NotificationDeliveryWorker
                 && DB::table('orbit_sessions')->where('device_id',$claimed->device_id)
                     ->where('user_id',$notice->recipient_user_id)->whereNull('revoked_at')
                     ->where('expires_at','>',now())->exists()
-                && $notice->category!=='moments' && $this->transport->enabled()
+                && $this->transport->enabled()
                 && $this->policy->enabled('channel.push');
             if(!$valid){
                 $this->finish($id,'suppressed','eligibility_changed',null);
