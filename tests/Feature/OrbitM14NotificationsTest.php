@@ -236,6 +236,29 @@ final class OrbitM14NotificationsTest extends TestCase
             ->assertOk()->assertJsonPath('data.items',[]);
     }
 
+    public function test_backfill_keeps_original_event_age_instead_of_becoming_new_push(): void
+    {
+        [$sender,$senderDevice,$senderToken]=$this->principal();
+        [$recipient,$device,$token]=$this->principal();
+        $id=(string)Str::uuid();
+        $occurred=now()->subDays(2)->startOfMinute();
+        DB::table('friend_requests')->insert([
+            'id'=>$id,'sender_id'=>$sender->id,'recipient_id'=>$recipient->id,
+            'status'=>'pending','created_at'=>$occurred,'updated_at'=>$occurred,
+        ]);
+        $stats=app(NotificationProjector::class)->run(20);
+        $this->assertSame(1,$stats['friends']);
+        $notice=DB::table('notification_inbox')->where('recipient_user_id',$recipient->id)->first();
+        $this->assertNotNull($notice);
+        $this->assertTrue(\Illuminate\Support\Carbon::parse($notice->created_at)
+            ->lt(now()->subDay()));
+        // Backfilled notices stay available to the inbox, not eligible for a
+        // fresh push in the configured 30-minute delivery window.
+        $this->withToken($token)->getJson('/api/v1/me/notifications')
+            ->assertOk()->assertJsonCount(1,'data.items');
+        $this->assertDatabaseCount('notification_jobs',0);
+    }
+
     public function test_reprojection_is_idempotent_without_fake_source_records(): void
     {
         $service=app(NotificationProjector::class);
