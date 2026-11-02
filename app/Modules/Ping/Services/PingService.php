@@ -55,13 +55,16 @@ final class PingService
 
         $created = DB::transaction(function () use ($sender, $recipient, $client, $type, $custom, $context, $circle, $payload): bool {
             // The unique sender/client index is authoritative across simultaneous retries.
-            return DB::table('pings')->insertOrIgnore([
-                'id' => (string) Str::uuid(), 'sender_id' => $sender,
+            $eventId = (string) Str::uuid();
+            $inserted = DB::table('pings')->insertOrIgnore([
+                'id' => $eventId, 'sender_id' => $sender,
                 'recipient_id' => $recipient, 'client_id' => $client,
                 'payload_hash' => $payload, 'type' => $type, 'custom_text' => $custom,
                 'context_type' => $context, 'context_id' => $circle,
                 'created_at' => now(), 'updated_at' => now(),
             ]) === 1;
+            if ($inserted) app(\App\Modules\Notifications\Services\NotificationSourceOutbox::class)->record('ping', $eventId);
+            return $inserted;
         });
 
         $row = DB::table('pings')->where('sender_id', $sender)->where('client_id', $client)->first();

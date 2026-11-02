@@ -138,6 +138,7 @@ final class SocialGraphService
                 'status' => 'pending', 'active_pair_key' => $low.':'.$high,
                 'created_at' => now(), 'updated_at' => now(),
             ]);
+            app(\App\Modules\Notifications\Services\NotificationSourceOutbox::class)->record('friend_request', $id);
             $this->revision($sender, $recipient, $device, 'social.request_sent');
             return ['id' => $id, 'status' => 'pending'];
         }, 3);
@@ -161,6 +162,7 @@ final class SocialGraphService
                 'active_pair_key' => null, 'updated_at' => now(),
             ]);
             if ($accept) {
+                app(\App\Modules\Notifications\Services\NotificationSourceOutbox::class)->record('friend_acceptance', $row->id);
                 [$low, $high] = $this->canonical($row->sender_id, $row->recipient_id);
                 DB::table('friendships')->insertOrIgnore([
                     'user_low_id' => $low, 'user_high_id' => $high, 'created_at' => now(),

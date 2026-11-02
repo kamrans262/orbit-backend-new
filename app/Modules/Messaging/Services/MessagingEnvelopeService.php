@@ -163,6 +163,7 @@ final class MessagingEnvelopeService
             }
             DB::table('messaging_conversations')->where('id',$row->id)
                 ->update(['updated_at'=>$now]);
+            app(\App\Modules\Notifications\Services\NotificationSourceOutbox::class)->record('message', $id);
             return [['id'=>$id,'conversation_id'=>$row->id,'kind'=>$payload['kind'],
                 'group_epoch'=>(int)$row->group_epoch,'accepted'=>true,
                 'delivered'=>false,'created_at'=>$now->toIso8601String()],true];

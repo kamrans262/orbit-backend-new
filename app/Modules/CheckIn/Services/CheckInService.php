@@ -159,7 +159,10 @@ final class CheckInService
                 'place_ref' => null, 'audience_revision' => 1,
                 'expires_at' => $expiry, 'created_at' => now(), 'updated_at' => now(),
             ]) === 1;
-            if ($created) $this->writeAudience($id, 1, $scopes, $recipients);
+            if ($created) {
+                $this->writeAudience($id, 1, $scopes, $recipients);
+                app(\App\Modules\Notifications\Services\NotificationSourceOutbox::class)->record('check_in', $id);
+            }
             return $created;
         });
         $row = DB::table('checkins')->where('creator_id', $creator)

@@ -263,6 +263,7 @@ final class CircleService
                 'expires_at'=>now()->addHours($ttl),
                 'created_at'=>now(),'updated_at'=>now(),
             ]);
+            app(\App\Modules\Notifications\Services\NotificationSourceOutbox::class)->record('circle_invite', $inviteId);
             $this->change($id,'circle.invited');
             return ['id'=>$inviteId,'status'=>'pending',
                 'expires_at'=>now()->addHours($ttl)->toIso8601String(),
@@ -405,6 +406,7 @@ final class CircleService
                 'resolved_at'=>now(),'redeemed_at'=>$code !== null ? now() : null,
                 'code_hash'=>null,'updated_at'=>now(),
             ]);
+            if ($accept) app(\App\Modules\Notifications\Services\NotificationSourceOutbox::class)->record('circle_acceptance', $id);
             $this->change($circle->id,$accept?'circle.joined':'circle.invite_declined');
             return ['status'=>$accept?'accepted':'declined','circle_id'=>$circle->id];
         }, 3);
