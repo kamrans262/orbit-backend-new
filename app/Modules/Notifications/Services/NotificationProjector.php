@@ -79,7 +79,8 @@ final class NotificationProjector
                     $conversation=DB::table('messaging_conversations')
                         ->where('id',$row->conversation_id)->first();
                     $context=$conversation && $conversation->kind==='circle'
-                        && $conversation->circle_id ? 'circle:'.$conversation->circle_id : null;
+                        && $conversation->circle_id ? 'circle:'.$conversation->circle_id
+                        : 'conversation:'.$row->conversation_id;
                     $stats['messages']+=$this->notices->publish('message',$row->id,
                         'messages','message.available',$row->id,$recipients,
                         $context,$row->expires_at,$row->created_at);
@@ -153,6 +154,20 @@ final class NotificationProjector
                         'security','security.notice',$event->id,[$event->user_id],null,null,$event->created_at);
                 }catch(\Throwable){$stats['errors']++;}
             }
+        }
+        if(Schema::hasTable('notification_source_outbox')){
+            // A committed source record is never marked projected until the
+            // corresponding canonical notification event actually exists.
+            $ids=DB::table('notification_source_outbox as o')
+                ->join('notification_events as e',function($join){
+                    $join->on('e.source_type','=','o.source_type')
+                        ->on('e.source_id','=','o.source_id');
+                })
+                ->whereNull('o.projected_at')->orderBy('o.created_at')
+                ->limit($limit)->pluck('o.id');
+            if($ids->isNotEmpty()) DB::table('notification_source_outbox')
+                ->whereIn('id',$ids)->whereNull('projected_at')
+                ->update(['projected_at'=>now()]);
         }
         return $stats;
     }

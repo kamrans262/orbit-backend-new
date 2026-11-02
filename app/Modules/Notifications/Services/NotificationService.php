@@ -53,6 +53,10 @@ final class NotificationService
                     'recipient_user_id'=>$user, 'category'=>$category, 'type'=>$type,
                     'target_id'=>$targetId, 'context_id'=>$context, 'template_key'=>$template,
                     'created_at'=>$eventTime, 'expires_at'=>$expiresAt,
+                    'read_at'=>$sourceType==='moment_notice'
+                        ? DB::table('moment_notification_inbox')->where('id',$sourceId)
+                            ->where('recipient_user_id',$user)->value('read_at')
+                        : null,
                 ]);
             }
         }, 3);
@@ -62,6 +66,7 @@ final class NotificationService
     public function page(string $owner, int $limit, ?string $cursor = null, ?string $category = null): array
     {
         $this->policy->assertReady();
+        $this->syncLegacyMomentReads($owner,200);
         $limit = min(max($limit, 1), (int) config('orbit_notifications.max_page', 30));
         $start = null;
         if ($cursor !== null) {
@@ -92,6 +97,12 @@ final class NotificationService
                 'read'=>$row->read_at !== null,
                 'title'=>(string)DB::table('notification_templates')->where('key',$row->template_key)->value('title'),
                 'body'=>(string)DB::table('notification_templates')->where('key',$row->template_key)->value('body'),
+                // Only a stable, non-identifying digest of the owning context.
+                // Never expose Circle IDs or conversation membership in group keys.
+                'group_key'=>in_array($row->category,['messages','circles'],true)
+                    && $row->context_id
+                        ? hash('sha256',$row->category.'|'.$row->context_id)
+                        : null,
                 'target'=>['kind'=>$row->category,'opaque_id'=>$row->target_id],
             ];
             if (count($out)>=$limit) break;
@@ -104,6 +115,7 @@ final class NotificationService
     public function unread(string $user): int
     {
         $this->policy->assertReady();
+        $this->syncLegacyMomentReads($user,200);
         $count=0;
         DB::table('notification_inbox')->where('recipient_user_id', $user)
             ->whereNull('read_at')->whereNull('invalidated_at')
@@ -120,8 +132,18 @@ final class NotificationService
         $row=DB::table('notification_inbox')->where('id',$notice)
             ->where('recipient_user_id',$user)->first();
         abort_unless($row && $this->policy->canView($row, $user), 404, 'Notification unavailable.');
-        DB::table('notification_inbox')->where('id',$notice)
-            ->where('recipient_user_id',$user)->whereNull('read_at')->update(['read_at'=>now()]);
+        DB::transaction(function () use ($user,$notice,$row):void {
+            DB::table('notification_inbox')->where('id',$notice)
+                ->where('recipient_user_id',$user)->whereNull('read_at')
+                ->update(['read_at'=>now()]);
+            if($row->category==='moments') {
+                $source=DB::table('notification_events')->where('id',$row->event_id)->first();
+                if($source && $source->source_type==='moment_notice')
+                    DB::table('moment_notification_inbox')->where('id',$source->source_id)
+                        ->where('recipient_user_id',$user)->whereNull('read_at')
+                        ->update(['read_at'=>now()]);
+            }
+        },3);
     }
 
     public function readAll(string $user, ?string $category=null): int
@@ -131,11 +153,37 @@ final class NotificationService
             ->whereNull('read_at')->whereNull('invalidated_at');
         if($category!==null)$query->where('category',$category);
         $updated=0;
-        // Bounded operation; no unsafe, unbounded server-wide bulk updates.
+        // Bounded operation; no unsafe server-wide bulk updates.
         foreach($query->orderByDesc('created_at')->limit(500)->get() as $row){
-            if($this->policy->canView($row,$user)) $updated += DB::table('notification_inbox')
-                ->where('id',$row->id)->where('recipient_user_id',$user)
-                ->whereNull('read_at')->update(['read_at'=>now()]);
+            if($this->policy->canView($row,$user)) {
+                $this->markRead($user,$row->id);
+                $updated++;
+            }
+        }
+        return $updated;
+    }
+
+    /**
+     * Existing M7 clients may mark Moment notifications read using the old
+     * endpoint. Preserve that state in the shared inbox without duplicating
+     * notice records or modifying the original owner's read timestamp.
+     */
+    public function syncLegacyMomentReads(string $owner,int $limit=500): int
+    {
+        if(!$this->policy->installed())return 0;
+        $rows=DB::table('notification_inbox as n')
+            ->join('notification_events as e','e.id','=','n.event_id')
+            ->join('moment_notification_inbox as m','m.id','=','e.source_id')
+            ->where('n.recipient_user_id',$owner)
+            ->where('m.recipient_user_id',$owner)
+            ->where('e.source_type','moment_notice')
+            ->whereNull('n.read_at')->whereNotNull('m.read_at')
+            ->limit(max(1,min(500,$limit)))->get(['n.id','m.read_at']);
+        $updated=0;
+        foreach($rows as $row) {
+            $updated+=DB::table('notification_inbox')->where('id',$row->id)
+                ->where('recipient_user_id',$owner)->whereNull('read_at')
+                ->update(['read_at'=>$row->read_at]);
         }
         return $updated;
     }

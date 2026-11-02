@@ -180,6 +180,25 @@ final class NotificationPolicy
         return false;
     }
 
+    /** Muting suppresses push, but never removes an authorized inbox record. */
+    public function pushAllowed(object $notice, string $user): bool
+    {
+        if(!$this->categoryEnabled($user,(string)$notice->category,true)
+            || !$this->canView($notice,$user))return false;
+        if($notice->category!=='messages')return true;
+        $message=DB::table('messaging_messages')->where('id',$notice->target_id)->first();
+        if(!$message)return false;
+        $member=DB::table('messaging_members')
+            ->where('conversation_id',$message->conversation_id)
+            ->where('user_id',$user)->whereNull('left_at')->first();
+        if(!$member)return false;
+        if($member->muted_until!==null && now()->lt($member->muted_until))return false;
+        return !DB::table('notification_context_mutes')
+            ->where('user_id',$user)->where('context_type','conversation')
+            ->where('context_id',$message->conversation_id)
+            ->where('category','messages')->exists();
+    }
+
     public function canView(object $notice, string $user): bool
     {
         if ($notice->recipient_user_id !== $user || $notice->invalidated_at
