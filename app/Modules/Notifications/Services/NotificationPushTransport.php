@@ -10,7 +10,7 @@ final class NotificationPushTransport
     {
         // Independent safety switch; credentials and APNs are prerequisites.
         return config('orbit_notifications.push_enabled') === true
-            && app(MomentFcmTransport::class)->enabled();
+            && app(MomentFcmTransport::class)->notificationsReady();
     }
 
     public function options(): array

@@ -12,8 +12,15 @@ final class MomentFcmTransport
 {
     public function enabled():bool
     {
-        if(config('orbit_moments.enabled')!==true ||
-            config('orbit_moments.fcm.enabled')!==true)return false;
+        // Preserve M7's original, independent transport rollout flags.
+        return config('orbit_moments.enabled')===true
+            && config('orbit_moments.fcm.enabled')===true
+            && $this->notificationsReady();
+    }
+
+    /** Shared credential readiness, independent of legacy Moments rollout. */
+    public function notificationsReady(): bool
+    {
         $options=config('orbit_moments.fcm',[]);
         if(!is_array($options))return false;
         foreach(['project_id','api_key','sender_id','android_app_id',
@@ -97,7 +104,7 @@ final class MomentFcmTransport
      */
     public function sendOperationalResult(string $fcmToken,string $category): array
     {
-        if(!$this->enabled())return ['status'=>'retry','code'=>'provider_off'];
+        if(!$this->notificationsReady())return ['status'=>'retry','code'=>'provider_off'];
         $allowed=['pings','check_ins','messages','friends','circles','security'];
         if(!in_array($category,$allowed,true))
             return ['status'=>'terminal','code'=>'category_unsupported'];
