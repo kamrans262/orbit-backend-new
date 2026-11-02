@@ -82,7 +82,8 @@ final class NotificationPolicy
         if (!DB::table('orbit_users')->where('id', $user)->where('status', 'active')
             ->whereNull('deletion_requested_at')->exists()) return false;
         if (!$this->categoryEnabled($user, $category)) return false;
-        if ($context && str_starts_with($context, 'circle:')) {
+        if ($context && str_starts_with($context, 'circle:')
+            && $category!=='messages') {
             $circle = substr($context, 7);
             if (DB::table('notification_context_mutes')
                 ->where('user_id', $user)->where('context_type', 'circle')
@@ -185,6 +186,24 @@ final class NotificationPolicy
         // Other categories are available only when an audited producer/policy
         // is added, never inferred from a guessed client supplied object ID.
         return false;
+    }
+
+    /** Mutes are private owner settings; never infer access from a UUID. */
+    public function canMuteContext(string $user,string $category,
+                                   string $contextType,string $contextId):bool
+    {
+        if(!in_array($category,['moments','pings','check_ins','circles','messages'],true))
+            return false;
+        if($contextType==='circle'){
+            return app(\App\Modules\Circle\Services\CircleAccessPolicy::class)
+                ->isMember($contextId,$user)
+                && DB::table('circles')->where('id',$contextId)
+                    ->whereNull('archived_at')->exists();
+        }
+        return $contextType==='conversation' && $category==='messages'
+            && DB::table('messaging_members')
+                ->where('conversation_id',$contextId)->where('user_id',$user)
+                ->whereNull('left_at')->exists();
     }
 
     /** Muting suppresses push, but never removes an authorized inbox record. */

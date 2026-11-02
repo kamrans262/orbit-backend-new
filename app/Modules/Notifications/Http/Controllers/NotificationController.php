@@ -122,6 +122,61 @@ final class NotificationController extends Controller
         return $this->response(['registered'=>true]);
     }
 
+    /** Return only the requesting account's still-authorized mute IDs. */
+    public function contextMutes(Request $request): JsonResponse
+    {
+        [$user]=$this->policy->actor($request);
+        $data=$request->validate([
+            'category'=>['required','string',Rule::in([
+                'moments','pings','check_ins','circles','messages'])],
+        ]);
+        $rows=DB::table('notification_context_mutes')
+            ->where('user_id',$user)->where('category',$data['category'])
+            ->limit(100)->get(['context_type','context_id','category']);
+        $items=[];
+        foreach($rows as $row){
+            if($this->policy->canMuteContext($user,$row->category,
+                $row->context_type,$row->context_id)){
+                $items[]=['type'=>$row->context_type,'id'=>$row->context_id];
+            }
+        }
+        return $this->response(['items'=>$items]);
+    }
+
+    public function setContextMute(Request $request, string $category,
+                                   string $contextType,string $contextId): JsonResponse
+    {
+        [$user]=$this->policy->actor($request);
+        abort_unless(Str::isUuid($contextId),422,'Invalid context reference.');
+        $data=$request->validate(['muted'=>['required','boolean']]);
+        abort_unless($this->policy->canMuteContext(
+            $user,$category,$contextType,$contextId),404,'Context unavailable.');
+        DB::transaction(function()use($user,$category,$contextType,$contextId,$data):void {
+            $where=[
+                'user_id'=>$user,'category'=>$category,
+                'context_type'=>$contextType,'context_id'=>$contextId,
+            ];
+            if($data['muted']){
+                DB::table('notification_context_mutes')->updateOrInsert(
+                    $where,['muted_at'=>now()]);
+            }else{
+                DB::table('notification_context_mutes')->where($where)->delete();
+            }
+            if($category==='moments' && $contextType==='circle'
+                && Schema::hasTable('moment_notification_muted_circles')){
+                $legacy=['user_id'=>$user,'circle_id'=>$contextId];
+                if($data['muted']){
+                    DB::table('moment_notification_muted_circles')->updateOrInsert(
+                        $legacy,['created_at'=>now(),'updated_at'=>now()]);
+                }else{
+                    DB::table('moment_notification_muted_circles')
+                        ->where($legacy)->delete();
+                }
+            }
+        },3);
+        return $this->response(['muted'=>(bool)$data['muted']]);
+    }
+
     public function unregisterDevice(Request $request): \Illuminate\Http\Response
     {
         [$user,$device]=$this->policy->actor($request);

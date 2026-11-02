@@ -55,6 +55,11 @@ Route::prefix('v1')->group(function (): void {
         // M14: trusted-device owner inbox; in-app HTTPS works with Firebase OFF.
         Route::get('/me/notifications',[NotificationController::class,'index'])->middleware('throttle:30,1');
         Route::get('/me/notifications/unread',[NotificationController::class,'unread'])->middleware('throttle:25,1');
+        Route::get('/me/notifications/context-mutes',[NotificationController::class,'contextMutes'])
+            ->middleware('throttle:20,1');
+        Route::put('/me/notifications/context-mutes/{category}/{contextType}/{contextId}',
+            [NotificationController::class,'setContextMute'])
+            ->whereUuid('contextId')->middleware('throttle:15,1');
         Route::post('/me/notifications/read-all',[NotificationController::class,'readAll'])->middleware('throttle:15,1');
         Route::post('/me/notifications/{notice}/read',[NotificationController::class,'read'])
             ->whereUuid('notice')->middleware('throttle:40,1');
