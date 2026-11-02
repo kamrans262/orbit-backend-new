@@ -7,7 +7,8 @@ on:
       - 'app/Modules/Notifications/**'
       - 'app/Modules/Moments/Services/MomentFcmTransport.php'
       - 'config/orbit_notifications.php'
-      - 'database/migrations/2026_11_02_000001_create_orbit_notifications.php'
+      - 'database/migrations/2026_11_02_*.php'
+      - 'scripts/m14_*'
       - 'resources/views/orbit-admin/notifications.blade.php'
       - 'resources/views/orbit-admin/partials/sidebar-navigation.blade.php'
       - 'routes/api.php'
@@ -66,10 +67,13 @@ jobs:
           find app/Modules/Notifications -name '*.php' -print0 | xargs -0 -n1 php -l
           php -l app/Modules/Moments/Services/MomentFcmTransport.php
           php -l config/orbit_notifications.php
-          php -l database/migrations/2026_11_02_000001_create_orbit_notifications.php
+          for migration in database/migrations/2026_11_02_*.php; do php -l "$migration"; done
+          php -l scripts/m14_assert_migration_schema.php
           php -l routes/api.php
           php -l routes/admin.php
           php -l routes/console.php
           php -l tests/Feature/OrbitM14NotificationsTest.php
+      - name: Verify additive schema and five-step rollback on disposable MariaDB
+        run: bash scripts/m14_verify_isolated_migration_rollback.sh
       - name: Focused Module 14 private inbox, delivery and Admin RBAC
         run: php artisan test --compact --filter='OrbitM14NotificationsTest'
