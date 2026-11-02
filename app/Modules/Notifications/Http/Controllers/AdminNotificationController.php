@@ -89,6 +89,9 @@ final class AdminNotificationController extends Controller
             'pushConfigured'=>config('orbit_notifications.push_enabled')===true,
             'categories'=>config('orbit_notifications.categories',[]),
             'mailReady'=>app(\App\Modules\Notifications\Services\NotificationSecurityEmailTransport::class)->enabled(),
+            'legacyMomentAudit'=>$ready && $area==='overview'
+                ?app(\App\Modules\Notifications\Services\NotificationService::class)->legacyMomentReadAudit()
+                :null,
             'legacyTokenAudit'=>$area==='devices'
                 ?app(\App\Modules\Notifications\Services\NotificationDeviceBridge::class)->audit(200)
                 :null,

@@ -168,6 +168,32 @@ final class NotificationService
      * endpoint. Preserve that state in the shared inbox without duplicating
      * notice records or modifying the original owner's read timestamp.
      */
+    /** Aggregates only; no user, Moment, audience or read timestamp leaves Admin. */
+    public function legacyMomentReadAudit(): array
+    {
+        $result=[
+            'linked_notices'=>0,'legacy_read_pending_sync'=>0,
+            'shared_read_pending_legacy'=>0,
+        ];
+        if(!$this->policy->installed()
+            || !\Illuminate\Support\Facades\Schema::hasTable('moment_notification_inbox')){
+            return $result;
+        }
+        $base=DB::table('notification_inbox as n')
+            ->join('notification_events as e','e.id','=','n.event_id')
+            ->join('moment_notification_inbox as m',function($join){
+                $join->on('m.id','=','e.source_id')
+                    ->on('m.recipient_user_id','=','n.recipient_user_id');
+            })
+            ->where('e.source_type','moment_notice');
+        $result['linked_notices']=(clone $base)->count();
+        $result['legacy_read_pending_sync']=(clone $base)
+            ->whereNotNull('m.read_at')->whereNull('n.read_at')->count();
+        $result['shared_read_pending_legacy']=(clone $base)
+            ->whereNull('m.read_at')->whereNotNull('n.read_at')->count();
+        return $result;
+    }
+
     public function syncLegacyMomentReads(string $owner,int $limit=500): int
     {
         if(!$this->policy->installed())return 0;

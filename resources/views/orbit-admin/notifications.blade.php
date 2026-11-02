@@ -50,6 +50,14 @@
     <div class="kv"><small>FCM/APNs provider</small><strong>{{ $pushReady?'Server ready; device QA required':'Disabled / not provisioned' }}</strong></div>
     <div class="kv"><small>Provider acceptance</small><strong>Not a device display or read receipt</strong></div>
     <div class="kv"><small>Existing Moments compatibility</small><strong>Independent M7 inbox &amp; push kept intact</strong></div>
+    @if($legacyMomentAudit)
+    <div class="kv"><small>Legacy Moments linked</small>
+      <strong>{{ number_format($legacyMomentAudit['linked_notices']) }}</strong></div>
+    <div class="kv"><small>Legacy reads waiting for sync</small>
+      <strong>{{ number_format($legacyMomentAudit['legacy_read_pending_sync']) }}</strong></div>
+    <div class="kv"><small>Shared reads waiting for legacy sync</small>
+      <strong>{{ number_format($legacyMomentAudit['shared_read_pending_legacy']) }}</strong></div>
+    @endif
     <div class="kv"><small>Retention</small><strong>{{ (int)config('orbit_notifications.retention_days',7) }} configured days</strong></div>
     <div class="kv"><small>Workers</small><strong>Laravel Scheduler / MariaDB</strong></div>
     <div class="kv"><small>Verified security email</small><strong>{{ $mailReady?'Provider configured; acceptance unverified':'Disabled / sender not verified' }}</strong></div>
