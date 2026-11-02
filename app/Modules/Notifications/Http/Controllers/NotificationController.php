@@ -140,6 +140,20 @@ final class NotificationController extends Controller
                 $items[]=['type'=>$row->context_type,'id'=>$row->context_id];
             }
         }
+        // M7 clients may have saved Circle Moment mutes before the shared
+        // table existed. Never lose them or reveal removed Circle IDs.
+        if($data['category']==='moments'
+            && Schema::hasTable('moment_notification_muted_circles')){
+            $legacy=DB::table('moment_notification_muted_circles')
+                ->where('user_id',$user)->limit(100)->pluck('circle_id');
+            foreach($legacy as $circle){
+                if($this->policy->canMuteContext($user,'moments','circle',$circle)
+                    && !collect($items)->contains(fn($row)=>
+                        $row['type']==='circle' && $row['id']===$circle)){
+                    $items[]=['type'=>'circle','id'=>$circle];
+                }
+            }
+        }
         return $this->response(['items'=>$items]);
     }
 
