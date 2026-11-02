@@ -140,6 +140,7 @@ final class NotificationPolicy
             return $event!==null && in_array($event->action,[
                 'auth.password_reset','auth.logout_all','device.approved',
                 'device.recovery_completed','session.revoked',
+                'location.sharing_started','location.sharing_stopped',
             ],true);
         }
         if ($category === 'friends') {

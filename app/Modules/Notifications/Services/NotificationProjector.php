@@ -144,6 +144,7 @@ final class NotificationProjector
                 ->whereIn('i.action',[
                     'auth.password_reset','auth.logout_all','device.approved',
                     'device.recovery_completed','session.revoked',
+                    'location.sharing_started','location.sharing_stopped',
                 ])
                 ->whereNotExists(fn($q)=>$q->selectRaw('1')->from('notification_events as e')
                     ->where('e.source_type','identity_event')->whereColumn('e.source_id','i.id'))

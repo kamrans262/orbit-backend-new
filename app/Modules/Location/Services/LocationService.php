@@ -111,6 +111,13 @@ final class LocationService
             ]);
             if ($type==='circle') $this->setCirclePermission($owner,$target,true,$data['precision'],$expiry);
             $this->audit($owner,$type,$data['precision'],'activated');
+            // Only the first active sharing transition is security-relevant.
+            // Never store audience IDs, GPS, precision or locations in the
+            // notification event, and never alert for location samples.
+            if($active->isEmpty()) DB::table('orbit_identity_events')->insert([
+                'id'=>(string)Str::uuid7(),'user_id'=>$owner,
+                'action'=>'location.sharing_started','created_at'=>now(),
+            ]);
             return $this->publicShare(DB::table('location_shares')->where('id',$id)->first());
         },3);
     }
@@ -179,10 +186,15 @@ final class LocationService
                 }
                 $this->audit($owner,$row->audience_type,$row->precision,'revoked');
             }
-            if (!$this->policy->canUpload($owner)) {
+            $stillSharing=$this->policy->canUpload($owner);
+            if (!$stillSharing) {
                 DB::table('location_latest')->where('owner_id',$owner)->delete();
+                if($rows->isNotEmpty()) DB::table('orbit_identity_events')->insert([
+                    'id'=>(string)Str::uuid7(),'user_id'=>$owner,
+                    'action'=>'location.sharing_stopped','created_at'=>now(),
+                ]);
             }
-            return ['revoked'=>count($rows),'sharing_active'=>$this->policy->canUpload($owner)];
+            return ['revoked'=>count($rows),'sharing_active'=>$stillSharing];
         },3);
     }
 
