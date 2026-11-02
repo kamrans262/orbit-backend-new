@@ -23,8 +23,10 @@ final class MomentFcmTransport
     {
         $options=config('orbit_moments.fcm',[]);
         if(!is_array($options))return false;
-        foreach(['project_id','api_key','sender_id','android_app_id',
-            'ios_app_id','ios_bundle_id'] as $field){
+        // Android push can be provisioned independently of Apple/APNs.
+        // iOS clients still require their own Firebase app IDs and APNs
+        // registration before requesting an FCM token.
+        foreach(['project_id','api_key','sender_id','android_app_id'] as $field){
             if(!is_string($options[$field]??null) ||
                 trim($options[$field])==='')return false;
         }
