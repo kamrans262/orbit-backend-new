@@ -101,14 +101,18 @@ final class NotificationController extends Controller
                 abort_if(DB::table('moment_push_devices')->where('token_digest',$digest)
                     ->where('device_id','!=',$device)->exists(),409,'Push token registered elsewhere.');
             }
-            DB::table('notification_device_tokens')->updateOrInsert(
-                ['device_id'=>$device],[
-                    'user_id'=>$user,'platform'=>$data['platform'],'project_id'=>$project,
-                    'token_digest'=>$digest,'token_ciphertext'=>Crypt::encryptString($data['token']),
-                    'disabled_at'=>null,'updated_at'=>now(),
-                    // Laravel insert timestamp on first registration.
-                    'created_at'=>DB::raw('COALESCE(created_at, CURRENT_TIMESTAMP)'),
-                ]);
+            $existing=DB::table('notification_device_tokens')->where('device_id',$device)->exists();
+            $attributes=[
+                'user_id'=>$user,'platform'=>$data['platform'],'project_id'=>$project,
+                'token_digest'=>$digest,'token_ciphertext'=>Crypt::encryptString($data['token']),
+                'disabled_at'=>null,'updated_at'=>now(),
+            ];
+            if($existing){
+                DB::table('notification_device_tokens')->where('device_id',$device)->update($attributes);
+            }else{
+                DB::table('notification_device_tokens')->insert(
+                    array_merge(['device_id'=>$device,'created_at'=>now()],$attributes));
+            }
         },3);
         return $this->response(['registered'=>true]);
     }

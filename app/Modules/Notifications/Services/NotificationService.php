@@ -79,6 +79,8 @@ final class NotificationService
                 'id'=>$row->id,'category'=>$row->category,'type'=>$row->type,
                 'template_key'=>$row->template_key,'created_at'=>Carbon::parse($row->created_at)->toIso8601String(),
                 'read'=>$row->read_at !== null,
+                'title'=>(string)DB::table('notification_templates')->where('key',$row->template_key)->value('title'),
+                'body'=>(string)DB::table('notification_templates')->where('key',$row->template_key)->value('body'),
                 'target'=>['kind'=>$row->category,'opaque_id'=>$row->target_id],
             ];
             if (count($out)>=$limit) { $more=true;break; }

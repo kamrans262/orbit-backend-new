@@ -30,6 +30,7 @@ use App\Modules\CheckIn\Http\Middleware\CheckInOperationalTelemetry;
 use App\Modules\Messaging\Http\Controllers\MessagingController;
 use App\Modules\Messaging\Http\Controllers\MessagingCircleConsentController;
 use App\Modules\Messaging\Http\Middleware\MessagingOperationalTelemetry;
+use App\Modules\Notifications\Http\Controllers\NotificationController;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -51,6 +52,18 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:120,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        // M14: trusted-device owner inbox; in-app HTTPS works with Firebase OFF.
+        Route::get('/me/notifications',[NotificationController::class,'index'])->middleware('throttle:30,1');
+        Route::get('/me/notifications/unread',[NotificationController::class,'unread'])->middleware('throttle:25,1');
+        Route::post('/me/notifications/read-all',[NotificationController::class,'readAll'])->middleware('throttle:15,1');
+        Route::post('/me/notifications/{notice}/read',[NotificationController::class,'read'])
+            ->whereUuid('notice')->middleware('throttle:40,1');
+        Route::get('/me/notifications/push-bootstrap',[NotificationController::class,'bootstrap'])
+            ->middleware('throttle:12,1');
+        Route::post('/me/notifications/push-devices',[NotificationController::class,'registerDevice'])
+            ->middleware('throttle:8,1');
+        Route::delete('/me/notifications/push-devices/current',[NotificationController::class,'unregisterDevice'])
+            ->middleware('throttle:8,1');
         // Encrypted per-device messaging: all payloads are ciphertext only.
         // No fake realtime, plaintext transport or universal Circle membership grant.
         Route::get('/messaging/capabilities',[MessagingController::class,'capabilities']);

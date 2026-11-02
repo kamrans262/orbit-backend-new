@@ -15,6 +15,7 @@ use App\Modules\Location\Http\Controllers\AdminLocationController;
 use App\Modules\Ping\Http\Controllers\AdminPingController;
 use App\Modules\CheckIn\Http\Controllers\AdminCheckInController;
 use App\Modules\Messaging\Http\Controllers\AdminMessagingController;
+use App\Modules\Notifications\Http\Controllers\AdminNotificationController;
 use App\Modules\Config\Http\Middleware\EnsureAdmin;
 use App\Modules\Config\Http\Middleware\RequireAdminPermission;
 
@@ -47,12 +48,52 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
                 'circles.read' => 'orbit.admin.circles.index',
                 'media.read' => 'orbit.admin.media.index',
                 'moments.read' => 'orbit.admin.moments.index',
+                'notifications.read' => 'orbit.admin.notifications.overview',
             ] as $permission => $route) {
                 if ($permission === 'circles.read' && config('orbit_circle.enabled') !== true) continue;
                 if ($actor?->canPerform($permission)) return redirect()->route($route);
             }
             abort(403);
         })->name('landing');
+
+        // M14 is a first-class operations area, NOT a submenu under
+        // Accounts or Configurations. Admin roles are explicit and audited.
+        Route::get('/notifications',[AdminNotificationController::class,'index'])
+            ->middleware(RequireAdminPermission::class.':notifications.read')
+            ->name('notifications.overview');
+        Route::get('/notifications/jobs',[AdminNotificationController::class,'jobs'])
+            ->middleware(RequireAdminPermission::class.':notifications.read')
+            ->name('notifications.jobs');
+        Route::get('/notifications/devices',[AdminNotificationController::class,'devices'])
+            ->middleware(RequireAdminPermission::class.':notifications.read')
+            ->name('notifications.devices');
+        Route::get('/notifications/templates',[AdminNotificationController::class,'templates'])
+            ->middleware(RequireAdminPermission::class.':notifications.read')
+            ->name('notifications.templates');
+        Route::get('/notifications/settings',[AdminNotificationController::class,'settings'])
+            ->middleware(RequireAdminPermission::class.':notifications.read')
+            ->name('notifications.settings');
+        Route::get('/notifications/audits',[AdminNotificationController::class,'audits'])
+            ->middleware(RequireAdminPermission::class.':notifications.read')
+            ->name('notifications.audits');
+        Route::post('/notifications/settings',[AdminNotificationController::class,'saveControl'])
+            ->middleware([RequireAdminPermission::class.':notifications.manage','throttle:10,1'])
+            ->name('notifications.settings.save');
+        Route::post('/notifications/templates/{key}',[AdminNotificationController::class,'saveTemplate'])
+            ->middleware([RequireAdminPermission::class.':notifications.manage','throttle:10,1'])
+            ->name('notifications.templates.save');
+        Route::post('/notifications/jobs/{job}/retry',[AdminNotificationController::class,'retry'])
+            ->whereUuid('job')
+            ->middleware([RequireAdminPermission::class.':notifications.manage','throttle:6,1'])
+            ->name('notifications.retry');
+        Route::post('/notifications/devices/{device}/disable',[AdminNotificationController::class,'disableDevice'])
+            ->whereUuid('device')
+            ->middleware([RequireAdminPermission::class.':notifications.manage','throttle:6,1'])
+            ->name('notifications.devices.disable');
+        Route::post('/notifications/maintenance/{operation}',[AdminNotificationController::class,'maintenance'])
+            ->whereIn('operation',['project','dispatch','expire'])
+            ->middleware([RequireAdminPermission::class.':notifications.manage','throttle:3,1'])
+            ->name('notifications.maintenance');
 
         Route::get('/messaging', [AdminMessagingController::class,'index'])
             ->middleware(RequireAdminPermission::class.':config.manage')->name('messaging.index');

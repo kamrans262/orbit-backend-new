@@ -17,6 +17,12 @@ final class AdminNotificationController extends Controller
 {
     private const AREAS = ['overview','jobs','devices','templates','settings','audits'];
 
+    public function jobs(Request $r) { return $this->index($r,'jobs'); }
+    public function devices(Request $r) { return $this->index($r,'devices'); }
+    public function templates(Request $r) { return $this->index($r,'templates'); }
+    public function settings(Request $r) { return $this->index($r,'settings'); }
+    public function audits(Request $r) { return $this->index($r,'audits'); }
+
     public function __construct(private readonly NotificationPolicy $policy,
                                 private readonly NotificationPushTransport $transport) {}
 

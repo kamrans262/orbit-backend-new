@@ -59,6 +59,7 @@ final class NotificationPolicy
 
     public function categoryEnabled(string $user, string $category, bool $push = false): bool
     {
+        if (!$this->enabled('channel.'.($push?'push':'in_app')))return false;
         if (!in_array($category, config('orbit_notifications.categories', []), true)
             || !$this->enabled('category.'.$category)) return false;
         if ($push && !$this->preference($user, 'push_notifications_enabled')) return false;
@@ -83,6 +84,11 @@ final class NotificationPolicy
                 ->where('user_id', $user)->where('context_type', 'circle')
                 ->where('context_id', $circle)->where('category', $category)->exists()) return false;
         }
+        if ($category === 'moments' && $context && str_starts_with($context,'circle:')
+            && \Illuminate\Support\Facades\Schema::hasTable('moment_notification_muted_circles')
+            && DB::table('moment_notification_muted_circles')
+                ->where('user_id',$user)->where('circle_id',substr($context,7))->exists())
+            return false;
         if ($category === 'moments') {
             $notice = DB::table('moments')->where('id', $target)->first();
             return $notice !== null

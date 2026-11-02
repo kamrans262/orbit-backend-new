@@ -113,3 +113,24 @@ Artisan::command('orbit:messaging:prune', function () {
     $this->info('Expired opaque sender-key distribution packets purged: '.$groupCount);
 })->purpose('Purge expired encrypted messaging envelopes within retention bounds');
 Schedule::command('orbit:messaging:prune')->dailyAt('03:35')->withoutOverlapping();
+
+
+// M14 private inbox projection and MariaDB-backed push delivery. Provider
+// transport remains inactive until release gate + real FCM/APNs credentials.
+Artisan::command('orbit:notifications:project', function () {
+    $result=app(\App\Modules\Notifications\Services\NotificationProjector::class)->run(75);
+    $this->info('Private notification projection: '.json_encode($result));
+})->purpose('Project permitted existing module events into the private notification inbox');
+Schedule::command('orbit:notifications:project')->everyFiveMinutes()->withoutOverlapping();
+
+Artisan::command('orbit:notifications:dispatch', function () {
+    $result=app(\App\Modules\Notifications\Services\NotificationDeliveryWorker::class)->run(40);
+    $this->info('Notification push delivery: '.json_encode($result));
+})->purpose('Send generic notification invalidations using approved device-scoped FCM');
+Schedule::command('orbit:notifications:dispatch')->everyMinute()->withoutOverlapping();
+
+Artisan::command('orbit:notifications:expire', function () {
+    $count=app(\App\Modules\Notifications\Services\NotificationService::class)->invalidateExpired(500);
+    $this->info('Expired notifications invalidated: '.$count);
+})->purpose('Hide notices beyond approved retention without purging M7 legacy source');
+Schedule::command('orbit:notifications:expire')->hourly()->withoutOverlapping();

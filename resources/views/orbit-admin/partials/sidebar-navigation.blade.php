@@ -61,6 +61,29 @@
     ];
   }
 
+  // Dedicated Notifications operations group, independent from Accounts
+  // and Configurations. Never show actions without notification RBAC.
+  if ($navUser?->canPerform('notifications.read')) {
+    $navGroups[] = [
+      'title'=>'Notifications', 'icon'=>'notifications',
+      'patterns'=>['orbit.admin.notifications.*'],
+      'children'=>[
+        ['title'=>'Overview','route'=>'orbit.admin.notifications.overview',
+          'patterns'=>['orbit.admin.notifications.overview']],
+        ['title'=>'Delivery Queue','route'=>'orbit.admin.notifications.jobs',
+          'patterns'=>['orbit.admin.notifications.jobs','orbit.admin.notifications.retry']],
+        ['title'=>'Push Devices','route'=>'orbit.admin.notifications.devices',
+          'patterns'=>['orbit.admin.notifications.devices*']],
+        ['title'=>'Templates','route'=>'orbit.admin.notifications.templates',
+          'patterns'=>['orbit.admin.notifications.templates*']],
+        ['title'=>'Settings & Controls','route'=>'orbit.admin.notifications.settings',
+          'patterns'=>['orbit.admin.notifications.settings*']],
+        ['title'=>'Audit Trail','route'=>'orbit.admin.notifications.audits',
+          'patterns'=>['orbit.admin.notifications.audits']],
+      ],
+    ];
+  }
+
   $accountChildren = [];
   if ($navUser?->canPerform('users.read')) {
     $accountChildren[] = ['title'=>'Users & Devices','route'=>'orbit.admin.users.index','patterns'=>['orbit.admin.users.*']];
