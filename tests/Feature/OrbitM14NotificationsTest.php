@@ -188,6 +188,54 @@ final class OrbitM14NotificationsTest extends TestCase
         $this->assertStringNotContainsString($device->id,$response->getContent());
     }
 
+    public function test_inactive_accounts_cannot_project_new_or_read_existing_private_notices(): void
+    {
+        [$sender,$senderDevice,$senderToken]=$this->principal();
+        [$recipient,$device,$token]=$this->principal();
+        $source=(string)Str::uuid();
+        DB::table('friend_requests')->insert([
+            'id'=>$source,'sender_id'=>$sender->id,'recipient_id'=>$recipient->id,
+            'status'=>'pending','created_at'=>now(),'updated_at'=>now(),
+        ]);
+        app(NotificationProjector::class)->run(10);
+        $this->withToken($token)->getJson('/api/v1/me/notifications')
+            ->assertOk()->assertJsonCount(1,'data.items');
+        DB::table('orbit_users')->where('id',$recipient->id)
+            ->update(['status'=>'suspended']);
+        // Existing trusted session, persisted notification and older push
+        // registration must never keep a suspended owner eligible.
+        $this->assertFalse(app(NotificationPolicy::class)->targetAllowed(
+            'friends',$source,$recipient->id,null,'friend.requested'));
+        $this->withToken($token)->getJson('/api/v1/me/notifications')
+            ->assertStatus(403);
+    }
+
+    public function test_inbox_skips_revoked_rows_without_dropping_cursor(): void
+    {
+        [$sender,$senderDevice,$senderToken]=$this->principal();
+        [$recipient,$device,$token]=$this->principal();
+        $ids=[];
+        for($i=0;$i<8;$i++){
+            $source=(string)Str::uuid();
+            DB::table('friend_requests')->insert([
+                'id'=>$source,'sender_id'=>$sender->id,
+                'recipient_id'=>$recipient->id,'status'=>'pending',
+                'created_at'=>now()->subSeconds($i),'updated_at'=>now(),
+            ]);
+            $ids[]=$source;
+        }
+        app(NotificationProjector::class)->run(20);
+        $page=$this->withToken($token)
+            ->getJson('/api/v1/me/notifications?limit=2')->assertOk();
+        $this->assertCount(2,$page->json('data.items'));
+        $this->assertNotNull($page->json('data.next_cursor'));
+        DB::table('blocks')->insert([
+            'blocker_id'=>$sender->id,'blocked_id'=>$recipient->id,'created_at'=>now(),
+        ]);
+        $this->withToken($token)->getJson('/api/v1/me/notifications')
+            ->assertOk()->assertJsonPath('data.items',[]);
+    }
+
     public function test_reprojection_is_idempotent_without_fake_source_records(): void
     {
         $service=app(NotificationProjector::class);

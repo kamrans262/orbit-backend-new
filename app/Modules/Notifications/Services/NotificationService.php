@@ -72,11 +72,15 @@ final class NotificationService
         if ($category !== null) $query->where('category', $category);
         if ($start) $query->where(fn ($q) => $q->where('created_at','<',$start[0])
             ->orWhere(fn ($t) => $t->where('created_at', $start[0])->where('id','<',$start[1])));
+        // A denied/revoked record does not end pagination. Scan a bounded
+        // window and resume after the last row actually inspected.
+        $window = min(1000, $limit * 10 + 1);
         $rows = $query->orderByDesc('created_at')->orderByDesc('id')
-            ->limit($limit * 5 + 1)->get();
-        $out=[];$last=null;$more=false;
+            ->limit($window)->get();
+        $out=[];$last=null;$scanned=0;
         foreach ($rows as $row) {
             $last=$row;
+            $scanned++;
             if ($this->policy->canView($row, $owner)) $out[] = [
                 'id'=>$row->id,'category'=>$row->category,'type'=>$row->type,
                 'template_key'=>$row->template_key,'created_at'=>Carbon::parse($row->created_at)->toIso8601String(),
@@ -85,8 +89,9 @@ final class NotificationService
                 'body'=>(string)DB::table('notification_templates')->where('key',$row->template_key)->value('body'),
                 'target'=>['kind'=>$row->category,'opaque_id'=>$row->target_id],
             ];
-            if (count($out)>=$limit) { $more=true;break; }
+            if (count($out)>=$limit) break;
         }
+        $more = ($scanned < $rows->count() || $rows->count() === $window);
         $next = $more && $last ? rtrim(strtr(base64_encode($last->created_at.'|'.$last->id), '+/', '-_'), '=') : null;
         return ['items'=>$out,'next_cursor'=>$next];
     }

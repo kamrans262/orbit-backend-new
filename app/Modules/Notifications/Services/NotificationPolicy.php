@@ -77,6 +77,10 @@ final class NotificationPolicy
     public function targetAllowed(string $category, string $target, string $user,
                                   ?string $context = null, ?string $type = null): bool
     {
+        // Projection and delivery are not exempt from account suspension or
+        // a pending deletion request, even if an old device session survives.
+        if (!DB::table('orbit_users')->where('id', $user)->where('status', 'active')
+            ->whereNull('deletion_requested_at')->exists()) return false;
         if (!$this->categoryEnabled($user, $category)) return false;
         if ($context && str_starts_with($context, 'circle:')) {
             $circle = substr($context, 7);
