@@ -338,6 +338,75 @@ final class OrbitM14NotificationsTest extends TestCase
         $this->assertDatabaseCount('notification_context_mutes',0);
     }
 
+    public function test_supplemental_friend_and_message_preferences_never_disable_security(): void
+    {
+        [$user,$device,$token]=$this->principal();
+        $path='/api/v1/me/notifications/category-preferences';
+        $this->withToken($token)->getJson($path)->assertOk()
+            ->assertJsonPath('data.messages',true)
+            ->assertJsonPath('data.friends',true)
+            ->assertJsonPath('data.security_required',true);
+        $this->withToken($token)->putJson($path.'/messages',['enabled'=>false])
+            ->assertOk()->assertJsonPath('data.enabled',false);
+        $this->withToken($token)->putJson($path.'/friends',['enabled'=>false])
+            ->assertOk()->assertJsonPath('data.enabled',false);
+        $this->assertDatabaseHas('notification_category_preferences',[
+            'user_id'=>$user->id,'category'=>'friends','enabled'=>0,
+        ]);
+        $policy=app(NotificationPolicy::class);
+        $this->assertFalse($policy->categoryEnabled($user->id,'messages'));
+        $this->assertFalse($policy->categoryEnabled($user->id,'friends'));
+        $this->assertTrue($policy->categoryEnabled($user->id,'security'));
+        $this->withToken($token)->putJson($path.'/security',['enabled'=>false])
+            ->assertNotFound();
+        $this->withToken($token)->putJson($path.'/messages',['enabled'=>true])
+            ->assertOk()->assertJsonPath('data.enabled',true);
+        $this->assertTrue($policy->categoryEnabled($user->id,'messages'));
+    }
+
+    public function test_notification_errors_are_typed_and_do_not_expose_details(): void
+    {
+        [$user,$device,$token]=$this->principal();
+        $this->withToken($token)
+            ->getJson('/api/v1/me/notifications?limit=2000')
+            ->assertStatus(422)
+            ->assertJsonPath('error.code','validation_error');
+        $this->withToken($token)
+            ->putJson('/api/v1/me/notifications/category-preferences/messages',
+                ['enabled'=>'not-a-boolean'])
+            ->assertStatus(422)->assertJsonPath('error.code','validation_error');
+        config()->set('orbit_notifications.enabled',false);
+        $response=$this->withToken($token)
+            ->getJson('/api/v1/me/notifications')
+            ->assertStatus(503)
+            ->assertJsonPath('error.code','service_unavailable');
+        $this->assertStringNotContainsString('stack',$response->getContent());
+        $this->assertStringContainsString('no-store',
+            (string)$response->headers->get('Cache-Control'));
+    }
+
+    public function test_additive_notification_tables_are_present_and_owner_scoped(): void
+    {
+        foreach([
+            'notification_events','notification_inbox','notification_device_tokens',
+            'notification_jobs','notification_attempts','notification_controls',
+            'notification_templates','notification_context_mutes',
+            'notification_category_preferences','notification_source_outbox',
+            'notification_circle_changes','notification_security_email_jobs',
+        ] as $table){
+            $this->assertTrue(\Illuminate\Support\Facades\Schema::hasTable($table),
+                'M14 migration table missing: '.$table);
+        }
+        [$first,$device,$token]=$this->principal();
+        [$other,$otherDevice,$otherToken]=$this->principal();
+        $this->withToken($token)
+            ->putJson('/api/v1/me/notifications/category-preferences/friends',
+                ['enabled'=>false])->assertOk();
+        $this->withToken($otherToken)
+            ->getJson('/api/v1/me/notifications/category-preferences')
+            ->assertOk()->assertJsonPath('data.friends',true);
+    }
+
     public function test_reprojection_is_idempotent_without_fake_source_records(): void
     {
         $service=app(NotificationProjector::class);
