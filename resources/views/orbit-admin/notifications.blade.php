@@ -176,7 +176,7 @@
   <p>Controls are server enforced and audited. Global user preferences and feature consent remain authoritative.</p></div></div>
   <div class="table-scroll"><table><thead><tr><th>CONTROL</th><th>STATE</th><th>UPDATE</th></tr></thead><tbody>
   @foreach(array_merge(['channel.in_app','channel.push'],array_map(fn($x)=>'category.'.$x,$categories)) as $key)
-    @php $enabled=$controls->has($key)?(bool)$controls->get($key):true; @endphp
+    @php $enabled=$controls->has($key)?(bool)$controls->get($key):($key!=='channel.push'); @endphp
     <tr><td><strong>{{ $key }}</strong></td>
       <td><span class="pill {{ $enabled?'success':'neutral' }}">{{ $enabled?'Enabled':'Paused' }}</span></td>
       <td>@if(auth()->guard('admin')->user()?->canPerform('notifications.manage'))

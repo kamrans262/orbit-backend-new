@@ -47,7 +47,7 @@ final class NotificationPolicy
     {
         if (!$this->installed()) return false;
         $value = DB::table('notification_controls')->where('key', $key)->value('enabled');
-        return $value === null ? $default : (bool) $value;
+        return $value === null ? ($key === 'channel.push' ? false : $default) : (bool) $value;
     }
 
     public function preference(string $user, string $key, bool $default = false): bool
