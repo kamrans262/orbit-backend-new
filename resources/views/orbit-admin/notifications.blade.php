@@ -33,7 +33,10 @@
   @foreach([
     'Events accepted'=>$stats['events'],'Private inbox records'=>$stats['inbox'],
     'Unread inbox records'=>$stats['unread'],'Active push registrations'=>$stats['devices'],
-    'Provider accepted'=>$stats['accepted'],'Failed delivery jobs'=>$stats['failed']
+    'Provider accepted'=>$stats['accepted'],'Failed delivery jobs'=>$stats['failed'],
+    'Pending/retrying jobs'=>$stats['pending'],'Suppressed jobs'=>$stats['suppressed'],
+    'Oldest queue age (seconds)'=>$stats['queue_lag_seconds'],
+    'Security email pending'=>$stats['security_email_pending']
   ] as $label=>$value)
   <article class="stat-card"><span class="stat-label">{{ $label }}</span><strong>{{ number_format($value) }}</strong>
   <p>Aggregate only; no private recipient or message data</p></article>
@@ -49,6 +52,7 @@
     <div class="kv"><small>Existing Moments compatibility</small><strong>Independent M7 inbox &amp; push kept intact</strong></div>
     <div class="kv"><small>Retention</small><strong>{{ (int)config('orbit_notifications.retention_days',7) }} configured days</strong></div>
     <div class="kv"><small>Workers</small><strong>Laravel Scheduler / MariaDB</strong></div>
+    <div class="kv"><small>Verified security email</small><strong>{{ $mailReady?'Provider configured; acceptance unverified':'Disabled / sender not verified' }}</strong></div>
   </div>
   <p>Encrypted-message content, GPS coordinates, notification tokens and user-specific audience memberships are not exposed through this workspace.</p>
 </section>

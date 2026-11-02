@@ -41,6 +41,15 @@ final class AdminNotificationController extends Controller
                 'devices'=>DB::table('notification_device_tokens')->whereNull('disabled_at')->count(),
                 'failed'=>DB::table('notification_jobs')->where('state','failed')->count(),
                 'accepted'=>DB::table('notification_jobs')->where('state','accepted')->count(),
+                'pending'=>DB::table('notification_jobs')->whereIn('state',['pending','retry','processing'])->count(),
+                'suppressed'=>DB::table('notification_jobs')->where('state','suppressed')->count(),
+                'queue_lag_seconds'=>max(0,DB::table('notification_jobs')
+                    ->whereIn('state',['pending','retry','processing'])
+                    ->selectRaw('TIMESTAMPDIFF(SECOND,MIN(created_at),CURRENT_TIMESTAMP) as lag_seconds')
+                    ->value('lag_seconds')??0),
+                'security_email_pending'=>\Illuminate\Support\Facades\Schema::hasTable('notification_security_email_jobs')
+                    ?DB::table('notification_security_email_jobs')->whereIn('state',['pending','retry','processing'])->count()
+                    :0,
             ];
             $categoryTotals=DB::table('notification_inbox')->select('category')
                 ->selectRaw('COUNT(*) as total')->groupBy('category')->orderBy('category')->get();
@@ -79,6 +88,7 @@ final class AdminNotificationController extends Controller
             'attempts'=>$attempts,'pushReady'=>$this->transport->enabled(),
             'pushConfigured'=>config('orbit_notifications.push_enabled')===true,
             'categories'=>config('orbit_notifications.categories',[]),
+            'mailReady'=>app(\App\Modules\Notifications\Services\NotificationSecurityEmailTransport::class)->enabled(),
         ])->header('Cache-Control','private, no-store');
     }
 

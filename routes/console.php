@@ -144,3 +144,12 @@ Artisan::command('orbit:notifications:devices-reconcile',function () {
 })->purpose('Disable stale or untrusted M14 push registrations');
 Schedule::command('orbit:notifications:devices-reconcile')
     ->everyFiveMinutes()->withoutOverlapping();
+
+// Account-security email is OFF by default and never a social/marketing route.
+Artisan::command('orbit:notifications:security-mail',function () {
+    $stats=app(\App\Modules\Notifications\Services\NotificationSecurityEmailDeliveryWorker::class)
+        ->run(30);
+    $this->info('Verified security email: '.json_encode($stats));
+})->purpose('Deliver approved generic account-security notices by verified mailer');
+Schedule::command('orbit:notifications:security-mail')
+    ->everyMinute()->withoutOverlapping();
