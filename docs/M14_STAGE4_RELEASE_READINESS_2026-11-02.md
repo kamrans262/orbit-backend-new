@@ -48,3 +48,12 @@ Status: source hardening done; production certification and deployment not yet p
 Hostinger read-only inspection -> reconcile production branch -> one module-start DB backup -> additive Laravel deploy/migration -> HTTPS inbox and Admin smoke validation with FCM OFF -> Mac Flutter tests/build and Android device run -> provider/APNs rollout only with actual provisioning -> record release evidence and rollback plan.
 
 Stage 4 preparation is complete; Stage 4 production release is still pending verification.
+
+## Final closure changes (2026-11-02)
+
+- Verify all five additive migrations, including `2026_11_02_000005_create_notification_category_preferences.php`.
+- M14 owner APIs now return stable machine-readable errors and preserve legacy top-level `message` compatibility.
+- Messages and Friends can be disabled separately without changing original M3 seven toggle keys; security notices remain mandatory.
+- Flutter adds grouped row semantics and larger text handling; TalkBack/VoiceOver and contrast still require physical QA.
+- Requirements now: 70 coded but NOT VERIFIED, 4 partial (019/034/057/072), 11 externally gated, 5 deferred. 122 test cases still NOT RUN.
+- Do not deploy or enable Firebase/email without the separately scheduled Hostinger/Mac validation and real credentials.

@@ -9,8 +9,8 @@ Companion artifact: Orbit_M14_Requirements_Traceability_Code_Closure_2026-11-02.
 
 Original matrix: 90 requirements, 122 acceptance cases.
 As of this code-only audit:
-- 69 CODED — NOT VERIFIED: implementation exists but mapped tests and operational evidence have not been run.
-- 5 PARTIAL — FOLLOW-UP: M14-009 typed API failure schema; M14-012 scoped category settings; M14-019 silent/quiet OS policy; M14-081 accessibility and dynamic-type QA; M14-085 future-safety visual distinction.
+- 70 CODED — NOT VERIFIED: implementation exists but mapped tests and operational evidence have not been run.
+- 4 PARTIAL — FOLLOW-UP: M14-019 OS behavior certification; M14-034 live-data read bridge; M14-057 real token migration; M14-072 migration/rollback verification.
 - 11 GATED — EXTERNAL: Firebase/APNs signed app registration, native device and provider verification, real credentials, safe production DB migration/scheduler, privacy regression and deployment sign-off.
 - 5 DEFERRED — ROADMAP: SOS escalation, Plans, billing/marketing, dry-run feature and safety policy owned by later modules.
 - 0/122 test cases are recorded PASS. All 122 acceptance cases stay NOT RUN.
@@ -29,6 +29,8 @@ This is **not** a claim of complete production delivery or acceptance.
 - Bounded retention invalidation, cleanup, failed-job queue diagnostics and reviewed Admin operations.
 - Owner-only sharing start/stop security notices and Circle role/permission change notices, all with no GPS, private content or roster data.
 - Flutter original Settings/Notifications screens preserved; OS permission status/shortcut via permission_handler 12.x; approved Orbit sheet for grouped notifications.
+- Messages/Friends opt-outs default-on for existing users, preserving seven-key M3 preferences and mandatory security notices; M14 owner APIs now return typed privacy-safe JSON errors.
+- Accessibility semantics and separate account-security labels added; device QA remains unverified.
 - Session-safe Flutter listener teardown, no recursive logout HTTP or accidental unregister when Home is disposed.
 
 ## Required additive migrations (not applied yet)
@@ -37,6 +39,7 @@ This is **not** a claim of complete production delivery or acceptance.
 2. 2026_11_02_000002_create_notification_source_outbox.php
 3. 2026_11_02_000003_create_notification_security_email_jobs.php
 4. 2026_11_02_000004_create_notification_circle_changes.php
+5. 2026_11_02_000005_create_notification_category_preferences.php
 
 Before migrating on Hostinger: inspect live deployed M13 branch and worktree, take ONE initial M14 DB backup, reconcile/merge on clean deployment branch, preview pending migrations, protect existing tables and .env and confirm Laravel scheduler. Never clear M1–M13 data.
 
@@ -50,3 +53,10 @@ Before migrating on Hostinger: inspect live deployed M13 branch and worktree, ta
 - Run Hostinger/Mac commands only after the user specifically resumes Stage 4 execution.
 
 Next action: code/build/suite/device verification and accurate per-requirement PASS/FAIL evidence, not new demo UI or invented acceptance results.
+
+## Updated evidence after code closure
+
+- Backend: safe owner API errors, optional category preferences, fifth additive migration, and focused privacy/legacy read-state tests.
+- Flutter: two approved-style optional settings, accessible group rows, text scaling, and accurate silent-delivery guidance.
+- Updated workbook: `Orbit_M14_Traceability_After_Completion_2026-11-02.xlsx` (70 coded, 4 partial, 11 gated, 5 deferred).
+- **0/122 acceptance cases marked PASS.** Tests added to source are not evidence of successful execution.
