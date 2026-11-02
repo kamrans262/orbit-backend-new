@@ -450,8 +450,11 @@ final class OrbitM14NotificationsTest extends TestCase
             'context_id'=>'friend','template_key'=>'moments.available',
             'created_at'=>now()->subHour(),
         ]);
-        $synced=app(\App\Modules\Notifications\Services\NotificationService::class)
-            ->syncLegacyMomentReads($owner->id);
+        $service=app(\App\Modules\Notifications\Services\NotificationService::class);
+        $before=$service->legacyMomentReadAudit();
+        $this->assertSame(1,$before['linked_notices']);
+        $this->assertSame(1,$before['legacy_read_pending_sync']);
+        $synced=$service->syncLegacyMomentReads($owner->id);
         $this->assertSame(1,$synced);
         $this->assertSame(
             \Illuminate\Support\Carbon::parse($readAt)->toDateTimeString(),
@@ -463,8 +466,10 @@ final class OrbitM14NotificationsTest extends TestCase
         $this->assertDatabaseHas('moment_notification_inbox',[
             'id'=>$legacy,'recipient_user_id'=>$owner->id,
         ]);
-        $this->assertSame(0,app(\App\Modules\Notifications\Services\NotificationService::class)
-            ->syncLegacyMomentReads($owner->id));
+        $this->assertSame(0,$service->syncLegacyMomentReads($owner->id));
+        $after=$service->legacyMomentReadAudit();
+        $this->assertSame(0,$after['legacy_read_pending_sync']);
+        $this->assertSame(0,$after['shared_read_pending_legacy']);
     }
 
     public function test_legacy_device_audit_does_not_migrate_or_contact_firebase(): void
@@ -480,6 +485,8 @@ final class OrbitM14NotificationsTest extends TestCase
         $bridge=app(\App\Modules\Notifications\Services\NotificationDeviceBridge::class);
         $audit=$bridge->audit();
         $this->assertSame(1,$audit['legacy_scanned']);
+        $this->assertSame(0,$audit['eligible_to_bridge']);
+        $this->assertSame(1,$audit['not_eligible']);
         $this->assertFalse($audit['push_delivery_enabled']);
         $this->assertSame(0,$bridge->bridge()['bridged']);
         $this->assertDatabaseCount('notification_device_tokens',0);
