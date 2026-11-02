@@ -91,6 +91,11 @@ final class NotificationController extends Controller
             'token'=>['required','string','min:20','max:4096',
                 'regex:/^[A-Za-z0-9_:~.\-]+$/D'],
         ]);
+        // The installed OS platform must match this trusted registered
+        // device, not a client-selected push token label.
+        abort_unless(DB::table('devices')->where('id',$device)->where('user_id',$user)
+            ->where('platform',$data['platform'])->whereNull('revoked_at')->exists(),
+            422,'Push platform does not match this device.');
         $project=(string)config('orbit_moments.fcm.project_id','');
         abort_unless($project!=='',503,'Firebase project unavailable.');
         $digest=hash('sha256',$data['token']);
