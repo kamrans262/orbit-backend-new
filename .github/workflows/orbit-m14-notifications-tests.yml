@@ -1,0 +1,75 @@
+name: Orbit M14 focused Notifications and Admin verification
+on:
+  push:
+    branches: [feature/m14-notifications-backend-admin-2026-11-02]
+    paths:
+      - '.github/workflows/orbit-m14-notifications-tests.yml'
+      - 'app/Modules/Notifications/**'
+      - 'app/Modules/Moments/Services/MomentFcmTransport.php'
+      - 'config/orbit_notifications.php'
+      - 'database/migrations/2026_11_02_000001_create_orbit_notifications.php'
+      - 'resources/views/orbit-admin/notifications.blade.php'
+      - 'resources/views/orbit-admin/partials/sidebar-navigation.blade.php'
+      - 'routes/api.php'
+      - 'routes/admin.php'
+      - 'routes/console.php'
+      - 'tests/Feature/OrbitM14NotificationsTest.php'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  notifications:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: rootpass
+          MARIADB_DATABASE: orbit_ci
+          MARIADB_USER: orbit_ci
+          MARIADB_PASSWORD: orbit_ci_pass
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: testing
+      APP_DEBUG: true
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: orbit_ci
+      DB_USERNAME: orbit_ci
+      DB_PASSWORD: orbit_ci_pass
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, fileinfo, pdo_mysql, openssl, sodium
+          tools: composer:v2
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Configure disposable test database
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+      - name: Lint Module 14 and directly connected PHP only
+        run: |
+          find app/Modules/Notifications -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l app/Modules/Moments/Services/MomentFcmTransport.php
+          php -l config/orbit_notifications.php
+          php -l database/migrations/2026_11_02_000001_create_orbit_notifications.php
+          php -l routes/api.php
+          php -l routes/admin.php
+          php -l routes/console.php
+          php -l tests/Feature/OrbitM14NotificationsTest.php
+      - name: Focused Module 14 private inbox, delivery and Admin RBAC
+        run: php artisan test --compact --filter='OrbitM14NotificationsTest'
