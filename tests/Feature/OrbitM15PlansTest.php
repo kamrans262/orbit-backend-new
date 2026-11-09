@@ -182,4 +182,33 @@ final class OrbitM15PlansTest extends TestCase
         $this->assertDatabaseHas('plan_controls',['key'=>'creation_enabled','enabled'=>0]);
         $this->assertDatabaseHas('plan_admin_audits',['action'=>'control.changed']);
     }
+    public function test_due_reminder_is_projected_once_and_respects_disabling_preference(): void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $body=$this->sample();
+        $body['starts_at']=now()->addMinutes(70)->toIso8601String();
+        $body['ends_at']=now()->addMinutes(120)->toIso8601String();
+        $this->withToken($token)->postJson('/api/v1/plans',$body)->assertCreated();
+        $plan=DB::table('plans')->where('client_id',$body['client_id'])->first();
+        $this->assertDatabaseHas('plan_reminder_jobs',[
+            'plan_id'=>$plan->id,'user_id'=>$owner->id,
+            'offset_minutes'=>60,'state'=>'pending',
+        ]);
+        $this->travel(10)->minutes();
+        $first=app(PlanReminderWorker::class)->run(30);
+        $this->assertSame(1,$first['reminders']);
+        $this->assertDatabaseHas('notification_events',[
+            'category'=>'plans','type'=>'plan.reminder','target_id'=>$plan->id,
+        ]);
+        $again=app(PlanReminderWorker::class)->run(30);
+        $this->assertSame(0,$again['reminders']);
+        $this->withToken($token)->putJson('/api/v1/me/plans/reminder-preferences',[
+            'enabled'=>false,'offsets_minutes'=>[15,60],
+        ])->assertOk();
+        $this->assertDatabaseMissing('plan_reminder_jobs',[
+            'plan_id'=>$plan->id,'offset_minutes'=>15,'state'=>'pending',
+        ]);
+        $this->travelBack();
+    }
+
 }
