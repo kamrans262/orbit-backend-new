@@ -17,6 +17,6 @@ return [
     // Seven-day compatibility with existing Moment inbox. Product-wide
     // retention remains configurable and requires approval before release.
     'retention_days' => max(1, min(30, (int) env('ORBIT_NOTIFICATIONS_RETENTION_DAYS', 7))),
-    'categories' => ['moments', 'pings', 'check_ins', 'messages', 'friends', 'circles', 'security'],
+    'categories' => ['moments', 'pings', 'check_ins', 'messages', 'friends', 'circles', 'plans', 'security'],
     // SOS critical escalation and marketing broadcast belong to later modules.
 ];

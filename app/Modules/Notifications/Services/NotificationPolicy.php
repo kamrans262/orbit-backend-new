@@ -84,6 +84,7 @@ final class NotificationPolicy
             // Existing seven-key M3 preferences have no separate message or
             // friend switches; a new preference must be designed in Stage 3.
             'messages', 'friends' => $this->optionalCategoryPreference($user, $category),
+            'plans' => true,
             'security' => true,
             default => false,
         };
@@ -149,6 +150,20 @@ final class NotificationPolicy
             return $conversation->kind === 'circle' && $conversation->circle_id
                 && $access->canCirclePair((string) $conversation->circle_id,
                     (string) $row->sender_id, $user);
+        }
+        if ($category === 'plans') {
+            $plan=DB::table('plans')->where('id',$target)->first();
+            if(!$plan || !app(\App\Modules\Plans\Services\PlanPolicy::class)
+                ->canViewRecord($plan,$user))return false;
+            if($type==='plan.invited')
+                return DB::table('plan_invitees')->where('plan_id',$target)
+                    ->where('user_id',$user)->where('state','invited')->exists();
+            if($type==='plan.reminder')
+                return $plan->status==='scheduled'
+                    && ($plan->organizer_id===$user
+                        || DB::table('plan_invitees')->where('plan_id',$target)
+                            ->where('user_id',$user)->where('state','joined')->exists());
+            return in_array($type,['plan.updated','plan.cancelled','plan.rsvp'],true);
         }
         if ($category === 'security') {
             $event=DB::table('orbit_identity_events')->where('id',$target)

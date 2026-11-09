@@ -30,7 +30,8 @@ final class PlanPolicy
     public function control(string $key): bool
     {
         if (!$this->installed()) return false;
-        return DB::table('plan_controls')->where('key',$key)->value('enabled') !== 0;
+        $enabled=DB::table('plan_controls')->where('key',$key)->value('enabled');
+        return $enabled===null ? false : (bool)$enabled;
     }
 
     public function active(string $user): bool
@@ -69,7 +70,7 @@ final class PlanPolicy
         if(!$this->active($user) || !$this->active((string)$plan->organizer_id))return false;
         if($plan->organizer_id===$user)return true;
         $invite=DB::table('plan_invitees')->where('plan_id',$plan->id)
-            ->where('user_id',$user)->whereIn('state',['invited','joined'])->first();
+            ->where('user_id',$user)->whereIn('state',['invited','joined','declined'])->first();
         if(!$invite)return false;
         $circles=DB::table('plan_circles')->where('plan_id',$plan->id)
             ->pluck('circle_id')->all();

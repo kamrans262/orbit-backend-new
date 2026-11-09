@@ -31,6 +31,7 @@ use App\Modules\Messaging\Http\Controllers\MessagingController;
 use App\Modules\Messaging\Http\Controllers\MessagingCircleConsentController;
 use App\Modules\Messaging\Http\Middleware\MessagingOperationalTelemetry;
 use App\Modules\Notifications\Http\Controllers\NotificationController;
+use App\Modules\Plans\Http\Controllers\PlanController;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -52,6 +53,17 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:120,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        // M15: private Plans under the existing M2 trusted-device boundary.
+        Route::get('/plans',[PlanController::class,'index'])->middleware('throttle:40,1');
+        Route::post('/plans',[PlanController::class,'store'])->middleware('throttle:10,1');
+        Route::get('/plans/{plan}',[PlanController::class,'show'])->whereUuid('plan')->middleware('throttle:60,1');
+        Route::patch('/plans/{plan}',[PlanController::class,'update'])->whereUuid('plan')->middleware('throttle:15,1');
+        Route::post('/plans/{plan}/cancel',[PlanController::class,'cancel'])->whereUuid('plan')->middleware('throttle:10,1');
+        Route::post('/plans/{plan}/rsvp',[PlanController::class,'rsvp'])->whereUuid('plan')->middleware('throttle:30,1');
+        Route::post('/plans/{plan}/leave',[PlanController::class,'leave'])->whereUuid('plan')->middleware('throttle:20,1');
+        Route::get('/plans/{plan}/participants',[PlanController::class,'participants'])->whereUuid('plan')->middleware('throttle:30,1');
+        Route::get('/me/plans/reminder-preferences',[PlanController::class,'preferences'])->middleware('throttle:20,1');
+        Route::put('/me/plans/reminder-preferences',[PlanController::class,'savePreferences'])->middleware('throttle:15,1');
         // M14: trusted-device owner inbox; in-app HTTPS works with Firebase OFF.
         Route::get('/me/notifications',[NotificationController::class,'index'])->middleware('throttle:30,1');
         Route::get('/me/notifications/unread',[NotificationController::class,'unread'])->middleware('throttle:25,1');

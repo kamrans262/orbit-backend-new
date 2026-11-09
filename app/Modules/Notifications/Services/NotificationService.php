@@ -23,6 +23,11 @@ final class NotificationService
             'moments'=>'moments.available', 'pings'=>'pings.received',
             'check_ins'=>'check_ins.available', 'messages'=>'messages.available',
             'friends'=>'friends.updated', 'circles'=>'circles.updated',
+            'plans'=>match($type){
+                'plan.invited'=>'plans.invited',
+                'plan.reminder'=>'plans.reminder',
+                default=>'plans.updated',
+            },
             'security'=>'security.notice',
         ][$category] ?? null;
         if ($template === null) return 0; // No unreviewed producer or broadcast.

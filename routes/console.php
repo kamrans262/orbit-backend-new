@@ -115,6 +115,14 @@ Artisan::command('orbit:messaging:prune', function () {
 Schedule::command('orbit:messaging:prune')->dailyAt('03:35')->withoutOverlapping();
 
 
+// M15: Plan changes and due reminders; no Firebase requirement.
+Artisan::command('orbit:plans:dispatch', function () {
+    $stats=app(\App\Modules\Plans\Services\PlanReminderWorker::class)
+        ->run((int)config('orbit_plans.worker_batch',40));
+    $this->info('Plan notice projection: '.json_encode($stats));
+})->purpose('Project authorized Plan notices and due in-app reminders');
+Schedule::command('orbit:plans:dispatch')->everyMinute()->withoutOverlapping();
+
 // M14 private inbox projection and MariaDB-backed push delivery. Provider
 // transport remains inactive until release gate + real FCM/APNs credentials.
 Artisan::command('orbit:notifications:project', function () {
