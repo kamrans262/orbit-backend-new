@@ -103,10 +103,10 @@ final class AdminPlanController extends Controller
         return back()->with('status','Plan operational control updated and audited.');
     }
 
-    public function cancel(Request $r,string $plan)
+    public function cancel(Request $r)
     {
-        $data=$this->approved($r);
-        $this->plans->moderateCancel($plan,(string)auth()->guard('admin')->id(),$data['reason']);
+        $data=$this->approved($r,['plan_id'=>['required','uuid']]);
+        $this->plans->moderateCancel($data['plan_id'],(string)auth()->guard('admin')->id(),$data['reason']);
         return back()->with('status','Plan cancelled. Reminder jobs suppressed and action audited.');
     }
 

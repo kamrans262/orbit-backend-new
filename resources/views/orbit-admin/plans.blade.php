@@ -53,7 +53,7 @@
 @if(auth()->guard('admin')->user()?->canPerform('plans.manage'))
 <section class="panel">
   <div class="panel-head"><div><h2>Moderated cancellation</h2><p>Emergency operational action only. Requires the full opaque Plan UUID, reason and confirmation. Not a substitute for a user's edit flow.</p></div></div>
-  <form method="post" action="{{ route('orbit.admin.plans.cancel', ['plan'=>'__PLAN__']) }}" onsubmit="this.action=this.action.replace('__PLAN__',encodeURIComponent(this.elements.plan_id.value)); return true;">
+  <form method="post" action="{{ route('orbit.admin.plans.cancel') }}">
     @csrf
     <div class="two-col"><label>Plan UUID<input name="plan_id" type="text" placeholder="Full plan UUID" required maxlength="36" pattern="[0-9a-fA-F-]{36}"></label>
     <label>Reason<input name="reason" required minlength="10" maxlength="500" placeholder="Required operational reason"></label></div>

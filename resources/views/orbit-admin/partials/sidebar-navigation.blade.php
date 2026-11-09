@@ -61,6 +61,23 @@
     ];
   }
 
+  // Standalone Plans navigation, gated identically to admin routes.
+  if ($navUser?->canPerform('plans.read')) {
+    $planChildren = [
+      ['title'=>'Overview','route'=>'orbit.admin.plans.overview','patterns'=>['orbit.admin.plans.overview']],
+      ['title'=>'Plan Directory','route'=>'orbit.admin.plans.directory','patterns'=>['orbit.admin.plans.directory']],
+      ['title'=>'Invitation & Attendance','route'=>'orbit.admin.plans.attendance','patterns'=>['orbit.admin.plans.attendance']],
+      ['title'=>'Reminder Operations','route'=>'orbit.admin.plans.reminders','patterns'=>['orbit.admin.plans.reminders','orbit.admin.plans.retry']],
+      ['title'=>'Settings','route'=>'orbit.admin.plans.settings','patterns'=>['orbit.admin.plans.settings*']],
+    ];
+    if ($navUser->canPerform('plans.audit')) {
+      $planChildren[]=['title'=>'Audit Trail','route'=>'orbit.admin.plans.audits',
+        'patterns'=>['orbit.admin.plans.audits']];
+    }
+    $navGroups[]=['title'=>'Plans','icon'=>'plans','patterns'=>['orbit.admin.plans.*'],
+      'children'=>$planChildren];
+  }
+
   // Dedicated Notifications operations group, independent from Accounts
   // and Configurations. Never show actions without notification RBAC.
   if ($navUser?->canPerform('notifications.read')) {

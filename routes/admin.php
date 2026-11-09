@@ -16,6 +16,7 @@ use App\Modules\Ping\Http\Controllers\AdminPingController;
 use App\Modules\CheckIn\Http\Controllers\AdminCheckInController;
 use App\Modules\Messaging\Http\Controllers\AdminMessagingController;
 use App\Modules\Notifications\Http\Controllers\AdminNotificationController;
+use App\Modules\Plans\Http\Controllers\AdminPlanController;
 use App\Modules\Config\Http\Middleware\EnsureAdmin;
 use App\Modules\Config\Http\Middleware\RequireAdminPermission;
 
@@ -49,6 +50,7 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
                 'media.read' => 'orbit.admin.media.index',
                 'moments.read' => 'orbit.admin.moments.index',
                 'notifications.read' => 'orbit.admin.notifications.overview',
+                'plans.read' => 'orbit.admin.plans.overview',
             ] as $permission => $route) {
                 if ($permission === 'circles.read' && config('orbit_circle.enabled') !== true) continue;
                 if ($actor?->canPerform($permission)) return redirect()->route($route);
@@ -58,6 +60,27 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
 
         // M14 is a first-class operations area, NOT a submenu under
         // Accounts or Configurations. Admin roles are explicit and audited.
+        // M15 dedicated Plans workspace.
+        Route::get('/plans',[AdminPlanController::class,'index'])
+            ->middleware(RequireAdminPermission::class.':plans.read')->name('plans.overview');
+        Route::get('/plans/directory',[AdminPlanController::class,'directory'])
+            ->middleware(RequireAdminPermission::class.':plans.read')->name('plans.directory');
+        Route::get('/plans/attendance',[AdminPlanController::class,'attendance'])
+            ->middleware(RequireAdminPermission::class.':plans.read')->name('plans.attendance');
+        Route::get('/plans/reminders',[AdminPlanController::class,'reminders'])
+            ->middleware(RequireAdminPermission::class.':plans.read')->name('plans.reminders');
+        Route::get('/plans/settings',[AdminPlanController::class,'settings'])
+            ->middleware(RequireAdminPermission::class.':plans.read')->name('plans.settings');
+        Route::get('/plans/audits',[AdminPlanController::class,'audits'])
+            ->middleware(RequireAdminPermission::class.':plans.audit')->name('plans.audits');
+        Route::post('/plans/settings',[AdminPlanController::class,'saveControl'])
+            ->middleware([RequireAdminPermission::class.':plans.manage','throttle:6,1'])->name('plans.settings.save');
+        Route::post('/plans/cancel',[AdminPlanController::class,'cancel'])
+            ->middleware([RequireAdminPermission::class.':plans.manage','throttle:6,1'])->name('plans.cancel');
+        Route::post('/plans/reminders/{job}/retry',[AdminPlanController::class,'retry'])
+            ->whereUuid('job')->middleware([RequireAdminPermission::class.':plans.manage','throttle:6,1'])->name('plans.retry');
+        Route::post('/plans/process',[AdminPlanController::class,'process'])
+            ->middleware([RequireAdminPermission::class.':plans.manage','throttle:3,1'])->name('plans.process');
         Route::get('/notifications',[AdminNotificationController::class,'index'])
             ->middleware(RequireAdminPermission::class.':notifications.read')
             ->name('notifications.overview');
