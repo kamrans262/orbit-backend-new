@@ -51,13 +51,18 @@ final class PlanService
             foreach($this->offsets($user) as $offset) {
                 $due=Carbon::parse($plan->starts_at)->subMinutes($offset);
                 if($due->isPast())continue;
+                $key=hash('sha256',$plan->id.'|'.$plan->revision.'|'.$user.'|'.$offset);
                 DB::table('plan_reminder_jobs')->insertOrIgnore([
                     'id'=>(string)Str::uuid(),'plan_id'=>$plan->id,'user_id'=>$user,
                     'plan_revision'=>$plan->revision,'offset_minutes'=>$offset,
-                    'due_at'=>$due,'state'=>'pending',
-                    'dedupe_key'=>hash('sha256',$plan->id.'|'.$plan->revision.'|'.$user.'|'.$offset),
+                    'due_at'=>$due,'state'=>'pending','dedupe_key'=>$key,
                     'created_at'=>now(),'updated_at'=>now(),
                 ]);
+                // A user who re-enables reminders or rejoins a plan can
+                // rearm an eligible unsent reminder without duplicating a key.
+                DB::table('plan_reminder_jobs')->where('dedupe_key',$key)
+                    ->where('state','suppressed')->where('due_at','>',now())
+                    ->update(['state'=>'pending','lease_until'=>null,'updated_at'=>now()]);
             }
         }
     }
@@ -89,7 +94,10 @@ final class PlanService
         }
         $candidates=array_values(array_unique(array_diff($candidates,[$plan->organizer_id])));
         $max=(int)config('orbit_plans.max_invitees',100);
-        abort_unless(count($candidates)+$invited<=$max,422,'Too many plan invitees.');
+        $already=DB::table('plan_invitees')->where('plan_id',$plan->id)
+            ->whereIn('user_id',$candidates)->pluck('user_id')->all();
+        abort_unless($invited+count(array_diff($candidates,$already))<=$max,
+            422,'Too many plan invitees.');
         foreach($candidates as $person) {
             $id=(string)Str::uuid();
             $inserted=DB::table('plan_invitees')->insertOrIgnore([
@@ -109,7 +117,10 @@ final class PlanService
         $starts=$this->utc($input['starts_at']);
         $ends=isset($input['ends_at']) && $input['ends_at']!==null
             ? $this->utc($input['ends_at']) : null;
-        abort_unless(Carbon::parse($starts)->isFuture()
+        // An idempotent offline retry may arrive after the original start.
+        $existing=DB::table('plans')->where('organizer_id',$actor)
+            ->where('client_id',$input['client_id'])->exists();
+        abort_unless(($existing || Carbon::parse($starts)->isFuture())
             && ($ends===null || $ends>$starts),422,'Invalid plan schedule.');
         $normalized=[
             'title'=>trim($input['title']),
