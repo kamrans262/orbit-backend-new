@@ -17,8 +17,12 @@ final class PlanPolicy
 
     public function installed(): bool
     {
-        return Schema::hasTable('plans') && Schema::hasTable('plan_invitees')
-            && Schema::hasTable('plan_reminder_jobs') && Schema::hasTable('plan_change_events');
+        foreach (['plans','plan_invitees','plan_circles',
+            'plan_reminder_preferences','plan_reminder_jobs','plan_change_events',
+            'plan_controls','plan_admin_audits'] as $table) {
+            if (!Schema::hasTable($table)) return false;
+        }
+        return true;
     }
 
     public function assertReady(): void
