@@ -191,14 +191,26 @@ final class PlanService
     public function participants(object $plan,string $viewer): array
     {
         abort_unless($this->policy->canViewRecord($plan,$viewer),404);
-        return DB::table('plan_invitees as i')
+        $circles=$this->circleIds($plan->id);
+        $social=app(\App\Modules\Social\Services\SocialGraphService::class);
+        $rows=DB::table('plan_invitees as i')
             ->join('orbit_users as u','u.id','=','i.user_id')
             ->where('i.plan_id',$plan->id)->where('u.status','active')
             ->whereNull('u.deletion_requested_at')
             ->orderBy('u.display_name')->limit(101)
-            ->get(['u.id','u.display_name','i.state'])->map(fn($r)=>[
-                'id'=>$r->id,'display_name'=>$r->display_name,'state'=>$r->state
-            ])->all();
+            ->get(['u.id','u.display_name','i.state']);
+        $out=[];
+        foreach($rows as $row){
+            if(!$this->policy->allowedInvitee($plan->organizer_id,$row->id,$circles))
+                continue;
+            if($viewer!==$plan->organizer_id){
+                if(!in_array($row->state,['invited','joined'],true)
+                    || $social->isBlockedEitherWay($viewer,$row->id))continue;
+            }
+            $out[]=['id'=>$row->id,'display_name'=>$row->display_name,
+                'state'=>$row->state];
+        }
+        return $out;
     }
 
     public function listing(string $actor,string $tab,int $limit,?string $cursor): array
