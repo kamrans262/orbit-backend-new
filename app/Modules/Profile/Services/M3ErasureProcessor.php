@@ -30,6 +30,11 @@ final class M3ErasureProcessor
         'moment_people_tags',
         'moment_push_devices','moment_notification_inbox',
         'moment_notification_muted_circles',
+        // M15 has verified cascade FKs from private Plans, invitees,
+        // reminders and notice events. Other modules remain separately
+        // gated until their own erasure contracts are approved.
+        'plans','plan_invitees','plan_reminder_preferences',
+        'plan_reminder_jobs','plan_change_events',
     ];
 
     public function preview(string $requestId): array
