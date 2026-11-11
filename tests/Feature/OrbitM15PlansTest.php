@@ -211,4 +211,67 @@ final class OrbitM15PlansTest extends TestCase
         $this->travelBack();
     }
 
+    public function test_worker_rechecks_preferences_after_a_reminder_was_queued(): void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $body=$this->sample();
+        $body['starts_at']=now()->addMinutes(70)->toIso8601String();
+        $body['ends_at']=now()->addMinutes(120)->toIso8601String();
+        $this->withToken($token)->postJson('/api/v1/plans',$body)->assertCreated();
+        $plan=DB::table('plans')->where('client_id',$body['client_id'])->first();
+        $this->assertDatabaseHas('plan_reminder_jobs',[
+            'plan_id'=>$plan->id,'offset_minutes'=>60,'state'=>'pending',
+        ]);
+        // Emulate a preference update racing the worker lease. It must not
+        // publish a stale reminder even though a pending row still exists.
+        DB::table('plan_reminder_preferences')->updateOrInsert(
+            ['user_id'=>$owner->id],
+            ['enabled'=>false,'offsets_json'=>json_encode([60]),
+                'created_at'=>now(),'updated_at'=>now()]
+        );
+        $this->travel(10)->minutes();
+        $stats=app(PlanReminderWorker::class)->run(30);
+        $this->assertSame(0,$stats['reminders']);
+        $this->assertDatabaseHas('plan_reminder_jobs',[
+            'plan_id'=>$plan->id,'offset_minutes'=>60,'state'=>'suppressed',
+        ]);
+        $this->travelBack();
+    }
+
+    public function test_idempotent_retry_remains_safe_after_the_original_start_time(): void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $body=$this->sample();
+        $this->withToken($token)->postJson('/api/v1/plans',$body)->assertCreated();
+        $this->assertDatabaseCount('plans',1);
+        $this->travel(4)->days();
+        $this->withToken($token)->postJson('/api/v1/plans',$body)->assertOk();
+        $this->assertDatabaseCount('plans',1);
+        $this->travelBack();
+    }
+
+    public function test_non_organizer_cannot_edit_cancel_or_mutate_past_plan(): void
+    {
+        [$owner,$device,$token]=$this->principal();
+        [$guest,$guestDevice,$guestToken]=$this->principal();
+        $this->friend($owner->id,$guest->id);
+        $body=$this->sample([$guest->id]);
+        $this->withToken($token)->postJson('/api/v1/plans',$body)->assertCreated();
+        $plan=DB::table('plans')->where('client_id',$body['client_id'])->first();
+        $this->withToken($guestToken)->patchJson('/api/v1/plans/'.$plan->id,[
+            'revision'=>1,'title'=>'Cannot hijack plan',
+        ])->assertForbidden();
+        $this->withToken($guestToken)->postJson('/api/v1/plans/'.$plan->id.'/cancel',[
+            'revision'=>1,
+        ])->assertForbidden();
+        $this->travel(3)->days();
+        $this->withToken($token)->patchJson('/api/v1/plans/'.$plan->id,[
+            'revision'=>1,'title'=>'No past edits',
+        ])->assertStatus(409);
+        $this->withToken($guestToken)->postJson('/api/v1/plans/'.$plan->id.'/rsvp',[
+            'state'=>'joined',
+        ])->assertStatus(409);
+        $this->travelBack();
+    }
+
 }
