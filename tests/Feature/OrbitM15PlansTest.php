@@ -274,4 +274,26 @@ final class OrbitM15PlansTest extends TestCase
         $this->travelBack();
     }
 
+    public function test_m15_erasure_contract_whitelists_only_cascade_backed_plan_owners(): void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $request=(string)Str::uuid();
+        DB::table('orbit_account_deletion_requests')->insert([
+            'request_id'=>$request,'user_id'=>$owner->id,'status'=>'pending',
+            'requested_at'=>now()->subDays(31),
+            'eligible_for_erasure_at'=>now()->subDay(),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $preview=app(\App\Modules\Profile\Services\M3ErasureProcessor::class)
+            ->preview($request);
+        $unregistered=$preview['unregistered_tables'];
+        foreach(['plans','plan_invitees','plan_reminder_preferences',
+            'plan_reminder_jobs','plan_change_events'] as $table){
+            $this->assertNotContains($table,$unregistered,
+                'M15 user FK must have approved cascade erasure contract: '.$table);
+        }
+        // Do not whitelist unrelated M8-M14 ownership relationships until
+        // their deletion and encrypted-media retention contracts are audited.
+    }
+
 }
