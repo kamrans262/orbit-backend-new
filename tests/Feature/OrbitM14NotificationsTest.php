@@ -206,8 +206,11 @@ final class OrbitM14NotificationsTest extends TestCase
         // registration must never keep a suspended owner eligible.
         $this->assertFalse(app(NotificationPolicy::class)->targetAllowed(
             'friends',$source,$recipient->id,null,'friend.requested'));
+        // M2 token middleware rejects a suspended identity before M14
+        // resource policy runs. Both layers remain fail-closed; 401 is
+        // the actual authenticated boundary contract for suspension.
         $this->withToken($token)->getJson('/api/v1/me/notifications')
-            ->assertStatus(403);
+            ->assertUnauthorized();
     }
 
     public function test_inbox_skips_revoked_rows_without_dropping_cursor(): void
