@@ -94,6 +94,8 @@ final class PlanReminderWorker
                     || DB::table('plan_invitees')->where('plan_id',$plan->id)
                         ->where('user_id',$job->user_id)->where('state','joined')->exists())
                 && $this->policy->control('reminders_enabled')
+                && $this->policy->reminderAllowed($job->user_id,
+                    (int)$job->offset_minutes)
                 && $this->notifications->categoryEnabled($job->user_id,'plans');
             if(!$canSend){
                 DB::table('plan_reminder_jobs')->where('id',$id)->update([

@@ -44,6 +44,21 @@ final class PlanPolicy
             ->whereNull('deletion_requested_at')->exists();
     }
 
+    /** Revalidate persisted opt-in and offset at dispatch time, even if a
+     * scheduler job was leased before the user saved new preferences. */
+    public function reminderAllowed(string $user,int $offset): bool
+    {
+        if (!in_array($offset,config('orbit_plans.allowed_reminder_offsets',
+            [0,15,60,1440]),true)) return false;
+        $row=DB::table('plan_reminder_preferences')->where('user_id',$user)->first();
+        if (!$row) return in_array($offset,config('orbit_plans.default_reminder_offsets',
+            [15,60]),true);
+        if (!(bool)$row->enabled) return false;
+        $offsets=json_decode((string)$row->offsets_json,true);
+        return is_array($offsets) && in_array($offset,
+            array_map('intval',$offsets),true);
+    }
+
     public function actor(Request $request): string
     {
         $this->assertReady();
