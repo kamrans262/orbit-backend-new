@@ -82,5 +82,19 @@ jobs:
           php artisan route:list --path=api/v1/plans
           php artisan route:list --path=admin/plans
           php artisan migrate --force
+      - name: Isolated M15 rollback and reapply preserves M1-M14 tables
+        run: |
+          php artisan migrate:rollback --force --path=database/migrations/2026_11_10_000001_create_orbit_plans.php
+          php artisan tinker --execute='if(\Illuminate\Support\Facades\Schema::hasTable("plans") || !\Illuminate\Support\Facades\Schema::hasTable("notification_events")) throw new RuntimeException("M15 rollback boundary failed"); echo "M14 notification tables preserved".PHP_EOL;'
+          php artisan migrate --force --path=database/migrations/2026_11_10_000001_create_orbit_plans.php
+          php artisan tinker --execute='if(!\Illuminate\Support\Facades\Schema::hasTable("plans") || !\Illuminate\Support\Facades\Schema::hasTable("notification_events")) throw new RuntimeException("M15 reapply failed"); echo "M15 reapply OK".PHP_EOL;'
       - name: Module 15 focused API and Admin tests
         run: php artisan test --compact --filter='OrbitM15PlansTest'
+      - name: Existing M3-M5 M8 M14 regression tests
+        run: |
+          php artisan test --compact \
+            tests/Feature/OrbitM3ErasureTest.php \
+            tests/Feature/OrbitM4SocialGraphTest.php \
+            tests/Feature/OrbitM5CirclesTest.php \
+            tests/Feature/OrbitM8DashboardTest.php \
+            tests/Feature/OrbitM14NotificationsTest.php
