@@ -101,6 +101,24 @@
     ];
   }
 
+  // M16 Safety: standalone first-class emergency operations, never nested
+  // in Accounts/Configurations and never displaying private coordinates.
+  if ($navUser?->canPerform('safety.read')) {
+    $safetyChildren = [
+      ['title'=>'Overview','route'=>'orbit.admin.safety.overview','patterns'=>['orbit.admin.safety.overview']],
+      ['title'=>'Incident Directory','route'=>'orbit.admin.safety.incidents','patterns'=>['orbit.admin.safety.incidents']],
+      ['title'=>'Responders','route'=>'orbit.admin.safety.responders','patterns'=>['orbit.admin.safety.responders']],
+      ['title'=>'Delivery Operations','route'=>'orbit.admin.safety.delivery','patterns'=>['orbit.admin.safety.delivery','orbit.admin.safety.retry','orbit.admin.safety.run']],
+      ['title'=>'Settings','route'=>'orbit.admin.safety.settings','patterns'=>['orbit.admin.safety.settings*']],
+    ];
+    if ($navUser->canPerform('safety.audit')) {
+      $safetyChildren[]=['title'=>'Audit Trail','route'=>'orbit.admin.safety.audits',
+        'patterns'=>['orbit.admin.safety.audits']];
+    }
+    $navGroups[]=['title'=>'SOS & Safety','icon'=>'sos',
+      'patterns'=>['orbit.admin.safety.*'],'children'=>$safetyChildren];
+  }
+
   $accountChildren = [];
   if ($navUser?->canPerform('users.read')) {
     $accountChildren[] = ['title'=>'Users & Devices','route'=>'orbit.admin.users.index','patterns'=>['orbit.admin.users.*']];

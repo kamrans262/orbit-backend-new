@@ -1,0 +1,91 @@
+name: Orbit M16 SOS Backend and Admin verification
+on:
+  push:
+    branches: [feature/m16-sos-safety-backend-admin-2026-11-17]
+    paths:
+      - '.github/workflows/orbit-m16-sos-safety-tests.yml'
+      - 'app/Modules/Safety/**'
+      - 'app/Modules/Moments/Services/MomentFcmTransport.php'
+      - 'config/orbit_sos.php'
+      - 'database/migrations/2026_11_17_*.php'
+      - 'resources/views/orbit-admin/sos.blade.php'
+      - 'resources/views/orbit-admin/layout.blade.php'
+      - 'resources/views/orbit-admin/partials/sidebar-navigation.blade.php'
+      - 'routes/api.php'
+      - 'routes/admin.php'
+      - 'routes/console.php'
+      - 'tests/Feature/OrbitM16SosSafetyTest.php'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: rootpass
+          MARIADB_DATABASE: orbit_ci
+          MARIADB_USER: orbit_ci
+          MARIADB_PASSWORD: orbit_ci_pass
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: testing
+      APP_DEBUG: true
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: orbit_ci
+      DB_USERNAME: orbit_ci
+      DB_PASSWORD: orbit_ci_pass
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+      ORBIT_NOTIFICATIONS_PUSH_ENABLED: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, fileinfo, pdo_mysql, openssl, sodium
+          tools: composer:v2
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Configure disposable CI database
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+      - name: Syntax and route contract
+        run: |
+          find app/Modules/Safety -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l database/migrations/2026_11_17_000001_create_orbit_sos_safety.php
+          php -l app/Modules/Moments/Services/MomentFcmTransport.php
+          php -l routes/api.php
+          php -l routes/admin.php
+          php -l routes/console.php
+          php -l tests/Feature/OrbitM16SosSafetyTest.php
+          php artisan route:list --path=api/v1/sos
+          php artisan route:list --path=admin/safety
+          php artisan migrate --force
+      - name: M16 rollback isolation and additive reapply
+        run: |
+          php artisan migrate:rollback --force --path=database/migrations/2026_11_17_000001_create_orbit_sos_safety.php
+          php artisan tinker --execute='if(\Illuminate\Support\Facades\Schema::hasTable("sos_incidents") || !\Illuminate\Support\Facades\Schema::hasTable("plans")) throw new RuntimeException("M16 rollback boundary failed");'
+          php artisan migrate --force --path=database/migrations/2026_11_17_000001_create_orbit_sos_safety.php
+      - name: Dedicated SOS privacy lifecycle and Admin tests
+        run: php artisan test --compact tests/Feature/OrbitM16SosSafetyTest.php
+      - name: Existing Circle, Messaging, Notifications and Plans regression
+        run: |
+          php artisan test --compact \
+            tests/Feature/OrbitM5CirclesTest.php \
+            tests/Feature/OrbitMessagingTest.php \
+            tests/Feature/OrbitM14NotificationsTest.php \
+            tests/Feature/OrbitM15PlansTest.php

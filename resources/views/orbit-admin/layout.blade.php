@@ -25,7 +25,6 @@
         @if(config('orbit_circle.enabled') !== true)
         <div class="nav-item disabled"><span class="upcoming-icon" aria-hidden="true">@include('orbit-admin.partials.icon', ['name'=>'circles'])</span><span>Circles</span><small>Upcoming</small></div>
         @endif
-        <div class="nav-item disabled"><span class="upcoming-icon" aria-hidden="true">@include('orbit-admin.partials.icon', ['name'=>'sos'])</span><span>SOS operations</span><small>Upcoming</small></div>
         <div class="nav-item disabled"><span class="upcoming-icon" aria-hidden="true">@include('orbit-admin.partials.icon', ['name'=>'billing'])</span><span>Billing &amp; Ads</span><small>Upcoming</small></div>
         <div class="nav-item disabled"><span class="upcoming-icon" aria-hidden="true">@include('orbit-admin.partials.icon', ['name'=>'health'])</span><span>System health</span><small>Upcoming</small></div>
       </div>

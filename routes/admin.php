@@ -17,6 +17,7 @@ use App\Modules\CheckIn\Http\Controllers\AdminCheckInController;
 use App\Modules\Messaging\Http\Controllers\AdminMessagingController;
 use App\Modules\Notifications\Http\Controllers\AdminNotificationController;
 use App\Modules\Plans\Http\Controllers\AdminPlanController;
+use App\Modules\Safety\Http\Controllers\AdminSosController;
 use App\Modules\Config\Http\Middleware\EnsureAdmin;
 use App\Modules\Config\Http\Middleware\RequireAdminPermission;
 
@@ -51,6 +52,7 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
                 'moments.read' => 'orbit.admin.moments.index',
                 'notifications.read' => 'orbit.admin.notifications.overview',
                 'plans.read' => 'orbit.admin.plans.overview',
+                'safety.read' => 'orbit.admin.safety.overview',
             ] as $permission => $route) {
                 if ($permission === 'circles.read' && config('orbit_circle.enabled') !== true) continue;
                 if ($actor?->canPerform($permission)) return redirect()->route($route);
@@ -60,6 +62,30 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
 
         // M14 is a first-class operations area, NOT a submenu under
         // Accounts or Configurations. Admin roles are explicit and audited.
+        // M16 is a standalone, independently RBAC-gated Safety workspace.
+        Route::get('/safety',[AdminSosController::class,'overview'])
+            ->middleware(RequireAdminPermission::class.':safety.read')->name('safety.overview');
+        Route::get('/safety/incidents',[AdminSosController::class,'incidents'])
+            ->middleware(RequireAdminPermission::class.':safety.read')->name('safety.incidents');
+        Route::get('/safety/responders',[AdminSosController::class,'responders'])
+            ->middleware(RequireAdminPermission::class.':safety.read')->name('safety.responders');
+        Route::get('/safety/delivery',[AdminSosController::class,'delivery'])
+            ->middleware(RequireAdminPermission::class.':safety.read')->name('safety.delivery');
+        Route::get('/safety/settings',[AdminSosController::class,'settings'])
+            ->middleware(RequireAdminPermission::class.':safety.read')->name('safety.settings');
+        Route::get('/safety/audits',[AdminSosController::class,'audits'])
+            ->middleware(RequireAdminPermission::class.':safety.audit')->name('safety.audits');
+        Route::post('/safety/settings',[AdminSosController::class,'saveControl'])
+            ->middleware([RequireAdminPermission::class.':safety.manage','throttle:6,1'])
+            ->name('safety.settings.save');
+        Route::post('/safety/delivery/{job}/retry',[AdminSosController::class,'retry'])
+            ->whereUuid('job')
+            ->middleware([RequireAdminPermission::class.':safety.manage','throttle:6,1'])
+            ->name('safety.retry');
+        Route::post('/safety/run',[AdminSosController::class,'run'])
+            ->middleware([RequireAdminPermission::class.':safety.manage','throttle:3,1'])
+            ->name('safety.run');
+
         // M15 dedicated Plans workspace.
         Route::get('/plans',[AdminPlanController::class,'index'])
             ->middleware(RequireAdminPermission::class.':plans.read')->name('plans.overview');

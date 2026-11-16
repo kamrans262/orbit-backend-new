@@ -32,6 +32,7 @@ use App\Modules\Messaging\Http\Controllers\MessagingCircleConsentController;
 use App\Modules\Messaging\Http\Middleware\MessagingOperationalTelemetry;
 use App\Modules\Notifications\Http\Controllers\NotificationController;
 use App\Modules\Plans\Http\Controllers\PlanController;
+use App\Modules\Safety\Http\Controllers\SosController;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -53,6 +54,31 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:120,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        // M16: SOS remains free. Never report an alert delivered at HTTP acceptance.
+        Route::get('/sos/capabilities',[SosController::class,'capabilities'])->middleware('throttle:40,1');
+        Route::get('/sos/incidents',[SosController::class,'index'])->middleware('throttle:30,1');
+        // Emergency initiation intentionally has no additional hard throttle; the
+        // trusted-device session is still governed by the shared auth middleware.
+        Route::post('/sos/incidents',[SosController::class,'store']);
+        Route::get('/sos/incidents/{incident}',[SosController::class,'show'])
+            ->whereUuid('incident')->middleware('throttle:40,1');
+        Route::get('/sos/incidents/{incident}/location',[SosController::class,'location'])
+            ->whereUuid('incident')->middleware('throttle:30,1');
+        Route::post('/sos/incidents/{incident}/acknowledge',[SosController::class,'acknowledge'])
+            ->whereUuid('incident')->middleware('throttle:30,1');
+        Route::post('/sos/incidents/{incident}/cancel',[SosController::class,'cancel'])
+            ->whereUuid('incident')->middleware('throttle:30,1');
+        Route::post('/sos/incidents/{incident}/resolve',[SosController::class,'resolve'])
+            ->whereUuid('incident')->middleware('throttle:30,1');
+        Route::get('/sos/trusted-contacts',[SosController::class,'contacts'])
+            ->middleware('throttle:30,1');
+        Route::post('/sos/trusted-contacts',[SosController::class,'requestContact'])
+            ->middleware('throttle:20,1');
+        Route::post('/sos/trusted-contacts/{contact}/decision',[SosController::class,'decideContact'])
+            ->whereUuid('contact')->middleware('throttle:20,1');
+        Route::delete('/sos/trusted-contacts/{contact}',[SosController::class,'removeContact'])
+            ->whereUuid('contact')->middleware('throttle:20,1');
+
         // M15: private Plans under the existing M2 trusted-device boundary.
         Route::get('/plans',[PlanController::class,'index'])->middleware('throttle:40,1');
         Route::post('/plans',[PlanController::class,'store'])->middleware('throttle:10,1');

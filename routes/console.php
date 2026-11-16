@@ -165,3 +165,12 @@ Artisan::command('orbit:notifications:security-mail',function () {
 })->purpose('Deliver approved generic account-security notices by verified mailer');
 Schedule::command('orbit:notifications:security-mail')
     ->everyMinute()->withoutOverlapping();
+
+
+// M16: private in-app SOS remains available without the optional push provider.
+// Only true provider acceptance is recorded; emergency-service calling is not integrated.
+Artisan::command('orbit:sos:dispatch', function () {
+    $stats=app(\App\Modules\Safety\Services\SosDeliveryWorker::class)->run(40);
+    $this->info('SOS delivery and escalation: '.json_encode($stats));
+})->purpose('Revalidate SOS responders, escalate and attempt permitted privacy-safe push');
+Schedule::command('orbit:sos:dispatch')->everyMinute()->withoutOverlapping();

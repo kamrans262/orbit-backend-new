@@ -107,7 +107,7 @@ final class MomentFcmTransport
     public function sendOperationalResult(string $fcmToken,string $category): array
     {
         if(!$this->notificationsReady())return ['status'=>'retry','code'=>'provider_off'];
-        $allowed=['moments','pings','check_ins','messages','friends','circles','security'];
+        $allowed=['moments','pings','check_ins','messages','friends','circles','security','sos'];
         if(!in_array($category,$allowed,true))
             return ['status'=>'terminal','code'=>'category_unsupported'];
 
@@ -122,21 +122,18 @@ final class MomentFcmTransport
                         // Public, generic OS-visible alert; no recipient, location,
                         // message text, Circle identity, or private target ID.
                         'notification'=>[
-                            'title'=>'Orbit',
-                            'body'=>'You have a new notification.',
+                            'title'=>$category==='sos'?'Orbit Safety':'Orbit',
+                            'body'=>$category==='sos'?'An SOS alert needs attention. Open Orbit.':'You have a new notification.',
                         ],
-                        'data'=>['type'=>'notification_available'],
-                        'android'=>[
-                            'priority'=>'NORMAL',
-                            'collapse_key'=>$collapse,
-                        ],
-                        'apns'=>[
-                            'headers'=>[
-                                'apns-priority'=>'5',
-                                'apns-collapse-id'=>$collapse,
-                            ],
-                            'payload'=>['aps'=>['content-available'=>1]],
-                        ],
+                        'data'=>['type'=>$category==='sos'?'sos_available':'notification_available'],
+                        'android'=>$category==='sos'
+                            ? ['priority'=>'HIGH']
+                            : ['priority'=>'NORMAL','collapse_key'=>$collapse],
+                        'apns'=>$category==='sos'
+                            ? ['headers'=>['apns-priority'=>'10'],
+                                'payload'=>['aps'=>['sound'=>'default','content-available'=>1]]]
+                            : ['headers'=>['apns-priority'=>'5','apns-collapse-id'=>$collapse],
+                                'payload'=>['aps'=>['content-available'=>1]]],
                     ],
                 ]);
         }catch(\Throwable) {
