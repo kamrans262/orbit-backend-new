@@ -43,3 +43,7 @@ Additive migration `2026_11_17_000001_create_orbit_sos_safety.php`: `sos_inciden
 4. Provider acceptance != on-device delivery, viewing, acknowledgement or emergency response. Device/offline/background tests and monitoring remain Stage 3/4.
 5. Confirm escalation ordering/delays, SOS location lifetime and legal retention rules with client source documents before production.
 6. Run GitHub CI, migrations and regression tests before release. This branch intentionally does not deploy or migrate production.
+
+## M3 / identity erasure safety integration
+
+The M16 user-FK tables are registered in the existing fail-closed M3 erasure inventory, while `SosErasurePolicy` checks both the initiator and responder relationships before the central `DeleteOrbitUser` cascade. A contact-only user may be deleted through the normal process, but deletion of anyone linked to incident evidence is blocked until an explicit retention and evidence disposal workflow is approved and implemented. Incident records are never silently discarded by user or device deletion. This is intentionally a release policy blocker, not a claim that full erasure/retention compliance has been finalized.

@@ -6,6 +6,8 @@ on:
       - '.github/workflows/orbit-m16-sos-safety-tests.yml'
       - 'app/Modules/Safety/**'
       - 'app/Modules/Moments/Services/MomentFcmTransport.php'
+      - 'app/Modules/Profile/Services/M3ErasureProcessor.php'
+      - 'app/Modules/Identity/Services/DeleteOrbitUser.php'
       - 'config/orbit_sos.php'
       - 'database/migrations/2026_11_17_*.php'
       - 'resources/views/orbit-admin/sos.blade.php'
@@ -69,6 +71,8 @@ jobs:
           find app/Modules/Safety -name '*.php' -print0 | xargs -0 -n1 php -l
           php -l database/migrations/2026_11_17_000001_create_orbit_sos_safety.php
           php -l app/Modules/Moments/Services/MomentFcmTransport.php
+          php -l app/Modules/Profile/Services/M3ErasureProcessor.php
+          php -l app/Modules/Identity/Services/DeleteOrbitUser.php
           php -l routes/api.php
           php -l routes/admin.php
           php -l routes/console.php

@@ -237,4 +237,38 @@ final class OrbitM16SosSafetyTest extends TestCase
             ->value('escalation_due_at'));
     }
 
+    public function test_sos_erasure_guard_blocks_incident_evidence_but_not_contact_only_accounts(): void
+    {
+        [$owner,$device,$token]=$this->principal();
+        [$recipient,$deviceTwo,$recipientToken]=$this->principal();
+        $this->trusted($owner->id,$recipient->id,$token,$recipientToken);
+
+        $guard=app(\App\Modules\Safety\Services\SosErasurePolicy::class);
+        // Requests/accepted contacts alone do not force an indefinite hold.
+        $guard->assertErasable($owner->id);
+        $guard->assertErasable($recipient->id);
+
+        $payload=$this->payload();
+        $this->withToken($token)->postJson('/api/v1/sos/incidents',$payload)->assertCreated();
+        $id=DB::table('sos_incidents')->where('client_id',$payload['client_id'])->value('id');
+
+        $operator=$this->admin(['users.delete']);
+        try {
+            app(\App\Modules\Identity\Services\DeleteOrbitUser::class)
+                ->execute($owner->id,$operator,'Account erasure audit test',null,null);
+            $this->fail('Direct account deletion must be blocked while SOS evidence exists.');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('SOS incident evidence', $e->getMessage());
+        }
+        $this->assertDatabaseHas('orbit_users',['id'=>$owner->id]);
+        $this->assertDatabaseHas('sos_incidents',['id'=>$id,'initiator_id'=>$owner->id]);
+
+        try {
+            $guard->assertErasable($recipient->id);
+            $this->fail('A responder cannot silently erase SOS incident evidence.');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('SOS incident evidence',$e->getMessage());
+        }
+    }
+
 }

@@ -35,6 +35,9 @@ final class M3ErasureProcessor
         // gated until their own erasure contracts are approved.
         'plans','plan_invitees','plan_reminder_preferences',
         'plan_reminder_jobs','plan_change_events',
+        // M16 user FKs are registered, but incident-bearing accounts are
+        // independently blocked by SosErasurePolicy until retention is reviewed.
+        'sos_trusted_contacts','sos_incidents','sos_recipients',
     ];
 
     public function preview(string $requestId): array

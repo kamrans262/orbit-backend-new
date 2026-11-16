@@ -19,6 +19,9 @@ final class DeleteOrbitUser
     {
         return DB::transaction(function () use ($userId, $actor, $reason, $ip, $requestId): array {
             $user = OrbitUser::query()->whereKey($userId)->lockForUpdate()->firstOrFail();
+            // SOS incident evidence is subject to a separate retention and
+            // safety review. Do not cascade it away through generic deletion.
+            app(\App\Modules\Safety\Services\SosErasurePolicy::class)->assertErasable($userId);
             app(\App\Modules\Circle\Services\CircleLifecycleIntegrity::class)->beforeUserRemoval($userId);
             $identities = DB::table('user_identities')->where('user_id', $userId)
                 ->get(['provider', 'provider_subject']);
