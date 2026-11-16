@@ -546,7 +546,7 @@ final class OrbitMessagingTest extends TestCase
             ['confirm'=>true])->assertForbidden();
         $role->update(['permissions'=>['messages.moderate']]);
         $this->actingAs($admin,'admin')->get('/admin/messaging/reports')
-            ->assertOk()->assertSee('User Messaging Reports')->assertDontSee($evidence);
+            ->assertOk()->assertSee('Messaging Reports')->assertDontSee($evidence);
         $this->actingAs($admin,'admin')->post('/admin/messaging/reports/'.$report.'/evidence',
             ['confirm'=>true])->assertOk()->assertSee($evidence);
         $this->assertDatabaseHas('messaging_report_audits',[
