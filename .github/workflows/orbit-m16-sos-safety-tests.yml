@@ -15,6 +15,7 @@ on:
       - 'routes/admin.php'
       - 'routes/console.php'
       - 'tests/Feature/OrbitM16SosSafetyTest.php'
+      - 'tests/Feature/OrbitMessagingTest.php'
   workflow_dispatch:
 permissions:
   contents: read

@@ -211,4 +211,30 @@ final class OrbitM16SosSafetyTest extends TestCase
         $this->assertSame(120,(int)DB::table('sos_controls')
             ->where('key','escalation_after_seconds')->value('value'));
     }
+    public function test_empty_circle_falls_back_to_trusted_contact_without_delay(): void
+    {
+        [$owner,$device,$token]=$this->principal();
+        [$trusted,$trustedDevice,$trustedToken]=$this->principal();
+        $this->trusted($owner->id,$trusted->id,$token,$trustedToken);
+        $circle=(string)Str::uuid();
+        DB::table('circles')->insert([
+            'id'=>$circle,'owner_id'=>$owner->id,'name'=>'Owner-only safety circle',
+            'revision'=>1,'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('circle_members')->insert([
+            'circle_id'=>$circle,'user_id'=>$owner->id,'role'=>'member',
+            'joined_at'=>now(),'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $payload=$this->payload(['circle_id'=>$circle]);
+        $this->withToken($token)->postJson('/api/v1/sos/incidents',$payload)
+            ->assertCreated()->assertJsonPath(
+                'data.in_app_available_for_eligible_responders',true);
+        $id=DB::table('sos_incidents')->where('client_id',$payload['client_id'])->value('id');
+        $this->assertDatabaseHas('sos_recipients',[
+            'incident_id'=>$id,'user_id'=>$trusted->id,'source'=>'trusted',
+        ]);
+        $this->assertNull(DB::table('sos_incidents')->where('id',$id)
+            ->value('escalation_due_at'));
+    }
+
 }

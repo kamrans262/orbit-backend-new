@@ -78,7 +78,7 @@ final class SosService
                 'location_ciphertext'=>$location,
                 'location_expires_at'=>$location?$now->copy()->addMinutes(
                     (int)config('orbit_sos.location_ttl_minutes',30)):null,
-                'escalation_due_at'=>$circle && $trusted ? $now->copy()->addSeconds($delay):null,
+                'escalation_due_at'=>$circle && $trusted && $circleResponders ? $now->copy()->addSeconds($delay):null,
                 'created_at'=>$now,'updated_at'=>$now,
             ]);
             $included=[];
@@ -88,9 +88,9 @@ final class SosService
                     $included[$recipient]=true;
                 }
             }
-            // No Circle: accepted trusted contacts are the primary responders.
-            // With a Circle, trusted contacts are a separately queued escalation tier.
-            if(!$circle)foreach($trusted as $recipient) {
+            // If a Circle has zero eligible responders, contact trusted users
+            // immediately: an emergency must not wait for a useless timeout.
+            if(!$circle || $circleResponders===[])foreach($trusted as $recipient) {
                 if(!isset($included[$recipient])) {
                     $this->recipient($id,$recipient,'trusted');
                     $included[$recipient]=true;
