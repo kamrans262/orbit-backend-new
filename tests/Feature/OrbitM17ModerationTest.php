@@ -171,7 +171,7 @@ final class OrbitM17ModerationTest extends TestCase
         $case=DB::table('moderation_cases')->first();
         $read=$this->admin(['moderation.read']);
         $this->actingAs($read,'admin')->get('/admin/moderation')
-            ->assertOk()->assertSee('Moderation &amp; Reporting')
+            ->assertOk()->assertSee('Moderation & Reporting')
             ->assertDontSee('Personal and private account report.');
         $this->actingAs($read,'admin')->post('/admin/moderation/cases/'.$case->id.'/transition',[
             'revision'=>1,'action'=>'triage','reason'=>'other','confirm'=>1,
@@ -267,7 +267,7 @@ final class OrbitM17ModerationTest extends TestCase
         $admin=$this->admin(['moderation.read','moderation.audit']);
         $this->actingAs($admin,'admin')->get('/admin/moderation')
             ->assertOk()->assertSee('Report Queue')->assertSee('Appeals')
-            ->assertSee('Moderation &amp; Reporting');
+            ->assertSee('Moderation & Reporting');
         $this->actingAs($admin,'admin')->get('/admin/moderation/audits')
             ->assertOk();
         $this->actingAs($admin,'admin')->post('/admin/moderation/sync',[
