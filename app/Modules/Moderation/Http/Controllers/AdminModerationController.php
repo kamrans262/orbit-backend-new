@@ -30,6 +30,7 @@ final class AdminModerationController extends Controller
             'actioned'=>0,'dismissed'=>0,'appeals'=>0,'active_actions'=>0];
         $cases=collect();$events=collect();$actions=collect();$appeals=collect();
         $case=null;$controls=collect();$assignable=collect();$sources=collect();
+        $controlAudits=collect();
         if($ready){
             foreach(DB::table('moderation_cases')->select('status')
                 ->selectRaw('COUNT(*) as total')->groupBy('status')->get() as $entry){
@@ -78,6 +79,10 @@ final class AdminModerationController extends Controller
                     'p.decision_code','p.decided_at','a.case_id','a.scope')
                 ->orderByDesc('p.created_at')->limit(60)->get();
             if($area==='settings')$controls=DB::table('moderation_controls')->orderBy('key')->get();
+            if($area==='audits')$controlAudits=DB::table('moderation_control_audits')
+                ->orderByDesc('created_at')->limit(50)->get([
+                    'key','old_value','new_value','created_at',
+                ]);
             if($area==='audits')$events=DB::table('moderation_case_events')
                 ->orderByDesc('id')->limit(80)->get([
                     'case_id','action','reason_code','revision_after','created_at',
@@ -85,7 +90,7 @@ final class AdminModerationController extends Controller
         }
         return response()->view('orbit-admin.moderation',compact(
             'area','ready','counts','cases','case','events','actions','appeals',
-            'controls','assignable','sources'))
+            'controls','assignable','sources','controlAudits'))
             ->header('Cache-Control','private, no-store');
     }
 
