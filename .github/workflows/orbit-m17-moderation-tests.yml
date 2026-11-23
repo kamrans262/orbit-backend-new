@@ -74,7 +74,8 @@ jobs:
             tests/Feature/OrbitM4SocialGraphTest.php \
             tests/Feature/OrbitM7MomentsTest.php \
             tests/Feature/OrbitMessagingTest.php \
-            tests/Feature/OrbitMessagingAdminTest.php \
             tests/Feature/OrbitM14NotificationsTest.php \
             tests/Feature/OrbitM15PlansTest.php \
             tests/Feature/OrbitM16SosSafetyTest.php
+      - name: Existing M13 Admin throttle tests in independent rate-limit process
+        run: php artisan test --compact tests/Feature/OrbitMessagingAdminTest.php
