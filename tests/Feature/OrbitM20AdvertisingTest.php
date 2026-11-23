@@ -56,7 +56,9 @@ final class OrbitM20AdvertisingTest extends TestCase
         $admin=AdminUser::create([
             'name'=>'Advertising operator',
             'email'=>Str::uuid().'@example.test',
-            'password'=>'StrongTestPassword123!','status'=>'active',
+            'password'=>'StrongTestPassword123!',
+            'totp_secret'=>(new \App\Modules\Config\Services\Totp())->generateSecret(),
+            'status'=>'active',
         ]);
         $admin->roles()->attach($role->id);
         return $admin;
@@ -110,7 +112,9 @@ final class OrbitM20AdvertisingTest extends TestCase
         config(['orbit_advertising.enabled'=>false]);
         $this->withToken($token)->getJson('/api/v1/ads/capabilities')
             ->assertOk()->assertJsonPath('data.available',false)
-            ->assertJsonPath('data.placements.home.promo',false);
+            ; // Dot-containing placement keys are literal map keys.
+        $this->assertFalse($this->withToken($token)
+            ->getJson('/api/v1/ads/capabilities')->json('data.placements')['home.promo']);
         $this->withToken($token)->postJson('/api/v1/ads/decisions',[
             'placement'=>'home.promo','request_id'=>(string)Str::uuid(),
         ])->assertStatus(503);
