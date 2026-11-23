@@ -26,6 +26,8 @@ jobs:
     env:
       APP_ENV: testing
       APP_DEBUG: true
+      # Static dummy key for disposable CI only; never use for production.
+      APP_KEY: base64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       DB_CONNECTION: mysql
       DB_HOST: 127.0.0.1
       DB_PORT: 3306
