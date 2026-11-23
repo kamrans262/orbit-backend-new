@@ -101,6 +101,25 @@
     ];
   }
 
+  // Reuse the existing nav-group/notifications icon; Activity is not inside
+  // Configurations or Accounts and receives independent server-side RBAC.
+  if ($navUser?->canPerform('activity.read')) {
+    $activityChildren = [
+      ['title'=>'Overview','route'=>'orbit.admin.activity.overview',
+        'patterns'=>['orbit.admin.activity.overview']],
+      ['title'=>'Source Controls','route'=>'orbit.admin.activity.sources',
+        'patterns'=>['orbit.admin.activity.sources','orbit.admin.activity.control']],
+      ['title'=>'Projection Operations','route'=>'orbit.admin.activity.operations',
+        'patterns'=>['orbit.admin.activity.operations','orbit.admin.activity.project']],
+    ];
+    if ($navUser->canPerform('activity.audit')) {
+      $activityChildren[]=['title'=>'Audit Trail','route'=>'orbit.admin.activity.audits',
+        'patterns'=>['orbit.admin.activity.audits']];
+    }
+    $navGroups[]=['title'=>'Activity Feed','icon'=>'notifications',
+      'patterns'=>['orbit.admin.activity.*'],'children'=>$activityChildren];
+  }
+
   // M17 uses the already approved sidebar and icon partial; it is separate
   // from Accounts, Messaging and Configurations, with no new visual system.
   if ($navUser?->canPerform('moderation.read')) {

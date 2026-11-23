@@ -208,3 +208,14 @@ Artisan::command('orbit:moderation:audit-verify',function(){
     }
     return 0;
 })->purpose('Read-only, bounded verification of signed moderation case history');
+
+
+/**
+ * M18 social activity source-pointer index. No media, audience or plaintext.
+ * If the schema is not migrated or Activity disabled, this is a no-op.
+ */
+Artisan::command('orbit:activity:project', function () {
+    $result=app(\App\Modules\Activity\Services\ActivityProjector::class)->run(60);
+    $this->info('M18 private Activity pointers: '.json_encode($result));
+})->purpose('Idempotently index source-authorized Moments and Check-Ins for Activity');
+Schedule::command('orbit:activity:project')->everyFiveMinutes()->withoutOverlapping();

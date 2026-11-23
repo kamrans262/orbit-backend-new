@@ -33,6 +33,7 @@ use App\Modules\Messaging\Http\Middleware\MessagingOperationalTelemetry;
 use App\Modules\Notifications\Http\Controllers\NotificationController;
 use App\Modules\Plans\Http\Controllers\PlanController;
 use App\Modules\Safety\Http\Controllers\SosController;
+use App\Modules\Activity\Http\Controllers\ActivityController;
 use App\Modules\Moderation\Http\Controllers\ModerationController;
 
 Route::prefix('v1')->group(function (): void {
@@ -55,6 +56,16 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:120,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        // M18: private, source-authorized activity pointers; never the M14 inbox.
+        Route::get('/activity/capabilities',[ActivityController::class,'capabilities'])
+            ->middleware('throttle:30,1');
+        Route::get('/activity/feed',[ActivityController::class,'index'])
+            ->middleware('throttle:40,1');
+        Route::get('/activity/changes',[ActivityController::class,'changes'])
+            ->middleware('throttle:30,1');
+        Route::get('/activity/items/{activity}',[ActivityController::class,'show'])
+            ->whereUuid('activity')->middleware('throttle:40,1');
+
         // M17: M4/M7/M13 report endpoints remain unchanged. Account reporting
         // and appeal receipts are scoped to a trusted, authenticated device.
         Route::get('/moderation/capabilities',[ModerationController::class,'capabilities'])

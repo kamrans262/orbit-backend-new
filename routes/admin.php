@@ -18,6 +18,7 @@ use App\Modules\Messaging\Http\Controllers\AdminMessagingController;
 use App\Modules\Notifications\Http\Controllers\AdminNotificationController;
 use App\Modules\Plans\Http\Controllers\AdminPlanController;
 use App\Modules\Safety\Http\Controllers\AdminSosController;
+use App\Modules\Activity\Http\Controllers\AdminActivityController;
 use App\Modules\Moderation\Http\Controllers\AdminModerationController;
 use App\Modules\Config\Http\Middleware\EnsureAdmin;
 use App\Modules\Config\Http\Middleware\RequireAdminPermission;
@@ -54,6 +55,7 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
                 'notifications.read' => 'orbit.admin.notifications.overview',
                 'plans.read' => 'orbit.admin.plans.overview',
                 'safety.read' => 'orbit.admin.safety.overview',
+                'activity.read' => 'orbit.admin.activity.overview',
                 'moderation.read' => 'orbit.admin.moderation.overview',
             ] as $permission => $route) {
                 if ($permission === 'circles.read' && config('orbit_circle.enabled') !== true) continue;
@@ -61,6 +63,26 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
             }
             abort(403);
         })->name('landing');
+
+        // M18 first-class Activity operations, under existing MFA/RBAC.
+        Route::get('/activity',[AdminActivityController::class,'overview'])
+            ->middleware(RequireAdminPermission::class.':activity.read')
+            ->name('activity.overview');
+        Route::get('/activity/sources',[AdminActivityController::class,'sources'])
+            ->middleware(RequireAdminPermission::class.':activity.read')
+            ->name('activity.sources');
+        Route::get('/activity/operations',[AdminActivityController::class,'operations'])
+            ->middleware(RequireAdminPermission::class.':activity.read')
+            ->name('activity.operations');
+        Route::get('/activity/audits',[AdminActivityController::class,'audits'])
+            ->middleware(RequireAdminPermission::class.':activity.audit')
+            ->name('activity.audits');
+        Route::post('/activity/control',[AdminActivityController::class,'control'])
+            ->middleware([RequireAdminPermission::class.':activity.manage','throttle:6,1'])
+            ->name('activity.control');
+        Route::post('/activity/project',[AdminActivityController::class,'project'])
+            ->middleware([RequireAdminPermission::class.':activity.manage','throttle:3,1'])
+            ->name('activity.project');
 
         // M17: first-class, independently permissioned Moderation workspace.
         Route::get('/moderation',[AdminModerationController::class,'overview'])
