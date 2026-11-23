@@ -130,7 +130,7 @@ final class SosService
             'created_at'=>$incident->created_at,'closed_at'=>$incident->closed_at,
             'revision'=>(int)$incident->revision,
             'server_accepted'=>true,
-            'in_app_available_for_eligible_responders'=>$eligible->isNotEmpty(),
+            'in_app_available_for_eligible_responders'=>$incident->status==='active' && $eligible->isNotEmpty(),
             'push_provider_accepted_jobs'=>$accepted,
             'responder_acknowledgements'=>$ack,
             'remote_responder_acknowledged'=>$ack>0,

@@ -343,4 +343,52 @@ final class OrbitM16SosSafetyTest extends TestCase
         ]);
     }
 
+    /**
+     * A resolved or cancelled SOS remains accessible as history but is not
+     * an active alert. Preserve real acknowledgements without claiming that
+     * responders are still receiving the incident.
+     */
+    public function test_stage4_closed_incident_never_advertises_active_alert_availability(): void
+    {
+        [$owner,$ownerDevice,$ownerToken]=$this->principal();
+        [$responder,$responderDevice,$responderToken]=$this->principal();
+        $this->trusted($owner->id,$responder->id,$ownerToken,$responderToken);
+
+        $payload=$this->payload();
+        $created=$this->withToken($ownerToken)
+            ->postJson('/api/v1/sos/incidents',$payload)
+            ->assertCreated()
+            ->assertJsonPath('data.in_app_available_for_eligible_responders',true);
+        $incidentId=$created->json('data.id');
+
+        $this->withToken($responderToken)
+            ->postJson('/api/v1/sos/incidents/'.$incidentId.'/acknowledge')
+            ->assertOk()->assertJsonPath('data.my_response','acknowledged');
+        $this->withToken($ownerToken)
+            ->postJson('/api/v1/sos/incidents/'.$incidentId.'/resolve',
+                ['revision'=>1])
+            ->assertOk()
+            ->assertJsonPath('data.status','resolved')
+            ->assertJsonPath('data.in_app_available_for_eligible_responders',false)
+            ->assertJsonPath('data.responder_acknowledgements',1);
+
+        $this->withToken($responderToken)
+            ->getJson('/api/v1/sos/incidents/'.$incidentId)
+            ->assertOk()
+            ->assertJsonPath('data.status','resolved')
+            ->assertJsonPath('data.in_app_available_for_eligible_responders',false);
+
+        $another=$this->payload();
+        $this->withToken($ownerToken)
+            ->postJson('/api/v1/sos/incidents',$another)->assertCreated();
+        $newId=DB::table('sos_incidents')
+            ->where('client_id',$another['client_id'])->value('id');
+        $this->withToken($ownerToken)
+            ->postJson('/api/v1/sos/incidents/'.$newId.'/cancel',
+                ['revision'=>1])
+            ->assertOk()
+            ->assertJsonPath('data.status','cancelled')
+            ->assertJsonPath('data.in_app_available_for_eligible_responders',false);
+    }
+
 }
