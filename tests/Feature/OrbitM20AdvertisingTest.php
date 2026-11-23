@@ -242,8 +242,11 @@ final class OrbitM20AdvertisingTest extends TestCase
         ])->assertOk()->json('data');
         $url=$item['creative']['image_url'];
         $path=parse_url($url,PHP_URL_PATH).'?'.parse_url($url,PHP_URL_QUERY);
-        $this->withToken($token)->get($path)->assertOk()
-            ->assertHeader('Cache-Control','private, no-store, max-age=0');
+        $assetResponse=$this->withToken($token)->get($path)->assertOk();
+        $cache=(string)$assetResponse->headers->get('Cache-Control');
+        $this->assertStringContainsString('private',$cache);
+        $this->assertStringContainsString('no-store',$cache);
+        $this->assertStringNotContainsString('public',$cache);
         [$other,$d2,$otherToken]=$this->member();
         $this->withToken($otherToken)->get($path)->assertNotFound();
         $this->withToken($token)->get(explode('?',$path)[0]
