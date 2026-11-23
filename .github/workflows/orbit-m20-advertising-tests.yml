@@ -1,0 +1,76 @@
+name: Orbit M20 Advertising backend and Admin verification
+on:
+  push:
+    branches: [feature/m20-advertising-backend-admin-2026-11-24]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  advertising:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: rootpass
+          MARIADB_DATABASE: orbit_ci
+          MARIADB_USER: orbit_ci
+          MARIADB_PASSWORD: orbit_ci_pass
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: testing
+      APP_DEBUG: true
+      APP_KEY: base64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: orbit_ci
+      DB_USERNAME: orbit_ci
+      DB_PASSWORD: orbit_ci_pass
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, fileinfo, pdo_mysql, openssl, sodium, gd
+          tools: composer:v2
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Syntax, M20 routes and full additive schema
+        run: |
+          find app/Modules/Advertising -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l config/orbit_advertising.php
+          php -l database/migrations/2026_11_24_010000_create_orbit_m20_advertising.php
+          php -l routes/api.php
+          php -l routes/admin.php
+          php -l tests/Feature/OrbitM20AdvertisingTest.php
+          php artisan route:list --path=api/v1/ads
+          php artisan route:list --path=admin/advertising
+          php artisan migrate --force
+      - name: Non-destructive M20 migration rollback and replay
+        run: |
+          php artisan migrate:rollback --force --path=database/migrations/2026_11_24_010000_create_orbit_m20_advertising.php
+          php artisan tinker --execute='if(\Illuminate\Support\Facades\Schema::hasTable("ad_sponsors") || !\Illuminate\Support\Facades\Schema::hasTable("activity_events") || !\Illuminate\Support\Facades\Schema::hasTable("moments") || !\Illuminate\Support\Facades\Schema::hasTable("moderation_cases")) throw new RuntimeException("Unsafe M20 rollback");'
+          php artisan migrate --force --path=database/migrations/2026_11_24_010000_create_orbit_m20_advertising.php
+      - name: M20 delivery, privacy, creative safety, Admin/RBAC and reporting
+        run: php artisan test --compact tests/Feature/OrbitM20AdvertisingTest.php
+      - name: Preserve M4 M7 M12 M13 M14 M17 M18 behavior
+        run: |
+          php artisan test --compact \
+            tests/Feature/OrbitM4SocialGraphTest.php \
+            tests/Feature/OrbitM7MomentsTest.php \
+            tests/Feature/OrbitCheckInTest.php \
+            tests/Feature/OrbitMessagingTest.php \
+            tests/Feature/OrbitM14NotificationsTest.php \
+            tests/Feature/OrbitM17ModerationTest.php \
+            tests/Feature/OrbitM18ActivityTest.php
