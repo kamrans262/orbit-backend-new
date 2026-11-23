@@ -384,6 +384,12 @@ final class ModerationService
                 ?? abort(404,'Case unavailable.');
             abort_unless((int)$case->revision===$revision,409,'Case changed. Refresh first.');
             abort_unless($case->status==='investigating',409,'Investigate before enforcement.');
+            // M7 Moment reports can refer to comments whose author reference
+            // becomes NULL after deletion. Their sanctions remain gated by
+            // the original M7 consent/restriction workflow. Never repurpose
+            // an uncertain Moment author into a general messaging sanction.
+            abort_unless($case->source_kind!=='moment',403,
+                'Moment moderation must use the approved M7 source workflow.');
             abort_unless($case->subject_user_id!==null
                 && DB::table('orbit_users')->where('id',$case->subject_user_id)
                     ->where('status','active')->whereNull('deletion_requested_at')

@@ -274,6 +274,36 @@ final class OrbitM17ModerationTest extends TestCase
         ]);
         $this->assertDatabaseCount('moderation_cases',3);
         $this->assertSame(['moment'=>0,'messaging'=>0],$service->syncSources(15));
+        // M17 must never bypass M7's independent Moment consent, approved
+        // restriction flag and audited evidence gate to sanction a comment
+        // author (or accidentally the enclosing Moment author).
+        $momentCase=DB::table('moderation_cases')->where(
+            'source_report_id',$momentReport)->first();
+        $reviewer=$this->admin([
+            'moderation.read','moderation.triage','moderation.decide','moderation.manage',
+        ]);
+        $this->actingAs($reviewer,'admin')->post('/admin/moderation/settings',[
+            'key'=>'enforcement_enabled','value'=>'1',
+            'release_confirmation'=>'ENABLE',
+            'reason'=>'Deliberate isolation test only','confirm'=>1,
+        ])->assertRedirect();
+        $this->actingAs($reviewer,'admin')->post(
+            '/admin/moderation/cases/'.$momentCase->id.'/transition',[
+            'revision'=>1,'action'=>'triage','reason'=>'abuse','confirm'=>1,
+        ])->assertRedirect();
+        $this->actingAs($reviewer,'admin')->post(
+            '/admin/moderation/cases/'.$momentCase->id.'/transition',[
+            'revision'=>2,'action'=>'investigate','reason'=>'abuse',
+            'confirm'=>1,
+        ])->assertRedirect();
+        $this->actingAs($reviewer,'admin')->post(
+            '/admin/moderation/cases/'.$momentCase->id.'/enforce',[
+            'revision'=>3,'scope'=>'messaging_send','reason'=>'abuse',
+            'duration'=>'24h','confirm'=>1,
+        ])->assertForbidden();
+        $this->assertDatabaseCount('moderation_actions',0);
+        $this->assertDatabaseMissing('messaging_send_restrictions',
+            ['user_id'=>$commentAuthor->id]);
     }
 
     public function test_assignment_refuses_active_admin_without_moderation_review_role():void
