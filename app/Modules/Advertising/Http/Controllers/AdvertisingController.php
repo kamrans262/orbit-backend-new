@@ -82,12 +82,17 @@ final class AdvertisingController extends Controller
         $record=$this->delivery->authorizeAsset($user,$creative,$input['decision']);
         abort_unless(Storage::disk('local')->exists($record->private_path),
             404,'Asset unavailable.');
-        return response()->file(Storage::disk('local')->path($record->private_path),[
+        $response=response()->file(Storage::disk('local')->path($record->private_path),[
             'Content-Type'=>$record->mime,
             'Cache-Control'=>'private, no-store, max-age=0',
             'X-Content-Type-Options'=>'nosniff',
             'Content-Security-Policy'=>"default-src 'none'; sandbox",
             'Referrer-Policy'=>'no-referrer',
         ]);
+        // Symfony's BinaryFileResponse sets public by default; override after
+        // construction to avoid accidentally caching user-scoped signed images.
+        $response->setPrivate();
+        $response->headers->set('Cache-Control','private, no-store, max-age=0');
+        return $response;
     }
 }

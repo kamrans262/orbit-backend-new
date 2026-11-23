@@ -282,11 +282,14 @@ final class AdminAdvertisingController extends Controller
         abort_unless($this->policy->installed(),503);
         $row=DB::table('ad_creatives')->where('id',$creative)->first();
         abort_unless($row && Storage::disk('local')->exists($row->private_path),404);
-        return response()->file(Storage::disk('local')->path($row->private_path),[
+        $response=response()->file(Storage::disk('local')->path($row->private_path),[
             'Content-Type'=>$row->mime,'Cache-Control'=>'private, no-store, max-age=0',
             'X-Content-Type-Options'=>'nosniff',
             'Content-Security-Policy'=>"default-src 'none'; sandbox",
         ]);
+        $response->setPrivate();
+        $response->headers->set('Cache-Control','private, no-store, max-age=0');
+        return $response;
     }
 
     public function createCampaign(Request $r)

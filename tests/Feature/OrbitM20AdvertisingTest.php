@@ -259,7 +259,7 @@ final class OrbitM20AdvertisingTest extends TestCase
         $readonly=$this->admin(['advertising.read']);
         $this->be($readonly,'admin');
         $this->get('/admin/advertising')->assertOk()
-            ->assertSee('Advertisements &amp; Sponsorships');
+            ->assertSee('Advertisements &amp; Sponsorships',false);
         $this->post('/admin/advertising/sponsors',[
             'display_name'=>'Test Sponsor','legal_name'=>'Test LLC',
             'approved_domain'=>'example.com','reason'=>'Creating test sponsor',
