@@ -105,6 +105,42 @@ final class OrbitM20AdvertisingTest extends TestCase
         return [$sponsor,$creative,$campaign];
     }
 
+    public function test_erasure_purges_only_member_ad_state_and_reconciles_metrics(): void
+    {
+        $this->creativeReady();
+        [$first,$d1,$token1]=$this->member();
+        [$other,$d2,$token2]=$this->member();
+        $one=$this->withToken($token1)->postJson('/api/v1/ads/decisions',[
+            'placement'=>'home.promo','request_id'=>(string)Str::uuid(),
+        ])->assertOk()->json('data');
+        $two=$this->withToken($token2)->postJson('/api/v1/ads/decisions',[
+            'placement'=>'home.promo','request_id'=>(string)Str::uuid(),
+        ])->assertOk()->json('data');
+        foreach ([[$one,$token1],[$two,$token2]] as [$d,$token]) {
+            $this->withToken($token)->postJson('/api/v1/ads/measurements',[
+                'decision_id'=>$d['decision_id'],'event_type'=>'impression',
+                'client_event_id'=>(string)Str::uuid(),
+                'measurement_token'=>$d['measurement_token'],
+                'evidence'=>['visible_duration_ms'=>1600],
+            ])->assertOk();
+        }
+        $this->assertDatabaseCount('ad_decisions',2);
+        $this->assertSame(2,(int)DB::table('ad_daily_aggregates')->sum('impressions'));
+        $counts=app(\App\Modules\Advertising\Services\AdvertisingErasureService::class)
+            ->eraseViewer($first->id);
+        $this->assertSame(['decisions'=>1,'measurement_events'=>1,
+            'frequency_windows'=>1],$counts);
+        $this->assertDatabaseCount('ad_decisions',1);
+        $this->assertDatabaseCount('ad_measurement_events',1);
+        $this->assertDatabaseCount('ad_frequency_windows',1);
+        $this->assertSame(1,(int)DB::table('ad_daily_aggregates')->sum('impressions'));
+        $this->assertDatabaseHas('ad_decisions',['id'=>$two['decision_id']]);
+        $this->assertDatabaseMissing('ad_decisions',['id'=>$one['decision_id']]);
+        $this->assertSame(['decisions'=>0,'measurement_events'=>0,
+            'frequency_windows'=>0],app(\App\Modules\Advertising\Services\AdvertisingErasureService::class)
+                ->eraseViewer($first->id));
+    }
+
     public function test_disabled_by_default_and_trusted_capabilities_are_data_free(): void
     {
         $this->getJson('/api/v1/ads/capabilities')->assertUnauthorized();

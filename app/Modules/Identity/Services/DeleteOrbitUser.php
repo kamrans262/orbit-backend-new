@@ -94,6 +94,10 @@ final class DeleteOrbitUser
                 ? DB::table('location_shares')->where('audience_type', 'person')
                     ->where('audience_id', $userId)->delete()
                 : 0; // M10 migration is separately gated; older releases still erase users.
+            // M20 has pseudonymous ad decisions without a person foreign key.
+            // Erase their bound receipts/frequency before the user row leaves.
+            $advertisingSummary=app(\App\Modules\Advertising\Services\AdvertisingErasureService::class)
+                ->eraseViewer($userId);
             $user->delete();
 
             // Preserve the immutable audit chain without retaining the deleted
@@ -109,6 +113,7 @@ final class DeleteOrbitUser
                 'contact_quotas' => $socialContactQuotas,
                 'social_event_outbox' => $socialEvents,
                 'location_recipient_shares' => $locationRecipientShares,
+                'advertising_m20' => $advertisingSummary,
             ];
             $last = DB::table('admin_audit_log')->orderByDesc('created_at')->lockForUpdate()->first();
             $prev = $last?->event_hash;
