@@ -299,6 +299,137 @@ final class OrbitM20AdvertisingTest extends TestCase
             ->assertDontSee('recipient_user_id');
     }
 
+    public function test_uploaded_creative_must_be_reviewed_by_independent_operator_and_revised_again(): void
+    {
+        [$sponsor,$existing,$campaign]=$this->creativeReady();
+        $manager=$this->admin(['advertising.read','advertising.manage']);
+        $this->be($manager,'admin');
+        $data=[
+            'sponsor_id'=>$sponsor,'title'=>'Original Sponsor Artwork',
+            'subtitle'=>'Reviewed static asset with original copy',
+            'cta_url'=>'https://example.com/original',
+            'asset'=>\Illuminate\Http\UploadedFile::fake()->image('creative.png',600,200),
+            'reason'=>'Submit original approved domain creative','confirm'=>'1',
+        ];
+        $this->post('/admin/advertising/creatives',$data)->assertRedirect();
+        $creative=DB::table('ad_creatives')->where('title','Original Sponsor Artwork')->first();
+        $this->assertNotNull($creative);
+        $this->assertSame('pending',$creative->status);
+        $this->assertSame('image/png',$creative->mime);
+        Storage::disk('local')->assertExists($creative->private_path);
+        $this->post('/admin/advertising/creatives/'.$creative->id.'/review',[
+            'revision'=>1,'action'=>'approved',
+            'reason'=>'Attempt creator self review','confirm'=>'1',
+        ])->assertForbidden();
+
+        $reviewer=$this->admin(['advertising.read','advertising.review']);
+        $this->be($reviewer,'admin');
+        $this->post('/admin/advertising/creatives/'.$creative->id.'/review',[
+            'revision'=>2,'action'=>'approved',
+            'reason'=>'Intentionally stale creative review','confirm'=>'1',
+        ])->assertStatus(409);
+        $this->post('/admin/advertising/creatives/'.$creative->id.'/review',[
+            'revision'=>1,'action'=>'approved',
+            'reason'=>'Reviewed the exact static image','confirm'=>'1',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('ad_creatives',[
+            'id'=>$creative->id,'revision'=>1,'status'=>'approved',
+            'reviewed_by'=>$reviewer->id,
+        ]);
+
+        $this->be($manager,'admin');
+        $data['title']='Revised Creative Artwork';
+        $data['asset']=\Illuminate\Http\UploadedFile::fake()->image('revision.jpg',600,200);
+        $this->post('/admin/advertising/creatives/'.$creative->id.'/revise',$data)
+            ->assertRedirect();
+        $this->assertDatabaseHas('ad_creatives',[
+            'id'=>$creative->id,'revision'=>2,'status'=>'pending','reviewed_by'=>null,
+        ]);
+    }
+
+    public function test_campaign_edits_invalidate_approval_and_scheduled_state_is_time_scoped(): void
+    {
+        [$sponsor,$creative,$campaign]=$this->creativeReady();
+        [$viewer,$device,$token]=$this->member();
+        $before=$this->withToken($token)->postJson('/api/v1/ads/decisions',[
+            'placement'=>'home.promo','request_id'=>(string)Str::uuid(),
+        ])->assertOk()->json('data');
+        $this->assertNotNull($before);
+        $manager=$this->admin(['advertising.read','advertising.manage']);
+        $this->be($manager,'admin');
+        $this->post('/admin/advertising/campaigns/'.$campaign.'/edit',[
+            'revision'=>3,'name'=>'Reviewed edited campaign','sponsor_id'=>$sponsor,
+            'creative_id'=>$creative,
+            'starts_at'=>now()->subMinutes(3)->format('Y-m-d H:i:s'),
+            'ends_at'=>now()->addHours(6)->format('Y-m-d H:i:s'),
+            'priority'=>3,'placements'=>['home.promo'],
+            'reason'=>'Material campaign edit resets approval','confirm'=>'1',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('ad_campaigns',[
+            'id'=>$campaign,'status'=>'draft','revision'=>4,
+            'created_by'=>$manager->id,'reviewed_by'=>null,
+        ]);
+        $this->withToken($token)->postJson('/api/v1/ads/decisions',[
+            'placement'=>'home.promo','request_id'=>(string)Str::uuid(),
+        ])->assertExactJson(['data'=>null]);
+        $this->post('/admin/advertising/campaigns/'.$campaign.'/transition',[
+            'revision'=>4,'status'=>'pending',
+            'reason'=>'Submit modified campaign for review','confirm'=>'1',
+        ])->assertRedirect();
+        $this->post('/admin/advertising/campaigns/'.$campaign.'/transition',[
+            'revision'=>5,'status'=>'approved',
+            'reason'=>'Cannot self approve own campaign','confirm'=>'1',
+        ])->assertForbidden();
+        $reviewer=$this->admin(['advertising.read','advertising.review']);
+        $this->be($reviewer,'admin');
+        $this->post('/admin/advertising/campaigns/'.$campaign.'/transition',[
+            'revision'=>5,'status'=>'approved',
+            'reason'=>'Independently approve revised campaign','confirm'=>'1',
+        ])->assertRedirect();
+        $this->be($manager,'admin');
+        $this->post('/admin/advertising/campaigns/'.$campaign.'/transition',[
+            'revision'=>6,'status'=>'scheduled',
+            'reason'=>'Schedule independently approved campaign','confirm'=>'1',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('ad_campaigns',[
+            'id'=>$campaign,'status'=>'scheduled','revision'=>7,
+        ]);
+        $decision=$this->withToken($token)->postJson('/api/v1/ads/decisions',[
+            'placement'=>'home.promo','request_id'=>(string)Str::uuid(),
+        ])->assertOk()->json('data');
+        $this->assertNotNull($decision);
+        $this->post('/admin/advertising/campaigns/'.$campaign.'/transition',[
+            'revision'=>7,'status'=>'paused',
+            'reason'=>'Pause scheduled campaign immediately','confirm'=>'1',
+        ])->assertRedirect();
+        $this->withToken($token)->postJson('/api/v1/ads/decisions',[
+            'placement'=>'home.promo','request_id'=>(string)Str::uuid(),
+        ])->assertExactJson(['data'=>null]);
+    }
+
+    public function test_sponsor_destination_edit_removes_verification_immediately(): void
+    {
+        [$sponsor,$creative,$campaign]=$this->creativeReady();
+        $manager=$this->admin(['advertising.read','advertising.manage']);
+        $this->be($manager,'admin');
+        $this->post('/admin/advertising/sponsors/'.$sponsor.'/edit',[
+            'display_name'=>'Updated sponsor name',
+            'legal_name'=>'Updated corporate entity',
+            'approved_domain'=>'newdomain.example',
+            'reason'=>'Review updated domain verification needed',
+            'confirm'=>'1',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('ad_sponsors',[
+            'id'=>$sponsor,'status'=>'draft',
+            'verification_status'=>'pending','verified_by'=>null,
+            'approved_domain'=>'newdomain.example',
+        ]);
+        [$viewer,$dev,$token]=$this->member();
+        $this->withToken($token)->postJson('/api/v1/ads/decisions',[
+            'placement'=>'home.promo','request_id'=>(string)Str::uuid(),
+        ])->assertExactJson(['data'=>null]);
+    }
+
     public function test_rejects_unsafe_domain_and_unapproved_campaign_mutations(): void
     {
         $this->creativeReady();
