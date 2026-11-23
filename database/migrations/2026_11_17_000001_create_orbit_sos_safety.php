@@ -38,6 +38,7 @@ return new class extends Migration {
             $t->unique(['initiator_id','client_id'], 'sos_client_unique');
             $t->index(['initiator_id','created_at'], 'sos_owner_history');
             $t->index(['status','escalation_due_at'], 'sos_escalation_due');
+            $t->index('location_expires_at','sos_location_expiry');
             $t->foreign('initiator_id')->references('id')->on('orbit_users')->cascadeOnDelete();
             $t->foreign('circle_id')->references('id')->on('circles')->nullOnDelete();
         });

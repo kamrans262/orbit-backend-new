@@ -271,4 +271,76 @@ final class OrbitM16SosSafetyTest extends TestCase
         }
     }
 
+    public function test_stage4_responders_receive_authorized_initiator_name_and_owner_sees_contact_name(): void
+    {
+        [$owner,$device,$token]=$this->principal();
+        [$responder,$otherDevice,$responderToken]=$this->principal();
+        $owner->update(['display_name'=>'Verified Owner']);
+        $responder->update(['display_name'=>'Verified Responder']);
+        $this->trusted($owner->id,$responder->id,$token,$responderToken);
+        $body=$this->payload();
+        $this->withToken($token)->postJson('/api/v1/sos/incidents',$body)
+            ->assertCreated()->assertJsonPath('data.initiator_name','Verified Owner')
+            ->assertJsonPath('data.recipients.0.display_name','Verified Responder');
+        $incident=DB::table('sos_incidents')->where('client_id',$body['client_id'])->first();
+        $this->withToken($responderToken)->getJson('/api/v1/sos/incidents/'.$incident->id)
+            ->assertOk()->assertJsonPath('data.initiator_name','Verified Owner')
+            ->assertJsonMissingPath('data.recipients');
+        [$outsider,$third,$otherToken]=$this->principal();
+        $this->withToken($otherToken)->getJson('/api/v1/sos/incidents/'.$incident->id)
+            ->assertNotFound();
+    }
+
+    public function test_stage4_expired_encrypted_location_is_purged_even_when_sos_disabled(): void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $request=$this->payload([
+            'share_location'=>true,'latitude'=>30.2,'longitude'=>71.4,
+            'location_captured_at'=>now()->toIso8601String(),
+        ]);
+        $this->withToken($token)->postJson('/api/v1/sos/incidents',$request)
+            ->assertCreated();
+        $id=DB::table('sos_incidents')->where('client_id',$request['client_id'])->value('id');
+        DB::table('sos_incidents')->where('id',$id)
+            ->update(['location_expires_at'=>now()->subSecond()]);
+        config()->set('orbit_sos.enabled',false);
+        $result=app(SosDeliveryWorker::class)->run(20);
+        $this->assertSame(1,$result['expired_locations_removed']);
+        $this->assertNull(DB::table('sos_incidents')->where('id',$id)
+            ->value('location_ciphertext'));
+        $this->assertNull(DB::table('sos_incidents')->where('id',$id)
+            ->value('location_expires_at'));
+        $this->assertDatabaseHas('sos_audit_events',[
+            'incident_id'=>$id,'action'=>'sos.location_expired',
+        ]);
+    }
+
+    public function test_stage4_late_push_result_cannot_reopen_suppressed_or_revoked_job(): void
+    {
+        [$owner,$device,$token]=$this->principal();
+        [$contact,$contactDevice,$contactToken]=$this->principal();
+        $this->trusted($owner->id,$contact->id,$token,$contactToken);
+        $body=$this->payload();
+        $this->withToken($token)->postJson('/api/v1/sos/incidents',$body)
+            ->assertCreated();
+        $incident=DB::table('sos_incidents')->where('client_id',$body['client_id'])->first();
+        $recipient=DB::table('sos_recipients')->where('incident_id',$incident->id)->first();
+        $id=(string)Str::uuid();
+        DB::table('sos_delivery_jobs')->insert([
+            'id'=>$id,'recipient_id'=>$recipient->id,'device_id'=>$contactDevice->id,
+            'state'=>'processing','attempts'=>1,'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->withToken($token)->postJson('/api/v1/sos/incidents/'.$incident->id.'/cancel',
+            ['revision'=>1])->assertOk();
+        $finish=new \ReflectionMethod(SosDeliveryWorker::class,'finish');
+        $accepted=$finish->invoke(app(SosDeliveryWorker::class),$id,'accepted',null,null);
+        $this->assertFalse($accepted);
+        $this->assertDatabaseHas('sos_delivery_jobs',[
+            'id'=>$id,'state'=>'suppressed','provider_accepted_at'=>null,
+        ]);
+        $this->assertDatabaseMissing('sos_dispatch_attempts',[
+            'job_id'=>$id,'state'=>'accepted',
+        ]);
+    }
+
 }

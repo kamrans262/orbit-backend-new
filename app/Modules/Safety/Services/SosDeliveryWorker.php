@@ -21,9 +21,14 @@ final class SosDeliveryWorker
     public function run(int $limit=30): array
     {
         $stats=['escalated'=>0,'recipients'=>0,'jobs_created'=>0,'provider_accepted'=>0,
-            'retry'=>0,'failed'=>0,'suppressed'=>0,'push_available'=>false];
-        if(!$this->policy->installed() || config('orbit_sos.enabled')!==true)return $stats;
+            'retry'=>0,'failed'=>0,'suppressed'=>0,'push_available'=>false,
+            'expired_locations_removed'=>0];
+        if(!$this->policy->installed())return $stats;
         $limit=max(1,min(100,$limit));
+        // Expiring precise coordinates is a privacy boundary independent
+        // of push credentials and of the SOS intake feature flag.
+        $this->purgeExpiredLocations($limit,$stats);
+        if(config('orbit_sos.enabled')!==true)return $stats;
         $this->reconcile(min($limit*2,100),$stats);
         $this->escalate($limit,$stats);
         $stats['push_available']=$this->push->enabled();
@@ -73,8 +78,11 @@ final class SosDeliveryWorker
             }catch(\Throwable){}
             $result=$outcome['status']??'retry';
             if($result==='accepted'){
-                $this->finish($id,'accepted',null,null);
-                $stats['provider_accepted']++;
+                // A provider may accept while a user cancels or blocks a
+                // contact; do not turn a suppressed job back into success.
+                if($this->finish($id,'accepted',null,null)){
+                    $stats['provider_accepted']++;
+                }else{$stats['suppressed']++;}
             } elseif($result==='invalid_token' || $result==='terminal'
                 || (int)$job->attempts+1 >= (int)config('orbit_sos.max_push_attempts',6)){
                 $this->finish($id,'failed',in_array($result,['invalid_token','terminal'],true)
@@ -183,18 +191,71 @@ final class SosDeliveryWorker
         }
     }
 
-    private function finish(string $id,string $state,?string $code,?\DateTimeInterface $retry): void
+    /** Remove expired exact coordinates, not incident history or audit evidence.
+     * Scheduled every minute even if SOS intake/push is turned off. */
+    private function purgeExpiredLocations(int $limit,array &$stats): void
     {
-        DB::transaction(function()use($id,$state,$code,$retry):void{
-            DB::table('sos_delivery_jobs')->where('id',$id)->update([
+        $ids=DB::table('sos_incidents')
+            ->whereNotNull('location_ciphertext')
+            ->whereNotNull('location_expires_at')
+            ->where('location_expires_at','<=',now())
+            ->orderBy('location_expires_at')->limit($limit)->pluck('id');
+        foreach($ids as $id){
+            DB::transaction(function()use($id,&$stats):void{
+                $incident=DB::table('sos_incidents')->where('id',$id)
+                    ->lockForUpdate()->first();
+                if(!$incident || !$incident->location_ciphertext ||
+                    !$incident->location_expires_at ||
+                    now()->lt($incident->location_expires_at))return;
+                DB::table('sos_incidents')->where('id',$id)->update([
+                    'location_ciphertext'=>null,'location_expires_at'=>null,
+                    'updated_at'=>now(),
+                ]);
+                $this->audit->incident($id,null,'sos.location_expired');
+                $stats['expired_locations_removed']++;
+            },3);
+        }
+    }
+
+    /**
+     * Finalize ONLY a claimed processing job. The incident is locked first,
+     * matching the incident-close/revocation lock ordering. A late provider
+     * response cannot resurrect a suppressed/cancelled alert.
+     */
+    private function finish(string $id,string $state,?string $code,
+        ?\DateTimeInterface $retry): bool
+    {
+        return DB::transaction(function()use($id,$state,$code,$retry):bool{
+            $scope=DB::table('sos_delivery_jobs as j')
+                ->join('sos_recipients as r','r.id','=','j.recipient_id')
+                ->where('j.id',$id)->value('r.incident_id');
+            if(!$scope)return false;
+            $incident=DB::table('sos_incidents')->where('id',$scope)
+                ->lockForUpdate()->first();
+            $job=DB::table('sos_delivery_jobs')->where('id',$id)
+                ->lockForUpdate()->first();
+            if(!$incident || !$job || $job->state!=='processing')return false;
+            $recipient=DB::table('sos_recipients')->where('id',$job->recipient_id)
+                ->lockForUpdate()->first();
+            $stillEligible=$incident->status==='active'
+                && $recipient && $recipient->state==='pending'
+                && $this->policy->recipientEligible($incident,$recipient);
+            if(!$stillEligible){
+                $state='suppressed';$code='eligibility_changed';$retry=null;
+            }
+            DB::table('sos_delivery_jobs')->where('id',$id)
+                ->where('state','processing')->update([
                 'state'=>$state,'last_error_code'=>$code,'lease_until'=>null,
                 'next_attempt_at'=>$retry,
-                'provider_accepted_at'=>$state==='accepted'?now():null,'updated_at'=>now(),
+                'provider_accepted_at'=>$state==='accepted'?now():null,
+                'updated_at'=>now(),
             ]);
             DB::table('sos_dispatch_attempts')->insert([
                 'id'=>(string)Str::uuid(),'job_id'=>$id,'state'=>$state,
                 'error_code'=>$code,'created_at'=>now(),
             ]);
+            return $state==='accepted';
         },3);
     }
+
 }

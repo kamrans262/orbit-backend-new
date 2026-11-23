@@ -119,7 +119,13 @@ final class SosService
         $accepted=DB::table('sos_delivery_jobs as j')
             ->join('sos_recipients as r','r.id','=','j.recipient_id')
             ->where('r.incident_id',$incident->id)->where('j.state','accepted')->count();
+        // These names are exposed ONLY after requireIncident/canView
+        // authorization. Never expose contact details or coordinates here.
+        $initiatorName=trim((string)DB::table('orbit_users')
+            ->where('id',$incident->initiator_id)->value('display_name'));
+        if($initiatorName==='')$initiatorName='Orbit contact';
         $result=[
+            'initiator_name'=>$initiatorName,
             'id'=>$incident->id,'status'=>$incident->status,
             'created_at'=>$incident->created_at,'closed_at'=>$incident->closed_at,
             'revision'=>(int)$incident->revision,
@@ -140,7 +146,10 @@ final class SosService
         if ($owner) {
             $result['my_role']='initiator';
             $result['recipients']=$eligible->map(fn($row)=>[
-                'user_id'=>$row->user_id,'source'=>$row->source,
+                'user_id'=>$row->user_id,
+                'display_name'=>trim((string)DB::table('orbit_users')
+                    ->where('id',$row->user_id)->value('display_name')) ?: 'Orbit contact',
+                'source'=>$row->source,
                 'state'=>$row->state,'acknowledged_at'=>$row->acknowledged_at,
             ])->values()->all();
         } else {
