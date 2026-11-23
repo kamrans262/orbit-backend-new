@@ -37,6 +37,11 @@ final class ActivityPolicy
         if (!in_array($kind, ['moment', 'check_in'], true)
             || $this->installed() === false
             || config('orbit_activity.enabled') !== true) return false;
+        // A disabled source module may still contain historical rows, but
+        // Activity must not expose pointers while its own API is disabled.
+        if ($kind === 'check_in' && config('orbit_check_in.enabled') !== true) return false;
+        if ($kind === 'moment' && (config('orbit_moments.enabled') !== true
+            || config('orbit_media.enabled') !== true)) return false;
         return DB::table('activity_controls')
             ->where('key', 'source.'.$kind)->where('enabled', true)->exists();
     }

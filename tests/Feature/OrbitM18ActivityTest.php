@@ -228,6 +228,66 @@ final class OrbitM18ActivityTest extends TestCase
             ->assertOk();
     }
 
+    public function test_revoked_friendship_block_privacy_and_audience_are_rechecked(): void
+    {
+        [$owner,$ownerDevice,$ownerToken]=$this->principal();
+        [$viewer,$viewerDevice,$viewerToken]=$this->principal();
+        $pair=[$owner->id,$viewer->id];sort($pair,SORT_STRING);
+        DB::table('friendships')->insert([
+            'user_low_id'=>$pair[0],'user_high_id'=>$pair[1],
+            'created_at'=>now(),
+        ]);
+        DB::table('orbit_user_preferences')->updateOrInsert([
+            'user_id'=>$owner->id],[
+            'privacy'=>json_encode(['activity_visibility'=>'Friends']),
+            'notifications'=>'{}','created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $id=$this->withToken($ownerToken)->postJson('/api/v1/check-ins',[
+            'client_id'=>(string)Str::uuid(),'type'=>'home',
+            'audience'=>[['type'=>'selected_friend','id'=>$viewer->id]],
+        ])->assertCreated()->json('data.id');
+        app(ActivityProjector::class)->run(20);
+        $this->withToken($viewerToken)->getJson('/api/v1/activity/feed')
+            ->assertOk()->assertJsonCount(1,'data.items');
+        $pointer=DB::table('activity_events')->where('source_id',$id)->value('id');
+        DB::table('blocks')->insert([
+            'blocker_id'=>$viewer->id,'blocked_id'=>$owner->id,
+            'created_at'=>now(),
+        ]);
+        $this->withToken($viewerToken)->getJson('/api/v1/activity/feed')
+            ->assertOk()->assertJsonCount(0,'data.items');
+        $this->withToken($viewerToken)->getJson('/api/v1/activity/items/'.$pointer)
+            ->assertNotFound();
+        DB::table('blocks')->delete();
+        DB::table('orbit_user_preferences')->where('user_id',$owner->id)
+            ->update(['privacy'=>json_encode(['activity_visibility'=>'Nobody'])]);
+        $this->withToken($viewerToken)->getJson('/api/v1/activity/feed')
+            ->assertOk()->assertJsonCount(0,'data.items');
+        DB::table('orbit_user_preferences')->where('user_id',$owner->id)
+            ->update(['privacy'=>json_encode(['activity_visibility'=>'Friends'])]);
+        $this->withToken($ownerToken)->putJson('/api/v1/check-ins/'.$id.'/audience',[
+            'expected_revision'=>1,'audience'=>[['type'=>'only_me']],
+        ])->assertOk()->assertJsonPath('data.audience_revision',2);
+        $this->withToken($viewerToken)->getJson('/api/v1/activity/feed')
+            ->assertOk()->assertJsonCount(0,'data.items');
+        $this->withToken($ownerToken)->getJson('/api/v1/activity/feed')
+            ->assertOk()->assertJsonCount(1,'data.items');
+    }
+
+    public function test_disabled_source_module_hides_prior_events_even_if_activity_control_on(): void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $this->checkIn($owner->id);
+        app(ActivityProjector::class)->run(20);
+        $this->withToken($token)->getJson('/api/v1/activity/feed')
+            ->assertOk()->assertJsonCount(1,'data.items');
+        config()->set('orbit_check_in.enabled',false);
+        $this->withToken($token)->getJson('/api/v1/activity/feed')
+            ->assertOk()->assertJsonCount(0,'data.items');
+        $this->withToken($token)->getJson('/api/v1/activity/capabilities')
+            ->assertOk()->assertJsonPath('data.sources.check_in',false);
+    }
+
     public function test_capabilities_and_auth_are_fail_closed(): void
     {
         $this->getJson('/api/v1/activity/feed')->assertUnauthorized();
