@@ -468,6 +468,30 @@ final class OrbitM17ModerationTest extends TestCase
             ->assertOk()->assertSee('Confidential review assessment');
     }
 
+
+    public function test_m17_signed_case_event_chain_detects_tampering():void
+    {
+        [$reporter,$device,$token]=$this->principal();
+        [$target]=$this->principal();
+        $this->report($token,$target->id);
+        $case=DB::table('moderation_cases')->first();
+        $moderator=$this->admin(['moderation.read','moderation.triage']);
+        $this->actingAs($moderator,'admin')->post(
+            '/admin/moderation/cases/'.$case->id.'/transition',[
+                'revision'=>1,'action'=>'triage','reason'=>'abuse','confirm'=>1,
+            ])->assertRedirect();
+        $before=app(ModerationService::class)->verifyAuditChains(25);
+        $this->assertSame(0,$before['invalid_cases']);
+        $this->assertSame(1,$before['cases_checked']);
+        $this->assertSame(2,$before['events_checked']);
+        $first=DB::table('moderation_case_events')
+            ->where('case_id',$case->id)->orderBy('id')->first();
+        DB::table('moderation_case_events')->where('id',$first->id)
+            ->update(['reason_code'=>'tampered']);
+        $after=app(ModerationService::class)->verifyAuditChains(25);
+        $this->assertSame(1,$after['invalid_cases']);
+    }
+
     public function test_admin_sidebar_and_controls_never_grant_evidence_access():void
     {
         $admin=$this->admin(['moderation.read','moderation.audit']);

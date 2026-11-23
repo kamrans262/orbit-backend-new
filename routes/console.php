@@ -190,3 +190,21 @@ Artisan::command('orbit:moderation:sync',function(){
     $this->info('Moderation report indexing: '.json_encode($service->syncSources(40)));
 })->purpose('Idempotently index existing private report references for moderation');
 Schedule::command('orbit:moderation:sync')->everyFiveMinutes()->withoutOverlapping();
+
+
+// Stage 4 on-demand integrity check. Never scheduled into the write path.
+// A green sample is not an external immutable backup or legal hold proof.
+Artisan::command('orbit:moderation:audit-verify',function(){
+    $service=app(\App\Modules\Moderation\Services\ModerationService::class);
+    if(!$service->installed()){
+        $this->error('M17 moderation migration is not installed.');
+        return 1;
+    }
+    $result=$service->verifyAuditChains(500);
+    $this->line('Bounded moderation audit integrity: '.json_encode($result));
+    if($result['invalid_cases']>0){
+        $this->error('Audit mismatch: stop release and investigate.');
+        return 1;
+    }
+    return 0;
+})->purpose('Read-only, bounded verification of signed moderation case history');

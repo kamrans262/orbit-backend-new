@@ -258,6 +258,57 @@ final class ModerationService
         return null;
     }
 
+
+    /**
+     * Read-only, bounded integrity check of the HMAC case-event chain.
+     * Detects changed or missing middle events and missing current-revision
+     * tails; it cannot prove completeness without externally anchored backups.
+     */
+    public function verifyAuditChains(int $limit=100): array
+    {
+        $this->assertReady();
+        $cap=max(1,min(500,$limit));
+        $cases=DB::table('moderation_cases')
+            ->orderByDesc('created_at')->orderByDesc('id')
+            ->limit($cap)->get(['id','revision']);
+        $invalid=0;
+        $eventsChecked=0;
+        foreach($cases as $case){
+            $previous=str_repeat('0',64);
+            $events=DB::table('moderation_case_events')
+                ->where('case_id',$case->id)->orderBy('id')->get([
+                    'id','case_id','actor_kind','actor_digest','action',
+                    'reason_code','revision_after','previous_hash',
+                    'event_hash','created_at',
+                ]);
+            $broken=$events->isEmpty();
+            foreach($events as $event){
+                $eventsChecked++;
+                $expected=hash_hmac('sha256',implode('|',[
+                    $event->id,$case->id,$event->actor_kind,
+                    $event->actor_digest??'',$event->action,
+                    $event->reason_code??'',$event->revision_after,
+                    $previous,(string)$event->created_at,
+                ]),(string)config('app.key'));
+                if(!hash_equals($previous,(string)$event->previous_hash)
+                    ||!hash_equals($expected,(string)$event->event_hash)){
+                    $broken=true;
+                    break;
+                }
+                $previous=$event->event_hash;
+            }
+            if(!$broken && (int)$events->last()->revision_after
+                <(int)$case->revision)$broken=true;
+            if($broken)$invalid++;
+        }
+        return [
+            'cases_checked'=>$cases->count(),
+            'events_checked'=>$eventsChecked,
+            'invalid_cases'=>$invalid,
+            'sample_limited'=>DB::table('moderation_cases')->count()>$cases->count(),
+        ];
+    }
+
     public function requireCase(string $id): object
     {
         $this->assertReady();
