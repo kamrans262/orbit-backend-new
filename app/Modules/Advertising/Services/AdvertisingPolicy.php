@@ -81,7 +81,7 @@ final class AdvertisingPolicy
 
     public function eligible(object $campaign): ?array
     {
-        if ($campaign->status !== 'active'
+        if (!in_array($campaign->status,['active','scheduled'],true)
             || now()->lt($campaign->starts_at) || now()->gte($campaign->ends_at)) return null;
         $sponsor=DB::table('ad_sponsors')->where('id',$campaign->sponsor_id)->first();
         $creative=DB::table('ad_creatives')->where('id',$campaign->creative_id)->first();

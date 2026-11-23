@@ -130,6 +130,41 @@ final class AdminAdvertisingController extends Controller
         return back()->with('status','Sponsor draft created; not eligible for serving.');
     }
 
+    public function editSponsor(Request $r,string $sponsor)
+    {
+        $this->ability('advertising.manage');
+        $data=$this->gate($r,[
+            'display_name'=>['required','string','min:2','max:150'],
+            'legal_name'=>['required','string','min:2','max:180'],
+            'approved_domain'=>['required','string','max:190'],
+            'contact'=>['nullable','email','max:190'],
+        ]);
+        $domain=$this->checkDomain($data['approved_domain']);
+        DB::transaction(function () use($sponsor,$data,$domain):void {
+            $row=DB::table('ad_sponsors')->where('id',$sponsor)->lockForUpdate()->first();
+            abort_unless($row && $row->status!=='archived',409);
+            $changeDomain=$row->approved_domain!==$domain;
+            DB::table('ad_sponsors')->where('id',$sponsor)->update([
+                'display_name'=>$data['display_name'],
+                'legal_name'=>$data['legal_name'],'approved_domain'=>$domain,
+                'status'=>$changeDomain?'draft':$row->status,
+                'verification_status'=>$changeDomain?'pending':$row->verification_status,
+                'verified_by'=>$changeDomain?null:$row->verified_by,
+                'verified_at'=>$changeDomain?null:$row->verified_at,
+                'updated_at'=>now('UTC'),
+            ]);
+            if (!empty($data['contact'])) DB::table('ad_sponsor_contacts')->insert([
+                'id'=>(string)Str::uuid7(),'sponsor_id'=>$sponsor,
+                'contact_kind'=>'email',
+                'encrypted_contact'=>Crypt::encryptString($data['contact']),
+                'created_at'=>now('UTC'),'updated_at'=>now('UTC'),
+            ]);
+            $this->audit('sponsor.edited','sponsor',$sponsor,$data['reason'],
+                $row->status,$changeDomain?'draft':$row->status);
+        },3);
+        return back()->with('status','Sponsor details saved. Destination changes require new independent verification.');
+    }
+
     public function sponsorStatus(Request $r,string $sponsor)
     {
         $this->ability('advertising.manage');
@@ -327,25 +362,71 @@ final class AdminAdvertisingController extends Controller
         return back()->with('status','Draft campaign created. Nothing is live.');
     }
 
+    public function editCampaign(Request $r,string $campaign)
+    {
+        $this->ability('advertising.manage');
+        $data=$this->gate($r,[
+            'revision'=>['required','integer','min:1'],
+            'name'=>['required','string','max:120'],
+            'sponsor_id'=>['required','uuid','exists:ad_sponsors,id'],
+            'creative_id'=>['required','uuid','exists:ad_creatives,id'],
+            'starts_at'=>['required','date'],
+            'ends_at'=>['required','date','after:starts_at'],
+            'priority'=>['required','integer','min:1','max:10'],
+            'placements'=>['required','array','min:1','max:2'],
+            'placements.*'=>['required',Rule::in(config('orbit_advertising.slots',[]))],
+        ]);
+        DB::transaction(function () use($campaign,$data):void {
+            $old=DB::table('ad_campaigns')->where('id',$campaign)->lockForUpdate()->first();
+            abort_unless($old && $old->status!=='archived'
+                && (int)$old->revision===(int)$data['revision'],409,
+                'Stale or archived campaign.');
+            $creative=DB::table('ad_creatives')->where('id',$data['creative_id'])->first();
+            abort_unless($creative && $creative->sponsor_id===$data['sponsor_id']
+                && $creative->status==='approved',409,'Approved matching creative required.');
+            DB::table('ad_campaigns')->where('id',$campaign)->update([
+                'name'=>$data['name'],'sponsor_id'=>$data['sponsor_id'],
+                'creative_id'=>$data['creative_id'],'creative_revision'=>$creative->revision,
+                'starts_at'=>$data['starts_at'],'ends_at'=>$data['ends_at'],
+                'priority'=>$data['priority'],'status'=>'draft',
+                'revision'=>$old->revision+1,
+                // The last editor may never self-approve the revised campaign.
+                'created_by'=>$this->admin()->id,
+                'reviewed_by'=>null,'reviewed_at'=>null,'updated_at'=>now('UTC'),
+            ]);
+            DB::table('ad_campaign_placements')->where('campaign_id',$campaign)->delete();
+            foreach(array_unique($data['placements']) as $slot)
+                DB::table('ad_campaign_placements')->insert([
+                    'campaign_id'=>$campaign,'placement_key'=>$slot,'created_at'=>now('UTC'),
+                ]);
+            $this->audit('campaign.edited','campaign',$campaign,$data['reason'],
+                $old->status.':'.$old->revision,'draft:'.($old->revision+1));
+        },3);
+        return back()->with('status','Revised campaign returned to draft; approval was invalidated.');
+    }
+
     public function campaignTransition(Request $r,string $campaign)
     {
         $data=$this->gate($r,[
             'revision'=>['required','integer','min:1'],
-            'status'=>['required',Rule::in(['draft','pending','approved','active',
-                'paused','completed','archived'])],
+            'status'=>['required',Rule::in(['draft','pending','approved','scheduled',
+                'active','paused','completed','rejected','archived'])],
         ]);
         $to=$data['status'];
-        $this->ability($to==='approved'?'advertising.review':'advertising.manage');
+        $this->ability(in_array($to,['approved','rejected'],true)
+            ?'advertising.review':'advertising.manage');
         DB::transaction(function () use($campaign,$data,$to):void {
             $row=DB::table('ad_campaigns')->where('id',$campaign)->lockForUpdate()->first();
             abort_unless($row && (int)$row->revision===(int)$data['revision'],
                 409,'Stale campaign revision.');
             $allowed=[
                 'draft'=>['pending','archived'],
-                'pending'=>['draft','approved','archived'],
-                'approved'=>['active','archived'],
+                'pending'=>['draft','approved','rejected','archived'],
+                'approved'=>['scheduled','active','archived'],
+                'scheduled'=>['active','paused','completed','archived'],
                 'active'=>['paused','completed'],
-                'paused'=>['active','completed','archived'],
+                'paused'=>['scheduled','active','completed','archived'],
+                'rejected'=>['draft','archived'],
                 'completed'=>['archived'],
                 'archived'=>[],
             ];
@@ -354,7 +435,7 @@ final class AdminAdvertisingController extends Controller
             if ($to==='approved') abort_unless(
                 $row->created_by!==$this->admin()->id,403,
                 'Campaign creator cannot approve their own campaign.');
-            if (in_array($to,['pending','approved','active'],true)) {
+            if (in_array($to,['pending','approved','scheduled','active'],true)) {
                 $creative=DB::table('ad_creatives')->where('id',$row->creative_id)->first();
                 $sponsor=DB::table('ad_sponsors')->where('id',$row->sponsor_id)->first();
                 abort_unless($creative && $sponsor

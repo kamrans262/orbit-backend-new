@@ -70,6 +70,16 @@
         <td>{{ ucfirst($sponsor->verification_status) }}</td>
         <td>
           @if(auth()->guard('admin')->user()?->canPerform('advertising.manage') && $sponsor->status!=='archived')
+          <details><summary>Edit Sponsor</summary>
+          <form method="post" action="{{ route('orbit.admin.advertising.sponsors.edit',['sponsor'=>$sponsor->id]) }}">@csrf
+            <label>Display name<input name="display_name" required maxlength="150" value="{{ $sponsor->display_name }}"></label>
+            <label>Legal name<input name="legal_name" required maxlength="180" value="{{ $sponsor->legal_name }}"></label>
+            <label>Destination domain<input name="approved_domain" required maxlength="190" value="{{ $sponsor->approved_domain }}"></label>
+            <label>Additional encrypted contact email (optional)<input type="email" name="contact" maxlength="190"></label>
+            <label>Reason<input name="reason" minlength="10" maxlength="500" required></label>
+            <label><input type="checkbox" name="confirm" value="1" required> Confirm details update</label>
+            <button class="btn secondary">Save Sponsor</button>
+          </form></details>
           <form method="post" action="{{ route('orbit.admin.advertising.sponsors.status',['sponsor'=>$sponsor->id]) }}">@csrf
             <label>Action<select name="status" required>
               @foreach(['verified'=>'Verify independently','suspended'=>'Suspend','archived'=>'Archive'] as $code=>$label)
@@ -180,10 +190,12 @@
       <td>{{ $campaign->revision }}</td>
       <td>
         @php
-          $states=['draft'=>['pending','archived'],'pending'=>['draft','approved','archived'],
-            'approved'=>['active','archived'],'active'=>['paused','completed'],
-            'paused'=>['active','completed','archived'],'completed'=>['archived'],'archived'=>[]];
-          $allowed=array_filter($states[$campaign->status]??[],fn($next)=>auth()->guard('admin')->user()?->canPerform($next==='approved'?'advertising.review':'advertising.manage'));
+          $states=['draft'=>['pending','archived'],'pending'=>['draft','approved','rejected','archived'],
+            'approved'=>['scheduled','active','archived'],'scheduled'=>['active','paused','completed','archived'],
+            'active'=>['paused','completed'],'paused'=>['scheduled','active','completed','archived'],
+            'rejected'=>['draft','archived'],'completed'=>['archived'],'archived'=>[]];
+          $allowed=array_filter($states[$campaign->status]??[],
+            fn($next)=>auth()->guard('admin')->user()?->canPerform(in_array($next,['approved','rejected'],true)?'advertising.review':'advertising.manage'));
         @endphp
         @if($allowed)
         <form method="post" action="{{ route('orbit.admin.advertising.campaigns.transition',['campaign'=>$campaign->id]) }}">@csrf
@@ -196,6 +208,29 @@
           <button class="btn secondary">Transition</button>
         </form>
         @else No actions @endif
+        @if($campaign->status!=='archived' && auth()->guard('admin')->user()?->canPerform('advertising.manage'))
+          <details><summary>Edit Campaign (resets approval)</summary>
+          <form method="post" action="{{ route('orbit.admin.advertising.campaigns.edit',['campaign'=>$campaign->id]) }}">@csrf
+            <input type="hidden" name="revision" value="{{ $campaign->revision }}">
+            <label>Name<input name="name" required maxlength="120" value="{{ $campaign->name }}"></label>
+            <label>Sponsor<select name="sponsor_id">
+              @foreach($sponsors as $sponsor)<option value="{{ $sponsor->id }}" @selected($sponsor->id===$campaign->sponsor_id)>{{ $sponsor->display_name }}</option>@endforeach
+            </select></label>
+            <label>Approved Creative<select name="creative_id">
+              @foreach($creatives as $creative)@if($creative->status==='approved')
+                <option value="{{ $creative->id }}" @selected($creative->id===$campaign->creative_id)>{{ $creative->title }}</option>
+              @endif @endforeach
+            </select></label>
+            <label>Start UTC<input name="starts_at" type="datetime-local" value="{{ IlluminateSupportCarbon::parse($campaign->starts_at)->format('Y-m-dTH:i') }}" required></label>
+            <label>End UTC<input name="ends_at" type="datetime-local" value="{{ IlluminateSupportCarbon::parse($campaign->ends_at)->format('Y-m-dTH:i') }}" required></label>
+            <label>Priority<input name="priority" type="number" min="1" max="10" required value="{{ $campaign->priority }}"></label>
+            <label><input type="checkbox" name="placements[]" value="home.promo"> Home promo</label>
+            <label><input type="checkbox" name="placements[]" value="moments.promo"> Moments promo</label>
+            <label>Reason<input name="reason" required minlength="10" maxlength="500"></label>
+            <label><input type="checkbox" name="confirm" value="1" required> Invalidate approval and save new draft</label>
+            <button class="btn secondary">Save Revised Campaign</button>
+          </form></details>
+        @endif
       </td>
     </tr>
     @empty<tr><td colspan="6">No campaigns created.</td></tr>@endforelse</tbody></table></div>

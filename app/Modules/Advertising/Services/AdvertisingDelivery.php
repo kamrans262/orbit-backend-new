@@ -66,7 +66,7 @@ final class AdvertisingDelivery
             }
             $candidates=DB::table('ad_campaigns as c')
                 ->join('ad_campaign_placements as cp','cp.campaign_id','=','c.id')
-                ->where('cp.placement_key',$placement)->where('c.status','active')
+                ->where('cp.placement_key',$placement)->whereIn('c.status',['active','scheduled'])
                 ->where('c.starts_at','<=',now())->where('c.ends_at','>',now())
                 ->select('c.*')->orderByDesc('c.priority')->orderBy('c.created_at')
                 ->limit(40)->get();

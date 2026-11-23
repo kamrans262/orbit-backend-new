@@ -85,6 +85,9 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
         Route::post('/advertising/sponsors',[AdminAdvertisingController::class,'createSponsor'])
             ->middleware([RequireAdminPermission::class.':advertising.manage','throttle:8,1'])
             ->name('advertising.sponsors.create');
+        Route::post('/advertising/sponsors/{sponsor}/edit',[AdminAdvertisingController::class,'editSponsor'])
+            ->whereUuid('sponsor')->middleware([RequireAdminPermission::class.':advertising.manage','throttle:8,1'])
+            ->name('advertising.sponsors.edit');
         Route::post('/advertising/sponsors/{sponsor}/status',[AdminAdvertisingController::class,'sponsorStatus'])
             ->whereUuid('sponsor')->middleware([RequireAdminPermission::class.':advertising.manage','throttle:8,1'])
             ->name('advertising.sponsors.status');
@@ -103,6 +106,9 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
         Route::post('/advertising/campaigns',[AdminAdvertisingController::class,'createCampaign'])
             ->middleware([RequireAdminPermission::class.':advertising.manage','throttle:8,1'])
             ->name('advertising.campaigns.create');
+        Route::post('/advertising/campaigns/{campaign}/edit',[AdminAdvertisingController::class,'editCampaign'])
+            ->whereUuid('campaign')->middleware([RequireAdminPermission::class.':advertising.manage','throttle:8,1'])
+            ->name('advertising.campaigns.edit');
         Route::post('/advertising/campaigns/{campaign}/transition',
             [AdminAdvertisingController::class,'campaignTransition'])
             ->whereUuid('campaign')->middleware([RequireAdminPermission::class.':advertising.read','throttle:8,1'])
