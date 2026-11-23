@@ -142,7 +142,9 @@
   @if($case->status==='investigating' && auth()->guard('admin')->user()?->canPerform('moderation.decide'))
   <section class="panel">
     <div class="panel-head"><div><h2>Reviewed enforcement</h2><p>Only warning and messaging-send restriction are implemented; account-wide suspensions and Moment restriction stay in their original gated modules. SOS cannot be disabled here.</p></div></div>
-    @if(app(\App\Modules\Moderation\Services\ModerationService::class)->control('enforcement_enabled'))
+    @if($case->source_kind==='moment')
+    <div class="admin-guidance">Moment and comment report sanctions must be reviewed in the original Moments moderation workspace under its separate consent, audit and restriction-release gates. The unified case view cannot bypass these protections.</div>
+    @elseif(app(\App\Modules\Moderation\Services\ModerationService::class)->control('enforcement_enabled'))
     <form method="post" action="{{ route('orbit.admin.moderation.cases.enforce',['case'=>$case->id]) }}">@csrf
       <input type="hidden" name="revision" value="{{ $case->revision }}">
       <label>Action<select name="scope"><option value="warning">Issue warning (record only)</option><option value="messaging_send">Restrict messaging sends</option></select></label>
