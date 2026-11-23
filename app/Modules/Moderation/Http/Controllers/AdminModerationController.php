@@ -122,7 +122,7 @@ final class AdminModerationController extends Controller
     {
         $d=$r->validate([
             'revision'=>['required','integer','min:1'],
-            'action'=>['required',Rule::in(['triage','investigate','dismiss','reopen'])],
+            'action'=>['required',Rule::in(['triage','investigate','dismiss','reopen','reassign'])],
             'reason'=>['required',Rule::in(['spam','harassment','fraud',
                 'abuse','safety','reviewed_safe','other'])],
             'assign_to'=>['sometimes','nullable','uuid'],

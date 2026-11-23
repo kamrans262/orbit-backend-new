@@ -102,6 +102,7 @@
         <input type="hidden" name="revision" value="{{ $case->revision }}">
         <label>Review action
           <select name="action" required>
+            @if(in_array($case->status,['pending','triaged','investigating','reopened'],true))<option value="reassign">Assign / reassign reviewer</option>@endif
             @if($case->status==='pending')<option value="triage">Triage</option>@endif
             @if(in_array($case->status,['triaged','reopened'],true))<option value="investigate">Open investigation</option>@endif
             @if(in_array($case->status,['pending','triaged','investigating'],true))<option value="dismiss">Dismiss after review</option>@endif

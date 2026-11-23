@@ -230,9 +230,14 @@ final class ModerationService
                 'investigate'=>in_array($row->status,['triaged','reopened'],true)?'investigating':null,
                 'dismiss'=>in_array($row->status,['pending','triaged','investigating'],true)?'dismissed':null,
                 'reopen'=>in_array($row->status,['actioned','dismissed'],true)?'reopened':null,
+                'reassign'=>in_array($row->status,
+                    ['pending','triaged','investigating','reopened'],true)
+                    ?$row->status:null,
                 default=>null,
             };
             abort_unless($next!==null,409,'Invalid moderation transition.');
+            if($action==='reassign')abort_unless($assignee!==null,422,
+                'Choose an authorized moderator to assign.');
             if($assignee!==null)abort_unless(DB::table('admin_users')
                 ->where('id',$assignee)->where('status','active')->exists(),422,
                 'Active assignee required.');

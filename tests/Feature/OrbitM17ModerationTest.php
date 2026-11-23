@@ -281,6 +281,38 @@ final class OrbitM17ModerationTest extends TestCase
             ->assertOk()->assertExactJson(['data'=>[]]);
     }
 
+    public function test_case_assignment_can_change_without_resetting_investigation_state():void
+    {
+        [$reporter,$device,$token]=$this->principal();
+        [$target]=$this->principal();
+        $this->report($token,$target->id);
+        $case=DB::table('moderation_cases')->first();
+        $first=$this->admin(['moderation.read','moderation.triage']);
+        $second=$this->admin(['moderation.read','moderation.triage']);
+        $this->actingAs($first,'admin')->post(
+            '/admin/moderation/cases/'.$case->id.'/transition',[
+                'revision'=>1,'action'=>'triage','reason'=>'other',
+                'assign_to'=>$first->id,'confirm'=>1,
+            ])->assertRedirect();
+        $this->actingAs($first,'admin')->post(
+            '/admin/moderation/cases/'.$case->id.'/transition',[
+                'revision'=>2,'action'=>'investigate','reason'=>'other','confirm'=>1,
+            ])->assertRedirect();
+        $this->actingAs($first,'admin')->post(
+            '/admin/moderation/cases/'.$case->id.'/transition',[
+                'revision'=>3,'action'=>'reassign','reason'=>'other',
+                'assign_to'=>$second->id,'confirm'=>1,
+            ])->assertRedirect();
+        $this->assertDatabaseHas('moderation_cases',[
+            'id'=>$case->id,'assigned_admin_id'=>$second->id,
+            'status'=>'investigating','revision'=>4,
+        ]);
+        $this->assertDatabaseHas('moderation_case_events',[
+            'case_id'=>$case->id,'action'=>'case.reassign',
+            'revision_after'=>4,
+        ]);
+    }
+
     public function test_case_notes_are_encrypted_reviewer_only_and_revision_guarded():void
     {
         [$reporter,$d,$token]=$this->principal();
