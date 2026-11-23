@@ -1,0 +1,80 @@
+name: Orbit M17 Moderation Laravel and Admin verification
+on:
+  push:
+    branches: [feature/m17-moderation-backend-admin-2026-11-23]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  moderation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: rootpass
+          MARIADB_DATABASE: orbit_ci
+          MARIADB_USER: orbit_ci
+          MARIADB_PASSWORD: orbit_ci_pass
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: testing
+      APP_DEBUG: true
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: orbit_ci
+      DB_USERNAME: orbit_ci
+      DB_PASSWORD: orbit_ci_pass
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, fileinfo, pdo_mysql, openssl, sodium
+          tools: composer:v2
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Configure disposable CI database
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+      - name: Syntax and endpoint contracts
+        run: |
+          find app/Modules/Moderation -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l database/migrations/2026_11_23_000001_create_orbit_m17_moderation.php
+          php -l config/orbit_moderation.php
+          php -l routes/api.php
+          php -l routes/admin.php
+          php -l routes/console.php
+          php -l tests/Feature/OrbitM17ModerationTest.php
+          php artisan route:list --path=api/v1/moderation
+          php artisan route:list --path=admin/moderation
+          php artisan migrate --force
+      - name: Isolated additive M17 rollback and reapply
+        run: |
+          php artisan migrate:rollback --force --path=database/migrations/2026_11_23_000001_create_orbit_m17_moderation.php
+          php artisan tinker --execute='if(\Illuminate\Support\Facades\Schema::hasTable("moderation_cases") || !\Illuminate\Support\Facades\Schema::hasTable("sos_incidents") || !\Illuminate\Support\Facades\Schema::hasTable("moment_reports") || !\Illuminate\Support\Facades\Schema::hasTable("messaging_reports")) throw new RuntimeException("M17 rollback altered previous modules");'
+          php artisan migrate --force --path=database/migrations/2026_11_23_000001_create_orbit_m17_moderation.php
+      - name: M17 account reporting, source isolation, admin permissions and appeals
+        run: php artisan test --compact tests/Feature/OrbitM17ModerationTest.php
+      - name: M4, M7, M13, M14, M15 and M16 regression
+        run: |
+          php artisan test --compact \
+            tests/Feature/OrbitM4SocialGraphTest.php \
+            tests/Feature/OrbitM7MomentsTest.php \
+            tests/Feature/OrbitMessagingTest.php \
+            tests/Feature/OrbitMessagingAdminTest.php \
+            tests/Feature/OrbitM14NotificationsTest.php \
+            tests/Feature/OrbitM15PlansTest.php \
+            tests/Feature/OrbitM16SosSafetyTest.php
