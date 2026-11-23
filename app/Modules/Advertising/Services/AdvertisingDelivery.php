@@ -87,7 +87,7 @@ final class AdvertisingDelivery
                     || $window->decisions >= $slot->daily_decision_cap
                     || $window->impressions >= $slot->daily_impression_cap) continue;
                 $id=(string)Str::uuid7();
-                DB::table('ad_decisions')->insert([
+                $inserted=DB::table('ad_decisions')->insertOrIgnore([
                     'id'=>$id,'campaign_id'=>$campaign->id,'placement_key'=>$placement,
                     'viewer_digest'=>$digest,'request_id'=>$requestId,
                     'creative_revision'=>$campaign->creative_revision,
@@ -95,6 +95,14 @@ final class AdvertisingDelivery
                     'expires_at'=>now('UTC')->addMinutes((int)config('orbit_advertising.decision_minutes',10)),
                     'status'=>'issued',
                 ]);
+                if ($inserted !== 1) {
+                    // Another concurrent request committed this idempotency key.
+                    // Never charge a second window debit or choose a new ad.
+                    $same=DB::table('ad_decisions')->where('viewer_digest',$digest)
+                        ->where('placement_key',$placement)
+                        ->where('request_id',$requestId)->first();
+                    return $same ? $this->present($same) : null;
+                }
                 DB::table('ad_frequency_windows')->where('id',$window->id)->update([
                     'decisions'=>$window->decisions+1,'last_decision_at'=>now('UTC'),
                 ]);
