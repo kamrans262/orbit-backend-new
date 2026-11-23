@@ -194,14 +194,18 @@ final class ModerationService
         $result=['moment'=>0,'messaging'=>0];
         foreach(['moment'=>'moment_reports','messaging'=>'messaging_reports'] as $kind=>$table){
             if(!Schema::hasTable($table))continue;
+            // Strict metadata projection. Never SELECT reporter identities,
+            // encrypted M7 notes/evidence or M13 volunteered message evidence
+            // during scheduled moderation intake.
+            $fields=$kind==='moment'
+                ?['id','moment_id','comment_id','reason']
+                :['id','conversation_id','message_id','reporter_id','reason'];
             $pending=DB::table($table)->whereNotExists(function($q)use($table,$kind){
                 $q->selectRaw('1')->from('moderation_cases as c')
                     ->where('c.source_kind',$kind)->whereColumn('c.source_report_id',$table.'.id');
-            })->orderBy($table.'.created_at')->limit($max)->get();
+            })->orderBy($table.'.created_at')->limit($max)->get($fields);
             foreach($pending as $row){
-                $subject=$kind==='moment'
-                    ?($row->reported_user_id??DB::table('moments')->where('id',$row->moment_id)->value('creator_id'))
-                    :($row->subject_user_id??null);
+                $subject=$this->reportSubject($kind,$row);
                 $before=DB::table('moderation_cases')->where('source_kind',$kind)
                     ->where('source_report_id',$row->id)->exists();
                 $this->linkSource($kind,$row->id,$subject,(string)$row->reason);
@@ -209,6 +213,49 @@ final class ModerationService
             }
         }
         return $result;
+    }
+
+    /**
+     * A reported Moment comment belongs to the COMMENT author, not to the
+     * enclosing Moment author. An M13 report belongs to the reported message
+     * sender; a direct-conversation report may identify its single peer.
+     * Ambiguous or vanished content must NEVER be attributed to someone else.
+     * No plaintext message, key material or ciphertext is selected here.
+     */
+    private function reportSubject(string $kind,object $row): ?string
+    {
+        if($kind==='moment'){
+            if($row->comment_id!==null){
+                return DB::table('moment_comments')
+                    ->where('id',$row->comment_id)
+                    ->where('moment_id',$row->moment_id)
+                    ->value('author_id');
+            }
+            return DB::table('moments')->where('id',$row->moment_id)
+                ->value('creator_id');
+        }
+        if($row->message_id!==null){
+            $author=DB::table('messaging_messages')
+                ->where('id',$row->message_id)
+                ->where('conversation_id',$row->conversation_id)
+                ->value('sender_id');
+            return $author!==$row->reporter_id?$author:null;
+        }
+        $kindOfThread=DB::table('messaging_conversations')
+            ->where('id',$row->conversation_id)->value('kind');
+        if($kindOfThread!=='direct')return null;
+        // A direct chat can only identify the target if membership has two
+        // members including the reporter, independent of Circle membership.
+        $participants=DB::table('messaging_members')
+            ->where('conversation_id',$row->conversation_id)
+            ->pluck('user_id')->all();
+        if(count($participants)!==2 || !in_array($row->reporter_id,$participants,true)){
+            return null;
+        }
+        foreach($participants as $participant){
+            if($participant!==$row->reporter_id)return $participant;
+        }
+        return null;
     }
 
     public function requireCase(string $id): object
@@ -238,9 +285,11 @@ final class ModerationService
             abort_unless($next!==null,409,'Invalid moderation transition.');
             if($action==='reassign')abort_unless($assignee!==null,422,
                 'Choose an authorized moderator to assign.');
-            if($assignee!==null)abort_unless(DB::table('admin_users')
-                ->where('id',$assignee)->where('status','active')->exists(),422,
-                'Active assignee required.');
+            if($assignee!==null){
+                $candidate=\App\Models\AdminUser::find($assignee);
+                abort_unless($candidate && $candidate->canPerform('moderation.triage'),
+                    422,'Assign a currently authorized moderation reviewer.');
+            }
             $updates=['status'=>$next,'revision'=>$revision+1,'updated_at'=>now(),
                 'closed_at'=>$next==='dismissed'?now():null];
             if($assignee!==null)$updates['assigned_admin_id']=$assignee;
@@ -285,8 +334,10 @@ final class ModerationService
             abort_unless((int)$case->revision===$revision,409,'Case changed. Refresh first.');
             abort_unless($case->status==='investigating',409,'Investigate before enforcement.');
             abort_unless($case->subject_user_id!==null
-                && DB::table('orbit_users')->where('id',$case->subject_user_id)->exists(),
-                409,'Action requires a currently valid account subject.');
+                && DB::table('orbit_users')->where('id',$case->subject_user_id)
+                    ->where('status','active')->whereNull('deletion_requested_at')
+                    ->exists(),
+                409,'Action requires a currently active account subject.');
             if($scope==='messaging_send'){
                 // Lock the subject before checking active M13 restrictions.
                 // Separate concurrent cases for one member cannot both pass

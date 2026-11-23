@@ -186,14 +186,16 @@ final class AdminModerationController extends Controller
         // No generic decryption/export route may be introduced.
         if($c->source_kind==='moment'){
             abort_unless($admin->canPerform('moments.moderate'),403);
-            $source=DB::table('moment_reports')->where('id',$c->source_report_id)->first();
-            abort_unless($source && $source->evidence_consent
-                && $source->consent_evidence_ciphertext,404,'Volunteered evidence unavailable.');
+            abort_unless(DB::table('moment_reports')
+                ->where('id',$c->source_report_id)->where('evidence_consent',true)
+                ->whereNotNull('consent_evidence_ciphertext')->exists(),
+                404,'Volunteered evidence unavailable.');
             $response=app(AdminMomentController::class)->evidence($r,$c->source_report_id);
         }elseif($c->source_kind==='messaging'){
             abort_unless($admin->canPerform('messages.moderate'),403);
-            $source=DB::table('messaging_reports')->where('id',$c->source_report_id)->first();
-            abort_unless($source && $source->evidence_shared && $source->evidence_enc,
+            abort_unless(DB::table('messaging_reports')
+                ->where('id',$c->source_report_id)->where('evidence_shared',true)
+                ->whereNotNull('evidence_enc')->exists(),
                 404,'Volunteered evidence unavailable.');
             $response=app(AdminMessagingController::class)->evidence($r,$c->source_report_id);
         }else{abort(404,'No shareable evidence for this case.');}
