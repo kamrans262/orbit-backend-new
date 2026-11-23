@@ -1,0 +1,252 @@
+@extends('orbit-admin.layout')
+@section('title','Advertisements & Sponsorships')
+@section('crumb') ADVERTISEMENTS / {{ strtoupper($area) }} @endsection
+@section('content')
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">SPONSORSHIP / AD OPERATIONS</p>
+    <h1>Advertisements &amp; Sponsorships</h1>
+    <p>Manage sponsor verification, creative approvals, campaigns, allowed placements and privacy-safe performance. No subscription, billing or member profiling is included.</p>
+  </div>
+</div>
+<section class="panel">
+  <div class="panel-head"><div>
+    <h2>Advertising workspace</h2>
+    <p>Uses only the approved Orbit Admin navigation, forms, cards, tables and confirmation styles. Advertisements remain globally disabled until the policy gates are approved.</p>
+  </div></div>
+  <div class="heading-actions" style="display:flex;flex-wrap:wrap;gap:8px">
+    @foreach(['overview'=>'Overview','sponsors'=>'Sponsors','creatives'=>'Creatives & Review','campaigns'=>'Campaigns','placements'=>'Placements & Frequency'] as $tab=>$label)
+      <a class="btn {{ $area===$tab?'primary':'secondary' }}" href="{{ route('orbit.admin.advertising.'.$tab) }}">{{ $label }}</a>
+    @endforeach
+    @if(auth()->guard('admin')->user()?->canPerform('advertising.analytics'))
+      <a class="btn {{ $area==='analytics'?'primary':'secondary' }}" href="{{ route('orbit.admin.advertising.analytics') }}">Analytics</a>
+    @endif
+    @if(auth()->guard('admin')->user()?->canPerform('advertising.audit'))
+      <a class="btn {{ $area==='audits'?'primary':'secondary' }}" href="{{ route('orbit.admin.advertising.audits') }}">Audit Trail</a>
+    @endif
+  </div>
+</section>
+@if(!$ready)
+<section class="panel"><div class="admin-guidance">The additive M20 database schema has not been provisioned in this environment. Advertising cannot serve or accept changes until its migration is applied in an explicitly approved deployment.</div></section>
+@else
+@if($area==='overview')
+<div class="stat-grid">
+  @foreach(['Sponsor records'=>$counts['sponsors'],'Verified sponsors'=>$counts['verified'],
+    'Creative submissions'=>$counts['creatives'],'Awaiting creative review'=>$counts['awaiting_review'],
+    'Campaigns'=>$counts['campaigns'],'Active campaign states'=>$counts['active']] as $label=>$value)
+    <article class="stat-card"><span class="stat-label">{{ $label }}</span><strong>{{ number_format($value) }}</strong></article>
+  @endforeach
+</div>
+<section class="panel">
+  <div class="panel-head"><div><h2>Delivery posture &amp; privacy</h2></div></div>
+  <div class="admin-kv">
+    <div class="kv"><small>Module delivery configuration</small><strong>{{ config('orbit_advertising.enabled')?'Enabled by environment':'Disabled by default' }}</strong></div>
+    <div class="kv"><small>Required rollout approvals</small><strong>{{ app(\App\Modules\Advertising\Services\AdvertisingPolicy::class)->policyApproved()?'All environment approvals present':'Not fully authorized' }}</strong></div>
+    <div class="kv"><small>Serving eligible now</small><strong>{{ app(\App\Modules\Advertising\Services\AdvertisingPolicy::class)->available()?'Environment gate available; placement and sponsor ACL still required':'Disabled' }}</strong></div>
+    <div class="kv"><small>Authorized UI surfaces</small><strong>Home promo card; Moments promo card (both individually disabled at migration)</strong></div>
+    <div class="kv"><small>Member tracking</small><strong>Only signed decision receipts; aggregate counts. No personal profiles or GPS</strong></div>
+    <div class="kv"><small>Excluded workflows</small><strong>Messages, SOS, notifications, Activity Feed and Subscription Billing</strong></div>
+  </div>
+</section>
+@elseif($area==='sponsors')
+<section class="panel">
+  <div class="panel-head"><div><h2>Sponsor directory</h2><p>Draft sponsor records require independent verification. A suspended or archived sponsor immediately stops all delivery.</p></div></div>
+  @if(auth()->guard('admin')->user()?->canPerform('advertising.manage'))
+  <form method="post" action="{{ route('orbit.admin.advertising.sponsors.create') }}">@csrf
+    <label>Sponsor display name<input type="text" name="display_name" maxlength="150" required></label>
+    <label>Legal name<input type="text" name="legal_name" maxlength="180" required></label>
+    <label>Verified destination domain (hostname only)<input type="text" name="approved_domain" maxlength="190" required placeholder="sponsor.example"></label>
+    <label>Confidential contact email (optional)<input type="email" name="contact" maxlength="190"></label>
+    <label>Reason<input type="text" name="reason" minlength="10" maxlength="500" required></label>
+    <label><input type="checkbox" name="confirm" value="1" required> Confirm sponsor creation</label>
+    <button type="submit" class="btn primary">Create Sponsor Draft</button>
+  </form>
+  @endif
+  <div class="table-scroll"><table>
+    <thead><tr><th>SPONSOR</th><th>LEGAL NAME</th><th>APPROVED DOMAIN</th><th>STATUS</th><th>VERIFICATION</th><th>OPERATIONS</th></tr></thead>
+    <tbody>@forelse($sponsors as $sponsor)
+      <tr><td>{{ $sponsor->display_name }}</td><td>{{ $sponsor->legal_name }}</td>
+        <td>{{ $sponsor->approved_domain }}</td><td>{{ ucfirst($sponsor->status) }}</td>
+        <td>{{ ucfirst($sponsor->verification_status) }}</td>
+        <td>
+          @if(auth()->guard('admin')->user()?->canPerform('advertising.manage') && $sponsor->status!=='archived')
+          <form method="post" action="{{ route('orbit.admin.advertising.sponsors.status',['sponsor'=>$sponsor->id]) }}">@csrf
+            <label>Action<select name="status" required>
+              @foreach(['verified'=>'Verify independently','suspended'=>'Suspend','archived'=>'Archive'] as $code=>$label)
+                @if($sponsor->status!==$code)<option value="{{ $code }}">{{ $label }}</option>@endif
+              @endforeach
+            </select></label>
+            <label>Reason<input type="text" name="reason" minlength="10" maxlength="500" required></label>
+            <label><input type="checkbox" name="confirm" value="1" required> Confirm</label>
+            <button class="btn secondary">Update Sponsor</button>
+          </form>
+          @else Read-only @endif
+        </td>
+      </tr>
+    @empty<tr><td colspan="6">No sponsor records yet.</td></tr>@endforelse</tbody>
+  </table></div>
+</section>
+@elseif($area==='creatives')
+<section class="panel">
+  <div class="panel-head"><div><h2>Creative review queue</h2><p>Image assets are stored privately. Only reviewed exact revisions can be served; revisions invalidate campaign eligibility.</p></div></div>
+  @if(auth()->guard('admin')->user()?->canPerform('advertising.manage'))
+  <form method="post" enctype="multipart/form-data" action="{{ route('orbit.admin.advertising.creatives.upload') }}">@csrf
+    <label>Approved sponsor<select name="sponsor_id" required>
+      @foreach($sponsors as $sponsor)@if($sponsor->status!=='archived')
+        <option value="{{ $sponsor->id }}">{{ $sponsor->display_name }} — {{ $sponsor->status }}</option>
+      @endif @endforeach
+    </select></label>
+    <label>Headline<input type="text" name="title" maxlength="120" required></label>
+    <label>Supporting text<input type="text" name="subtitle" maxlength="220" required></label>
+    <label>HTTPS sponsor destination<input type="url" name="cta_url" maxlength="500" required></label>
+    <label>Static approved image (JPEG, PNG or WebP)<input type="file" name="asset" accept="image/jpeg,image/png,image/webp" required></label>
+    <label>Reason<input type="text" name="reason" minlength="10" maxlength="500" required></label>
+    <label><input type="checkbox" name="confirm" value="1" required> Confirm private upload</label>
+    <button class="btn primary">Submit Creative for Review</button>
+  </form>
+  @endif
+  <div class="table-scroll"><table><thead>
+    <tr><th>TITLE</th><th>SPONSOR</th><th>REVISION</th><th>STATE</th><th>ASSET</th><th>REVIEW</th><th>REVISION</th></tr></thead>
+    <tbody>@forelse($creatives as $creative)
+      <tr>
+        <td>{{ $creative->title }}<p>{{ $creative->subtitle }}</p><small>{{ $creative->cta_url }}</small></td>
+        <td>{{ $sponsors->firstWhere('id',$creative->sponsor_id)->display_name??'Unknown' }}</td>
+        <td>{{ $creative->revision }}</td><td>{{ ucfirst($creative->status) }}</td>
+        <td>{{ $creative->width }}×{{ $creative->height }} / {{ $creative->mime }}
+          @if(auth()->guard('admin')->user()?->canPerform('advertising.review'))
+            <p><a class="btn secondary" href="{{ route('orbit.admin.advertising.creatives.preview',['creative'=>$creative->id]) }}">Review Image</a></p>
+          @endif
+        </td>
+        <td>
+          @if($creative->status==='pending' && auth()->guard('admin')->user()?->canPerform('advertising.review'))
+          <form method="post" action="{{ route('orbit.admin.advertising.creatives.review',['creative'=>$creative->id]) }}">@csrf
+            <input type="hidden" name="revision" value="{{ $creative->revision }}">
+            <label>Decision<select name="action"><option value="approved">Approve</option><option value="rejected">Reject</option></select></label>
+            <label>Review reason<input name="reason" required minlength="10" maxlength="500"></label>
+            <label><input type="checkbox" name="confirm" value="1" required> Confirm</label>
+            <button class="btn secondary" type="submit">Save Review</button>
+          </form>
+          @else {{ $creative->reviewed_at??'Awaiting review' }} @endif
+        </td>
+        <td>
+          @if(auth()->guard('admin')->user()?->canPerform('advertising.manage'))
+          <details><summary>Revise creative</summary>
+            <form method="post" enctype="multipart/form-data" action="{{ route('orbit.admin.advertising.creatives.revise',['creative'=>$creative->id]) }}">@csrf
+              <input type="hidden" name="sponsor_id" value="{{ $creative->sponsor_id }}">
+              <label>Headline<input name="title" required maxlength="120" value="{{ $creative->title }}"></label>
+              <label>Supporting text<input name="subtitle" required maxlength="220" value="{{ $creative->subtitle }}"></label>
+              <label>HTTPS destination<input type="url" name="cta_url" required maxlength="500" value="{{ $creative->cta_url }}"></label>
+              <label>Replacement image<input type="file" name="asset" required accept="image/jpeg,image/png,image/webp"></label>
+              <label>Reason<input name="reason" required minlength="10" maxlength="500"></label>
+              <label><input type="checkbox" name="confirm" value="1" required> Confirm new revision</label>
+              <button class="btn secondary">Submit Revision</button>
+            </form>
+          </details>
+          @else Read-only @endif
+        </td>
+      </tr>
+    @empty<tr><td colspan="7">No creative submissions.</td></tr>@endforelse</tbody></table></div>
+</section>
+@elseif($area==='campaigns')
+<section class="panel">
+  <div class="panel-head"><div><h2>Campaign management</h2><p>Separate create, submit, independent approval and activation. Active status never bypasses the verified sponsor, approved creative, schedule, domain or placement gates.</p></div></div>
+  @if(auth()->guard('admin')->user()?->canPerform('advertising.manage'))
+  <form method="post" action="{{ route('orbit.admin.advertising.campaigns.create') }}">@csrf
+    <label>Campaign name<input name="name" required maxlength="120"></label>
+    <label>Sponsor<select name="sponsor_id" required>
+      @foreach($sponsors as $sponsor)<option value="{{ $sponsor->id }}">{{ $sponsor->display_name }} ({{ $sponsor->status }})</option>@endforeach
+    </select></label>
+    <label>Approved creative<select name="creative_id" required>
+      @foreach($creatives as $creative)@if($creative->status==='approved')
+        <option value="{{ $creative->id }}">{{ $creative->title }} / {{ substr($creative->sponsor_id,0,8) }}</option>
+      @endif @endforeach
+    </select></label>
+    <label>Start UTC<input name="starts_at" type="datetime-local" required></label>
+    <label>End UTC<input name="ends_at" type="datetime-local" required></label>
+    <label>Priority (1–10)<input name="priority" type="number" min="1" max="10" value="5" required></label>
+    <label><input type="checkbox" name="placements[]" value="home.promo"> Home promo slot</label>
+    <label><input type="checkbox" name="placements[]" value="moments.promo"> Moments promo slot</label>
+    <label>Reason<input name="reason" required minlength="10" maxlength="500"></label>
+    <label><input type="checkbox" name="confirm" value="1" required> Confirm draft creation</label>
+    <button class="btn primary">Create Campaign Draft</button>
+  </form>
+  @endif
+  <div class="table-scroll"><table><thead><tr><th>CAMPAIGN</th><th>STATE</th><th>SCHEDULE (UTC)</th><th>CREATIVE</th><th>REVISION</th><th>OPERATIONS</th></tr></thead>
+    <tbody>@forelse($campaigns as $campaign)
+    <tr><td>{{ $campaign->name }}<p>Priority {{ $campaign->priority }}</p></td>
+      <td>{{ ucfirst($campaign->status) }}</td>
+      <td>{{ $campaign->starts_at }} – {{ $campaign->ends_at }}</td>
+      <td>{{ $creatives->firstWhere('id',$campaign->creative_id)->title??'Unavailable' }} (r{{ $campaign->creative_revision }})</td>
+      <td>{{ $campaign->revision }}</td>
+      <td>
+        @php
+          $states=['draft'=>['pending','archived'],'pending'=>['draft','approved','archived'],
+            'approved'=>['active','archived'],'active'=>['paused','completed'],
+            'paused'=>['active','completed','archived'],'completed'=>['archived'],'archived'=>[]];
+          $allowed=array_filter($states[$campaign->status]??[],fn($next)=>auth()->guard('admin')->user()?->canPerform($next==='approved'?'advertising.review':'advertising.manage'));
+        @endphp
+        @if($allowed)
+        <form method="post" action="{{ route('orbit.admin.advertising.campaigns.transition',['campaign'=>$campaign->id]) }}">@csrf
+          <input type="hidden" name="revision" value="{{ $campaign->revision }}">
+          <label>Next state<select name="status">
+            @foreach($allowed as $next)<option value="{{ $next }}">{{ ucfirst($next) }}</option>@endforeach
+          </select></label>
+          <label>Reason<input name="reason" minlength="10" maxlength="500" required></label>
+          <label><input type="checkbox" name="confirm" value="1" required> Confirm change</label>
+          <button class="btn secondary">Transition</button>
+        </form>
+        @else No actions @endif
+      </td>
+    </tr>
+    @empty<tr><td colspan="6">No campaigns created.</td></tr>@endforelse</tbody></table></div>
+</section>
+@elseif($area==='placements')
+<section class="panel">
+  <div class="panel-head"><div><h2>Placement allowlist &amp; frequency policy</h2><p>Only the two approved UI component types may be configured. Actual delivery also requires the independently approved environment flags.</p></div></div>
+  <div class="table-scroll"><table><thead><tr><th>SLOT</th><th>EXISTING COMPONENT</th><th>STATE</th><th>CAPS</th><th>REVISION</th><th>CONTROL</th></tr></thead>
+  <tbody>@foreach($slots as $slot)
+    <tr><td>{{ $slot->key }}</td><td>{{ $slot->component_name }} / Sponsored</td>
+      <td>{{ $slot->enabled?'Enabled':'Disabled' }}</td>
+      <td>{{ $slot->daily_decision_cap??'Unset' }} decisions / {{ $slot->daily_impression_cap??'Unset' }} impressions per day</td>
+      <td>{{ $slot->rule_version }}</td>
+      <td>@if(auth()->guard('admin')->user()?->canPerform('advertising.manage'))
+        <form method="post" action="{{ route('orbit.admin.advertising.placements.control',['placement'=>$slot->key]) }}">@csrf
+          <input name="rule_version" type="hidden" value="{{ $slot->rule_version }}">
+          <label>Status<select name="enabled"><option value="0">Disabled</option><option value="1" @selected($slot->enabled)>Enabled (only if approved)</option></select></label>
+          <label>Daily decisions cap<input type="number" name="daily_decision_cap" min="1" max="{{ config('orbit_advertising.max_cap_per_day') }}" value="{{ $slot->daily_decision_cap }}"></label>
+          <label>Daily impressions cap<input type="number" name="daily_impression_cap" min="1" max="{{ config('orbit_advertising.max_cap_per_day') }}" value="{{ $slot->daily_impression_cap }}"></label>
+          <label>Policy justification<input name="reason" minlength="10" maxlength="500" required></label>
+          <label><input type="checkbox" name="confirm" value="1" required> Confirm controls</label>
+          <button class="btn secondary">Save Placement</button>
+        </form>
+      @else Read-only @endif</td>
+    </tr>
+  @endforeach</tbody></table></div>
+</section>
+@elseif($area==='analytics')
+<section class="panel">
+  <div class="panel-head"><div><h2>Aggregate performance</h2><p>Counts are produced only from signed, accepted measurement receipts. No individual member logs, identifiers, device information or location data.</p></div></div>
+  <div class="stat-grid">
+    <article class="stat-card"><span class="stat-label">Verified impressions</span><strong>{{ number_format($counts['impressions']) }}</strong></article>
+    <article class="stat-card"><span class="stat-label">Verified clicks</span><strong>{{ number_format($counts['clicks']) }}</strong></article>
+  </div>
+  <div class="table-scroll"><table><thead><tr><th>DAY (UTC)</th><th>CAMPAIGN REF</th><th>PLACEMENT</th><th>IMPRESSIONS</th><th>CLICKS</th></tr></thead>
+  <tbody>@forelse($daily as $entry)
+    <tr><td>{{ $entry->day_utc }}</td><td><code>{{ substr($entry->campaign_id,0,8) }}…</code></td>
+      <td>{{ $entry->placement_key }}</td><td>{{ number_format($entry->impressions) }}</td><td>{{ number_format($entry->clicks) }}</td></tr>
+  @empty<tr><td colspan="5">No signed measurement events accepted.</td></tr>@endforelse</tbody></table></div>
+</section>
+@elseif($area==='audits')
+<section class="panel">
+  <div class="panel-head"><div><h2>Administrative audit trail</h2><p>Restricted to advertising.audit. All mutations retain actor, subject, reason, previous state and new state.</p></div></div>
+  <div class="table-scroll"><table><thead><tr><th>WHEN</th><th>ACTOR</th><th>ACTION</th><th>SUBJECT</th><th>OLD</th><th>NEW</th><th>REASON</th></tr></thead>
+    <tbody>@forelse($audits as $audit)
+      <tr><td>{{ $audit->created_at }}</td><td><code>{{ substr($audit->admin_id,0,8) }}…</code></td>
+        <td>{{ $audit->action }}</td><td>{{ $audit->subject_type }} / {{ $audit->subject_id }}</td>
+        <td>{{ $audit->old_state??'—' }}</td><td>{{ $audit->new_state??'—' }}</td>
+        <td>{{ $audit->reason }}</td></tr>
+    @empty<tr><td colspan="7">No advertising administration changes.</td></tr>@endforelse</tbody></table></div>
+</section>
+@endif
+@endif
+@endsection
