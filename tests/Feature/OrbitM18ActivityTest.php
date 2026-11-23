@@ -182,9 +182,50 @@ final class OrbitM18ActivityTest extends TestCase
         ]);
         $this->assertDatabaseHas('activity_admin_audits',[
             'action'=>'source.changed','subject_key'=>'source.moment',
+            'old_value'=>'enabled','new_value'=>'disabled',
         ]);
         $this->get('/admin/activity/audits')->assertOk()
             ->assertSee('Testing controlled source disablement');
+    }
+
+    public function test_projector_backfills_fresh_first_and_updates_source_revision(): void
+    {
+        [$owner,$dev,$token] = $this->principal();
+        $earlier = $this->checkIn($owner->id);
+        DB::table('checkins')->where('id',$earlier)->update([
+            'created_at'=>now()->subDays(10)]);
+        $latest = $this->checkIn($owner->id);
+        $first = app(ActivityProjector::class)->run(1);
+        $this->assertSame(1,$first['check_ins_added']);
+        $this->assertDatabaseHas('activity_events',[
+            'source_type'=>'check_in','source_id'=>$latest,
+        ]);
+        DB::table('checkins')->where('id',$latest)->update([
+            'audience_revision'=>2,
+        ]);
+        app(ActivityProjector::class)->run(20);
+        $this->assertDatabaseHas('activity_events',[
+            'source_type'=>'check_in','source_id'=>$latest,
+            'source_revision'=>2,
+        ]);
+    }
+
+    public function test_cursor_does_not_embed_readable_account_id(): void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $this->moment($owner->id);
+        $this->checkIn($owner->id);
+        app(ActivityProjector::class)->run(10);
+        $cursor=$this->withToken($token)
+            ->getJson('/api/v1/activity/feed?limit=1')
+            ->assertOk()->json('data.next_cursor');
+        $encoded=explode('.', (string)$cursor)[0];
+        $payload=base64_decode(strtr($encoded,'-_','+/'));
+        $this->assertIsString($payload);
+        $this->assertStringNotContainsString($owner->id,$payload);
+        $this->withToken($token)
+            ->getJson('/api/v1/activity/feed?limit=1&cursor='.urlencode($cursor))
+            ->assertOk();
     }
 
     public function test_capabilities_and_auth_are_fail_closed(): void

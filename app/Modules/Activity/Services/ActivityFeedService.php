@@ -11,7 +11,9 @@ final class ActivityFeedService
     /** Signed opaque viewer-bound pagination. A raw source ID never grants access. */
     private function cursor(string $viewer, object $row): string
     {
-        $json = json_encode(['v' => 1, 'u' => $viewer,
+        // Avoid embedding a readable member UUID inside the base64 cursor.
+        $viewerDigest = hash_hmac('sha256', $viewer, (string)config('app.key'));
+        $json = json_encode(['v' => 1, 'u' => $viewerDigest,
             'at' => (string) $row->occurred_at, 'id' => (string) $row->id,
             'iat' => time()], JSON_THROW_ON_ERROR);
         return rtrim(strtr(base64_encode($json), '+/', '-_'), '=').'.'
@@ -31,7 +33,8 @@ final class ActivityFeedService
                 $parts[1]), 422, 'Invalid Activity cursor.');
         $payload = json_decode($json, true);
         abort_unless(is_array($payload) && ($payload['v'] ?? null) === 1
-            && ($payload['u'] ?? null) === $viewer
+            && ($payload['u'] ?? null) === hash_hmac('sha256',
+                $viewer, (string)config('app.key'))
             && is_string($payload['at'] ?? null)
             && preg_match('/^[0-9a-f-]{36}$/iD', (string)($payload['id'] ?? ''))
             && is_int($payload['iat'] ?? null)

@@ -99,10 +99,10 @@
 @if($area==='audits' && auth()->guard('admin')->user()?->canPerform('activity.audit'))
   <section class="panel">
     <div class="panel-head"><div><h2>Administrative audit trail</h2><p>Access restricted to authorized Activity auditors.</p></div></div>
-    <div class="table-scroll"><table><thead><tr><th>WHEN</th><th>ACTION</th><th>SETTING</th><th>REASON</th></tr></thead>
+    <div class="table-scroll"><table><thead><tr><th>WHEN</th><th>ACTOR</th><th>ACTION</th><th>SETTING</th><th>FROM</th><th>TO</th><th>REASON</th></tr></thead>
     <tbody>@forelse($audits as $record)
-      <tr><td>{{ $record->created_at }}</td><td>{{ $record->action }}</td><td>{{ $record->subject_key }}</td><td>{{ $record->reason }}</td></tr>
-    @empty<tr><td colspan="4">No Activity administration changes recorded.</td></tr>@endforelse
+      <tr><td>{{ $record->created_at }}</td><td>{{ $record->admin_id }}</td><td>{{ $record->action }}</td><td>{{ $record->subject_key }}</td><td>{{ $record->old_value??'—' }}</td><td>{{ $record->new_value??'—' }}</td><td>{{ $record->reason }}</td></tr>
+    @empty<tr><td colspan="7">No Activity administration changes recorded.</td></tr>@endforelse
     </tbody></table></div>
   </section>
 @endif

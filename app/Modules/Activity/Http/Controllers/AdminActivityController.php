@@ -43,7 +43,8 @@ final class AdminActivityController extends Controller
             if ($area === 'audits') {
                 $audits = DB::table('activity_admin_audits')
                     ->orderByDesc('created_at')->limit(80)->get([
-                        'action','subject_key','reason','created_at',
+                        'action','subject_key','reason','admin_id',
+                        'old_value','new_value','created_at',
                     ]);
             }
         }
@@ -66,13 +67,15 @@ final class AdminActivityController extends Controller
         ], $rules));
     }
 
-    private function audit(string $action, string $key, string $reason): void
+    private function audit(string $action, string $key, string $reason,
+        ?string $oldValue = null, ?string $newValue = null): void
     {
         DB::table('activity_admin_audits')->insert([
             'id' => (string)Str::uuid7(),
             'admin_id' => (string)auth()->guard('admin')->id(),
             'action' => $action, 'subject_key' => $key,
             'reason' => trim($reason), 'created_at' => now(),
+            'old_value' => $oldValue, 'new_value' => $newValue,
         ]);
     }
 
@@ -83,12 +86,19 @@ final class AdminActivityController extends Controller
             'enabled' => ['required','boolean'],
         ]);
         DB::transaction(function () use ($data): void {
+            $current = DB::table('activity_controls')->where('key', $data['key'])
+                ->lockForUpdate()->first();
+            abort_unless($current !== null, 404);
+            $old = (bool)$current->enabled;
+            $new = (bool)$data['enabled'];
+            if ($old === $new) return; // No fake "changed" audit.
             DB::table('activity_controls')->where('key', $data['key'])->update([
-                'enabled' => (bool)$data['enabled'],
+                'enabled' => $new,
                 'updated_by' => (string)auth()->guard('admin')->id(),
                 'updated_at' => now(),
             ]);
-            $this->audit('source.changed', $data['key'], $data['reason']);
+            $this->audit('source.changed', $data['key'], $data['reason'],
+                $old ? 'enabled' : 'disabled', $new ? 'enabled' : 'disabled');
         }, 3);
         return back()->with('status', 'Activity source control updated and audited.');
     }

@@ -51,6 +51,7 @@ jobs:
         run: |
           find app/Modules/Activity -name '*.php' -print0 | xargs -0 -n1 php -l
           php -l database/migrations/2026_11_24_000001_create_orbit_m18_activity.php
+          php -l database/migrations/2026_11_24_000002_extend_m18_activity_admin_audits.php
           php -l config/orbit_activity.php
           php -l routes/api.php
           php -l routes/admin.php
@@ -61,9 +62,11 @@ jobs:
           php artisan migrate --force
       - name: Verify M18 rollback preserves M1-M17 source data
         run: |
+          php artisan migrate:rollback --force --path=database/migrations/2026_11_24_000002_extend_m18_activity_admin_audits.php
           php artisan migrate:rollback --force --path=database/migrations/2026_11_24_000001_create_orbit_m18_activity.php
           php artisan tinker --execute='if(\Illuminate\Support\Facades\Schema::hasTable("activity_events") || !\Illuminate\Support\Facades\Schema::hasTable("moments") || !\Illuminate\Support\Facades\Schema::hasTable("checkins") || !\Illuminate\Support\Facades\Schema::hasTable("moderation_cases")) throw new RuntimeException("M18 rollback is unsafe");'
           php artisan migrate --force --path=database/migrations/2026_11_24_000001_create_orbit_m18_activity.php
+          php artisan migrate --force --path=database/migrations/2026_11_24_000002_extend_m18_activity_admin_audits.php
       - name: Activity ACL, pagination, privacy and admin permissions
         run: php artisan test --compact tests/Feature/OrbitM18ActivityTest.php
       - name: M7 M12 M14 M17 regression

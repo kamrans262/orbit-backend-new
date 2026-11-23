@@ -44,7 +44,7 @@ final class ActivityProjector
                 $q->where(fn($q) => $q->whereNull('s.expires_at')
                     ->orWhere('s.expires_at', '>', now()));
             }
-            $rows = $q->orderBy('s.'.$spec['occurred'])
+            $rows = $q->orderByDesc('s.'.$spec['occurred'])
                 ->limit($batch)->get(['s.id','s.'.$spec['actor'],
                     's.'.$spec['revision'],'s.'.$spec['occurred']]);
             foreach ($rows as $row) {
@@ -79,8 +79,16 @@ final class ActivityProjector
             } else {
                 // Rotate verified rows so later rows cannot starve behind the
                 // same first batch during repeated scheduled reconciliations.
+                // Source audience revision may change after publication. Keep
+                // index metadata current without storing the grant or body.
+                $revision = DB::table($row->source_type === 'moment'
+                    ? 'moments' : 'checkins')
+                    ->where('id', $row->source_id)->value('audience_revision');
                 DB::table('activity_events')->where('id', $row->id)
-                    ->update(['updated_at' => now()]);
+                    ->update([
+                        'source_revision' => (int) ($revision ?? $row->source_revision),
+                        'updated_at' => now(),
+                    ]);
             }
         }
         DB::table('activity_projection_runs')->insert([
