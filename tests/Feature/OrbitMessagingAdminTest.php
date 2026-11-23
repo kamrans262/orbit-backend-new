@@ -17,6 +17,16 @@ final class OrbitMessagingAdminTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Operational route throttles share the same test-user signature
+        // across unrelated endpoints. This test verifies Admin RBAC, controls
+        // and audit semantics; rate limits require a separate isolated test.
+        // Production middleware and quotas remain entirely unchanged.
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+    }
+
     private function admin(array $permissions,string $name): AdminUser
     {
         $role=AdminRole::create([
