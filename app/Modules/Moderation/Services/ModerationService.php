@@ -429,7 +429,7 @@ final class ModerationService
         $this->assertReady();
         return DB::table('moderation_appeals')->where('appellant_id',$actor)
             ->orderByDesc('created_at')->limit(40)
-            ->get(['id','status','decision_code','created_at','decided_at'])
+            ->get(['id','action_id','status','decision_code','created_at','decided_at'])
             ->map(fn($r)=>(array)$r)->all();
     }
 

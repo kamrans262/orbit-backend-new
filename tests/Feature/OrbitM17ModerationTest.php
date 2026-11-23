@@ -398,7 +398,8 @@ final class OrbitM17ModerationTest extends TestCase
         $this->assertDatabaseMissing('messaging_send_restrictions',
             ['user_id'=>$target->id]);
         $this->withToken($targetToken)->getJson('/api/v1/me/moderation/appeals')
-            ->assertOk()->assertJsonPath('data.0.status','reversed');
+            ->assertOk()->assertJsonPath('data.0.status','reversed')
+            ->assertJsonPath('data.0.action_id',$action->id);
         $this->withToken($outsiderToken)->getJson('/api/v1/me/moderation/appeals')
             ->assertOk()->assertExactJson(['data'=>[]]);
     }
