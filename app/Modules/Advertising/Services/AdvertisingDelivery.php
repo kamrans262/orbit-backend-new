@@ -124,7 +124,7 @@ final class AdvertisingDelivery
             if ($event==='impression') {
                 // A network decision is never automatically counted as a view.
                 // The threshold is policy-gated until product approval.
-                abort_unless($visibleMs!==null && $visibleMs>=1000,422,
+                abort_unless($visibleMs!==null && $visibleMs >= (int)config('orbit_advertising.minimum_visible_ms'),422,
                     'Viewability evidence insufficient.');
             } else {
                 abort_unless($d->impression_at!==null,422,'Click requires a verified impression.');

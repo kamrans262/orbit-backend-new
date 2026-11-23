@@ -16,6 +16,8 @@ return [
     'max_cap_per_day' => 20, // Validation ceiling, NOT an activated policy.
     'retention_approved' => (bool) env('ORBIT_M20_RETENTION_APPROVED', false),
     'age_protection_approved' => (bool) env('ORBIT_M20_AGE_POLICY_APPROVED', false),
+    'minimum_visible_ms' => env('ORBIT_M20_MIN_VISIBLE_MS') === null
+        ? null : (int)env('ORBIT_M20_MIN_VISIBLE_MS'),
     'viewability_approved' => (bool) env('ORBIT_M20_VIEWABILITY_APPROVED', false),
     'privacy_approved' => (bool) env('ORBIT_M20_PRIVACY_POLICY_APPROVED', false),
 ];

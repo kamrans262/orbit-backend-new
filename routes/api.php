@@ -34,6 +34,7 @@ use App\Modules\Notifications\Http\Controllers\NotificationController;
 use App\Modules\Plans\Http\Controllers\PlanController;
 use App\Modules\Safety\Http\Controllers\SosController;
 use App\Modules\Activity\Http\Controllers\ActivityController;
+use App\Modules\Advertising\Http\Controllers\AdvertisingController;
 use App\Modules\Moderation\Http\Controllers\ModerationController;
 
 Route::prefix('v1')->group(function (): void {
@@ -56,6 +57,18 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:120,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        // M20: first-party sponsored placements. Always disabled without
+        // explicit content, privacy and frequency approvals.
+        Route::get('/ads/capabilities',[AdvertisingController::class,'capabilities'])
+            ->middleware('throttle:20,1');
+        Route::post('/ads/decisions',[AdvertisingController::class,'decide'])
+            ->middleware('throttle:30,1');
+        Route::post('/ads/measurements',[AdvertisingController::class,'measure'])
+            ->middleware('throttle:60,1');
+        Route::get('/ads/creatives/{creative}/asset',[AdvertisingController::class,'asset'])
+            ->whereUuid('creative')->middleware('throttle:60,1')
+            ->name('orbit.api.ads.asset');
+
         // M18: private, source-authorized activity pointers; never the M14 inbox.
         Route::get('/activity/capabilities',[ActivityController::class,'capabilities'])
             ->middleware('throttle:30,1');

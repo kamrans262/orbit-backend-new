@@ -29,7 +29,9 @@ final class AdvertisingPolicy
         return config('orbit_advertising.retention_approved') === true
             && config('orbit_advertising.privacy_approved') === true
             && config('orbit_advertising.age_protection_approved') === true
-            && config('orbit_advertising.viewability_approved') === true;
+            && config('orbit_advertising.viewability_approved') === true
+            && is_int(config('orbit_advertising.minimum_visible_ms'))
+            && config('orbit_advertising.minimum_visible_ms') > 0;
     }
 
     public function available(): bool
