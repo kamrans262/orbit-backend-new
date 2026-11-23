@@ -100,7 +100,7 @@ final class AdvertisingDelivery
                     // Never charge a second window debit or choose a new ad.
                     $same=DB::table('ad_decisions')->where('viewer_digest',$digest)
                         ->where('placement_key',$placement)
-                        ->where('request_id',$requestId)->first();
+                        ->where('request_id',$requestId)->lockForUpdate()->first();
                     return $same ? $this->present($same) : null;
                 }
                 DB::table('ad_frequency_windows')->where('id',$window->id)->update([
