@@ -93,3 +93,15 @@ git fetch origin && git switch feature/m16-sos-safety-flutter-2026-11-23 && git 
 “**SOS registered with Orbit**” means HTTPS intake accepted. “**Push accepted by provider**” means only FCM accepted a message. “**Responder acknowledged**” requires the authenticated responder's server-side acknowledgement. None means emergency services were called, that a phone visibly displayed an alert, or that a responder arrived.
 
 **Conclusion:** The Stage 4 **engineering code/CI audit and identified local fixes are complete**. **M16 safety release certification and full original PRD/TRD sign-off remain blocked**; do not deploy or advertise SOS as a dependable emergency service yet.
+
+## Stage 4 final reconciliation: closed-alert lifecycle
+
+The follow-up audit identified one backend display-contract defect: historical `resolved` and `cancelled` incidents could still report `in_app_available_for_eligible_responders=true`. Commit `2159bb26def3d900765494a3dec01fd7d3668856` corrects `SosService::present` to advertise active responder availability **only** while the incident is active, while keeping historical acknowledgement counts. A dedicated test covers both cancellation and resolution and both initiator/responder reads.
+
+**Verified:** M16 Laravel job https://github.com/kamrans262/orbit-backend-new/actions/runs/45193257770/job/137756872431 passed **10 SOS feature tests / 105 assertions** and **72 regression tests / 765 assertions** with fresh MariaDB migrations, syntax and route contract checks.
+
+**Flutter source:** `feature/m16-sos-safety-flutter-2026-11-23`; already-approved SOS hold UI, shared Orbit modal/components and navigation are preserved. The updated Flutter workflow now attempts Android and unsigned iOS compile jobs independently; real-device SOS delivery remains unverified.
+
+**Companion handoff:** `Orbit_M16_Stage4_Traceability_Readiness_2026-11-23.xlsx` contains a provisional 36-control requirements/engineering matrix, release gates, 12 device QA scenarios and minimal non-deployment commands. This is not an exact original PRD/TRD source map, since the original client PDF/DOCX were unavailable.
+
+**Production safety:** No production backup, migration, cron, push-credential change, merge, app store publication or deployment was executed. Do not run migrations on the live Hostinger database, or claim emergency-service capability, before explicit user authorization, original requirement decisions and live phone/worker/provider validation. Keep the first M16 production backup at the start of its initial authorized deployment only; no repetitive backups per development stage.
