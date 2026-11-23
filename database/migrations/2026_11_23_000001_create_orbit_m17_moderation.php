@@ -65,6 +65,16 @@ return new class extends Migration {
             $t->index(['case_id','id']);
             $t->foreign('case_id')->references('id')->on('moderation_cases')->restrictOnDelete();
         });
+        Schema::create('moderation_case_notes', function (Blueprint $t): void {
+            $t->uuid('id')->primary();
+            $t->uuid('case_id');
+            $t->uuid('admin_id');
+            $t->text('note_enc');
+            $t->timestamp('created_at')->useCurrent();
+            $t->index(['case_id','created_at']);
+            $t->foreign('case_id')->references('id')->on('moderation_cases')->restrictOnDelete();
+            $t->foreign('admin_id')->references('id')->on('admin_users')->restrictOnDelete();
+        });
         Schema::create('moderation_actions', function (Blueprint $t): void {
             $t->uuid('id')->primary();
             $t->uuid('case_id');
@@ -138,7 +148,8 @@ return new class extends Migration {
     {
         // Rollback only M17-owned tables; never drop or alter M4/M7/M13/M16.
         foreach (['moderation_control_audits','moderation_controls','moderation_evidence_access',
-            'moderation_appeals','moderation_actions','moderation_case_events',
+            'moderation_appeals','moderation_actions','moderation_case_notes',
+            'moderation_case_events',
             'moderation_case_sources','moderation_cases','moderation_reports'] as $table) {
             Schema::dropIfExists($table);
         }

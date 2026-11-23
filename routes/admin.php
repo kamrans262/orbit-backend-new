@@ -79,6 +79,10 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
             ->whereUuid('case')->middleware([
                 RequireAdminPermission::class.':moderation.triage','throttle:10,1'])
             ->name('moderation.cases.transition');
+        Route::post('/moderation/cases/{case}/notes',[AdminModerationController::class,'addNote'])
+            ->whereUuid('case')->middleware([
+                RequireAdminPermission::class.':moderation.triage','throttle:10,1'])
+            ->name('moderation.cases.notes');
         Route::post('/moderation/cases/{case}/enforce',[AdminModerationController::class,'enforce'])
             ->whereUuid('case')->middleware([
                 RequireAdminPermission::class.':moderation.decide','throttle:6,1'])

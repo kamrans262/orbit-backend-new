@@ -123,6 +123,21 @@
       </form>
     @endif
   </section>
+  @if(auth()->guard('admin')->user()?->canPerform('moderation.triage'))
+  <section class="panel">
+    <div class="panel-head"><div><h2>Investigation notes</h2><p>Reviewer-only notes are encrypted at rest, omitted from case searches, and never forwarded to push notifications or reported members.</p></div></div>
+    <form method="post" action="{{ route('orbit.admin.moderation.cases.notes',['case'=>$case->id]) }}">@csrf
+      <input type="hidden" name="revision" value="{{ $case->revision }}">
+      <label>Confidential review note<textarea name="note" required minlength="10" maxlength="2000" rows="4" placeholder="Record the reasoned assessment and evidence ticket, not copied private chat transcripts"></textarea></label>
+      <label><input type="checkbox" name="confirm" value="1" required> Confirm this audit-linked private note</label>
+      <button class="btn secondary" type="submit">Save review note</button>
+    </form>
+    <div class="table-scroll"><table><thead><tr><th>RECORDED</th><th>REVIEW NOTE</th></tr></thead><tbody>
+      @forelse($notes as $note)<tr><td>{{ $note->created_at }}</td><td>{{ $note->note }}</td></tr>
+      @empty<tr><td colspan="2">No investigator notes yet.</td></tr>@endforelse
+    </tbody></table></div>
+  </section>
+  @endif
   @if($case->status==='investigating' && auth()->guard('admin')->user()?->canPerform('moderation.decide'))
   <section class="panel">
     <div class="panel-head"><div><h2>Reviewed enforcement</h2><p>Only warning and messaging-send restriction are implemented; account-wide suspensions and Moment restriction stay in their original gated modules. SOS cannot be disabled here.</p></div></div>

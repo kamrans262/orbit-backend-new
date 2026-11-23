@@ -30,7 +30,7 @@ final class AdminModerationController extends Controller
             'actioned'=>0,'dismissed'=>0,'appeals'=>0,'active_actions'=>0];
         $cases=collect();$events=collect();$actions=collect();$appeals=collect();
         $case=null;$controls=collect();$assignable=collect();$sources=collect();
-        $controlAudits=collect();
+        $controlAudits=collect();$notes=collect();
         if($ready){
             foreach(DB::table('moderation_cases')->select('status')
                 ->selectRaw('COUNT(*) as total')->groupBy('status')->get() as $entry){
@@ -66,6 +66,15 @@ final class AdminModerationController extends Controller
                     ->orderByDesc('created_at')->limit(15)->get([
                         'id','scope','status','reason_code','ends_at','created_at',
                     ]);
+                if($this->auth()->canPerform('moderation.triage')){
+                    $notes=DB::table('moderation_case_notes')->where('case_id',$case->id)
+                        ->orderByDesc('created_at')->limit(30)->get([
+                            'id','note_enc','created_at',
+                        ])->map(fn($n)=>(object)[
+                            'id'=>$n->id,'note'=>\Illuminate\Support\Facades\Crypt::decryptString(
+                                $n->note_enc),'created_at'=>$n->created_at,
+                        ]);
+                }
                 $assignable=\App\Models\AdminUser::query()->where('status','active')
                     ->orderBy('name')->get()->filter(fn($u)=>$u->canPerform('moderation.triage'));
             }
@@ -90,7 +99,7 @@ final class AdminModerationController extends Controller
         }
         return response()->view('orbit-admin.moderation',compact(
             'area','ready','counts','cases','case','events','actions','appeals',
-            'controls','assignable','sources','controlAudits'))
+            'controls','assignable','sources','controlAudits','notes'))
             ->header('Cache-Control','private, no-store');
     }
 
@@ -122,6 +131,18 @@ final class AdminModerationController extends Controller
         $this->moderation->transition($case,$this->auth()->id,(int)$d['revision'],
             $d['action'],$d['reason'],$d['assign_to']??null);
         return $this->redirectCase($case,'Case decision recorded and audited.');
+    }
+
+    public function addNote(Request $r,string $case):RedirectResponse
+    {
+        $d=$r->validate([
+            'revision'=>['required','integer','min:1'],
+            'note'=>['required','string','min:10','max:2000'],
+            'confirm'=>['required','accepted'],
+        ]);
+        $this->moderation->addNote($case,$this->auth()->id,
+            (int)$d['revision'],$d['note']);
+        return $this->redirectCase($case,'Confidential review note stored and audited.');
     }
 
     public function enforce(Request $r,string $case):RedirectResponse
@@ -189,6 +210,12 @@ final class AdminModerationController extends Controller
         $r->validate(['confirm'=>['required','accepted'],
             'reason'=>['required','string','min:10','max:300']]);
         $stats=$this->moderation->syncSources(40);
+        DB::table('moderation_control_audits')->insert([
+            'id'=>(string)Str::uuid7(),'admin_id'=>$this->auth()->id,
+            'key'=>'report_reference_sync','old_value'=>'requested',
+            'new_value'=>'completed','reason_digest'=>hash('sha256',
+                trim((string)$r->input('reason'))),'created_at'=>now(),
+        ]);
         return redirect()->route('orbit.admin.moderation.overview')
             ->with('status','Legacy report sync: '.json_encode($stats).'. No private evidence copied.');
     }

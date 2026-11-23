@@ -262,6 +262,38 @@ final class OrbitM17ModerationTest extends TestCase
             ->assertOk()->assertExactJson(['data'=>[]]);
     }
 
+    public function test_case_notes_are_encrypted_reviewer_only_and_revision_guarded():void
+    {
+        [$reporter,$d,$token]=$this->principal();
+        [$target]=$this->principal();
+        $this->report($token,$target->id);
+        $case=DB::table('moderation_cases')->first();
+        $reader=$this->admin(['moderation.read']);
+        $this->actingAs($reader,'admin')->get('/admin/moderation/cases/'.$case->id)
+            ->assertOk()->assertDontSee('Investigation notes');
+        $this->actingAs($reader,'admin')->post(
+            '/admin/moderation/cases/'.$case->id.'/notes',[
+                'revision'=>1,'note'=>'Confidential review assessment','confirm'=>1,
+            ])->assertForbidden();
+        $reviewer=$this->admin(['moderation.read','moderation.triage']);
+        $this->actingAs($reviewer,'admin')->post(
+            '/admin/moderation/cases/'.$case->id.'/notes',[
+                'revision'=>1,'note'=>'Confidential review assessment','confirm'=>1,
+            ])->assertRedirect();
+        $row=DB::table('moderation_case_notes')->first();
+        $this->assertNotSame('Confidential review assessment',$row->note_enc);
+        $this->assertSame('Confidential review assessment',
+            Crypt::decryptString($row->note_enc));
+        $this->actingAs($reviewer,'admin')->post(
+            '/admin/moderation/cases/'.$case->id.'/notes',[
+                'revision'=>1,'note'=>'Confidential new stale note','confirm'=>1,
+            ])->assertStatus(409);
+        $this->actingAs($reader,'admin')->get('/admin/moderation/cases/'.$case->id)
+            ->assertOk()->assertDontSee('Confidential review assessment');
+        $this->actingAs($reviewer,'admin')->get('/admin/moderation/cases/'.$case->id)
+            ->assertOk()->assertSee('Confidential review assessment');
+    }
+
     public function test_admin_sidebar_and_controls_never_grant_evidence_access():void
     {
         $admin=$this->admin(['moderation.read','moderation.audit']);

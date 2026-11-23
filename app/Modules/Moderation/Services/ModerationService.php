@@ -25,7 +25,8 @@ final class ModerationService
     public function installed(): bool
     {
         foreach (['moderation_reports','moderation_cases','moderation_case_sources',
-            'moderation_case_events','moderation_actions','moderation_appeals',
+            'moderation_case_events','moderation_case_notes','moderation_actions',
+            'moderation_appeals',
             'moderation_evidence_access','moderation_controls',
             'moderation_control_audits'] as $table) {
             if (!Schema::hasTable($table)) return false;
@@ -231,6 +232,27 @@ final class ModerationService
             DB::table('moderation_cases')->where('id',$id)->update($updates);
             $this->event($id,'admin',$admin,'case.'.$action,$reason,$revision+1);
             return DB::table('moderation_cases')->where('id',$id)->first();
+        },3);
+    }
+
+    /** Confidential investigator note. Never copied to global audit or response. */
+    public function addNote(string $id,string $admin,int $revision,string $text): void
+    {
+        $this->assertReady();
+        abort_unless(trim($text)!=='',422,'A review note is required.');
+        DB::transaction(function()use($id,$admin,$revision,$text):void {
+            $case=DB::table('moderation_cases')->where('id',$id)
+                ->lockForUpdate()->first()??abort(404,'Case unavailable.');
+            abort_unless((int)$case->revision===$revision,409,
+                'Case changed. Refresh before saving your note.');
+            DB::table('moderation_case_notes')->insert([
+                'id'=>(string)Str::uuid7(),'case_id'=>$id,'admin_id'=>$admin,
+                'note_enc'=>Crypt::encryptString(trim($text)),'created_at'=>now(),
+            ]);
+            DB::table('moderation_cases')->where('id',$id)->update([
+                'revision'=>$revision+1,'updated_at'=>now(),
+            ]);
+            $this->event($id,'admin',$admin,'case.note_added','review_note',$revision+1);
         },3);
     }
 
