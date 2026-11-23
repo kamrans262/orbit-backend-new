@@ -26,7 +26,8 @@ final class ModerationService
     {
         foreach (['moderation_reports','moderation_cases','moderation_case_sources',
             'moderation_case_events','moderation_actions','moderation_appeals',
-            'moderation_evidence_access','moderation_controls'] as $table) {
+            'moderation_evidence_access','moderation_controls',
+            'moderation_control_audits'] as $table) {
             if (!Schema::hasTable($table)) return false;
         }
         return true;
@@ -262,16 +263,18 @@ final class ModerationService
                     'action'=>'suspend','reason'=>$reason,'duration'=>$duration,
                 ]);
             }
-            $ends=match($duration){
-                '1h'=>now()->addHour(),'24h'=>now()->addDay(),
-                '7d'=>now()->addDays(7),'30d'=>now()->addDays(30),
-                default=>null,
-            };
+            // Store the exact restriction expiry from the existing M13
+            // service; independently calculating now() would make appeal
+            // reversal compare a different timestamp.
+            $ends=$scope==='messaging_send'
+                ?DB::table('messaging_send_restrictions')
+                    ->where('user_id',$case->subject_user_id)->value('ends_at')
+                :null;
             $actionId=(string)Str::uuid7();
             DB::table('moderation_actions')->insert([
                 'id'=>$actionId,'case_id'=>$id,'subject_user_id'=>$case->subject_user_id,
                 'scope'=>$scope,'reason_code'=>$reason,'duration'=>$duration,
-                'ends_at'=>$scope==='warning'?null:$ends,
+                'ends_at'=>$ends,
                 'status'=>'active','issued_by'=>$admin,'created_at'=>now(),
             ]);
             DB::table('moderation_cases')->where('id',$id)->update([

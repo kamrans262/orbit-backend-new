@@ -120,6 +120,16 @@ return new class extends Migration {
             $t->timestamps();
             $t->foreign('updated_by')->references('id')->on('admin_users')->nullOnDelete();
         });
+        Schema::create('moderation_control_audits',function (Blueprint $t):void {
+            $t->uuid('id')->primary();
+            $t->uuid('admin_id');
+            $t->string('key',48);
+            $t->string('old_value',80);
+            $t->string('new_value',80);
+            $t->char('reason_digest',64);
+            $t->timestamp('created_at')->useCurrent();
+            $t->foreign('admin_id')->references('id')->on('admin_users')->restrictOnDelete();
+        });
         DB::table('moderation_controls')->insert([
             ['key'=>'enforcement_enabled','value'=>'0','created_at'=>now(),'updated_at'=>now()],
         ]);
@@ -127,7 +137,7 @@ return new class extends Migration {
     public function down(): void
     {
         // Rollback only M17-owned tables; never drop or alter M4/M7/M13/M16.
-        foreach (['moderation_controls','moderation_evidence_access',
+        foreach (['moderation_control_audits','moderation_controls','moderation_evidence_access',
             'moderation_appeals','moderation_actions','moderation_case_events',
             'moderation_case_sources','moderation_cases','moderation_reports'] as $table) {
             Schema::dropIfExists($table);
