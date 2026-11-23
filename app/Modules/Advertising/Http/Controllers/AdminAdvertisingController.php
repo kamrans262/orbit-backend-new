@@ -4,6 +4,7 @@ namespace App\Modules\Advertising\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Advertising\Services\AdvertisingPolicy;
+use App\Modules\Advertising\Services\AdvertisingCreativeRevisionHistory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -250,6 +251,7 @@ final class AdminAdvertisingController extends Controller
                     'status'=>'pending','submitted_by'=>$this->admin()->id,
                     'created_at'=>now('UTC'),'updated_at'=>now('UTC'),
                 ]);
+                app(AdvertisingCreativeRevisionHistory::class)->capture($id);
                 $this->audit('creative.submitted','creative',$id,$data['reason'],null,'pending:1');
             },3);
         } catch (\Throwable $e) { Storage::disk('local')->delete($path); throw $e; }
@@ -278,6 +280,7 @@ final class AdminAdvertisingController extends Controller
                     'reviewed_by'=>null,'reviewed_at'=>null,'rejection_reason'=>null,
                     'updated_at'=>now('UTC'),
                 ]);
+                app(AdvertisingCreativeRevisionHistory::class)->capture($creative);
                 $this->audit('creative.revised','creative',$creative,$data['reason'],
                     $old->status.':'.$old->revision,'pending:'.$revision);
             },3);
@@ -305,6 +308,9 @@ final class AdminAdvertisingController extends Controller
                 'rejection_reason'=>$data['action']==='rejected'?$data['reason']:null,
                 'updated_at'=>now('UTC'),
             ]);
+            app(AdvertisingCreativeRevisionHistory::class)->review(
+                $creative,(int)$row->revision,$data['action'],$this->admin()->id,
+                $data['action']==='rejected'?$data['reason']:null);
             $this->audit('creative.review','creative',$creative,$data['reason'],
                 'pending:'.$row->revision,$data['action'].':'.$row->revision);
         },3);

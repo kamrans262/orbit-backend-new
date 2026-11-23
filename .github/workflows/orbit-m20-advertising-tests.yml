@@ -51,6 +51,7 @@ jobs:
           find app/Modules/Advertising -name '*.php' -print0 | xargs -0 -n1 php -l
           php -l config/orbit_advertising.php
           php -l database/migrations/2026_11_24_010000_create_orbit_m20_advertising.php
+          php -l database/migrations/2026_11_24_010100_create_orbit_m20_creative_revision_history.php
           php -l routes/api.php
           php -l routes/admin.php
           php -l tests/Feature/OrbitM20AdvertisingTest.php
@@ -59,9 +60,12 @@ jobs:
           php artisan migrate --force
       - name: Non-destructive M20 migration rollback and replay
         run: |
+          php artisan migrate:rollback --force --path=database/migrations/2026_11_24_010100_create_orbit_m20_creative_revision_history.php
+          php artisan tinker --execute='if(\Illuminate\Support\Facades\Schema::hasTable("ad_creative_revisions") || !\Illuminate\Support\Facades\Schema::hasTable("ad_creatives")) throw new RuntimeException("Unsafe Stage 4 rollback");'
           php artisan migrate:rollback --force --path=database/migrations/2026_11_24_010000_create_orbit_m20_advertising.php
           php artisan tinker --execute='if(\Illuminate\Support\Facades\Schema::hasTable("ad_sponsors") || !\Illuminate\Support\Facades\Schema::hasTable("activity_events") || !\Illuminate\Support\Facades\Schema::hasTable("moments") || !\Illuminate\Support\Facades\Schema::hasTable("moderation_cases")) throw new RuntimeException("Unsafe M20 rollback");'
           php artisan migrate --force --path=database/migrations/2026_11_24_010000_create_orbit_m20_advertising.php
+          php artisan migrate --force --path=database/migrations/2026_11_24_010100_create_orbit_m20_creative_revision_history.php
       - name: M20 delivery, privacy, creative safety, Admin/RBAC and reporting
         run: php artisan test --compact tests/Feature/OrbitM20AdvertisingTest.php
       - name: Preserve M4 M7 M12 M13 M14 M17 M18 behavior

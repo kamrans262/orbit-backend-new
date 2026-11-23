@@ -352,6 +352,10 @@ final class OrbitM20AdvertisingTest extends TestCase
         $this->assertNotNull($creative);
         $this->assertSame('pending',$creative->status);
         $this->assertSame('image/png',$creative->mime);
+        $this->assertDatabaseHas('ad_creative_revisions',[
+            'creative_id'=>$creative->id,'revision'=>1,'status'=>'pending',
+            'title'=>'Original Sponsor Artwork',
+        ]);
         Storage::disk('local')->assertExists($creative->private_path);
         $this->post('/admin/advertising/creatives/'.$creative->id.'/review',[
             'revision'=>1,'action'=>'approved',
@@ -372,6 +376,10 @@ final class OrbitM20AdvertisingTest extends TestCase
             'id'=>$creative->id,'revision'=>1,'status'=>'approved',
             'reviewed_by'=>$reviewer->id,
         ]);
+        $this->assertDatabaseHas('ad_creative_revisions',[
+            'creative_id'=>$creative->id,'revision'=>1,'status'=>'approved',
+            'reviewed_by'=>$reviewer->id,
+        ]);
 
         $this->be($manager,'admin');
         $data['title']='Revised Creative Artwork';
@@ -381,6 +389,16 @@ final class OrbitM20AdvertisingTest extends TestCase
         $this->assertDatabaseHas('ad_creatives',[
             'id'=>$creative->id,'revision'=>2,'status'=>'pending','reviewed_by'=>null,
         ]);
+        $this->assertDatabaseHas('ad_creative_revisions',[
+            'creative_id'=>$creative->id,'revision'=>1,'status'=>'approved',
+            'title'=>'Original Sponsor Artwork',
+        ]);
+        $this->assertDatabaseHas('ad_creative_revisions',[
+            'creative_id'=>$creative->id,'revision'=>2,'status'=>'pending',
+            'title'=>'Revised Creative Artwork',
+        ]);
+        $this->assertSame(2,DB::table('ad_creative_revisions')
+            ->where('creative_id',$creative->id)->count());
     }
 
     public function test_campaign_edits_invalidate_approval_and_scheduled_state_is_time_scoped(): void
