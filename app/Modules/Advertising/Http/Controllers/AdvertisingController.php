@@ -43,6 +43,10 @@ final class AdvertisingController extends Controller
             'available'=>$this->policy->available(),
             'placements'=>$slots,
             'measurement_mode'=>'signed_receipt',
+            // Client must count genuine foreground exposure using the exact
+            // server-approved duration. Never guess a billing threshold.
+            'minimum_visible_ms'=>$this->policy->available()
+                ? (int)config('orbit_advertising.minimum_visible_ms') : null,
             'schema_version'=>1,
         ]);
     }
