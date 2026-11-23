@@ -18,6 +18,7 @@ use App\Modules\Messaging\Http\Controllers\AdminMessagingController;
 use App\Modules\Notifications\Http\Controllers\AdminNotificationController;
 use App\Modules\Plans\Http\Controllers\AdminPlanController;
 use App\Modules\Safety\Http\Controllers\AdminSosController;
+use App\Modules\Moderation\Http\Controllers\AdminModerationController;
 use App\Modules\Config\Http\Middleware\EnsureAdmin;
 use App\Modules\Config\Http\Middleware\RequireAdminPermission;
 
@@ -53,12 +54,62 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
                 'notifications.read' => 'orbit.admin.notifications.overview',
                 'plans.read' => 'orbit.admin.plans.overview',
                 'safety.read' => 'orbit.admin.safety.overview',
+                'moderation.read' => 'orbit.admin.moderation.overview',
             ] as $permission => $route) {
                 if ($permission === 'circles.read' && config('orbit_circle.enabled') !== true) continue;
                 if ($actor?->canPerform($permission)) return redirect()->route($route);
             }
             abort(403);
         })->name('landing');
+
+        // M17: first-class, independently permissioned Moderation workspace.
+        Route::get('/moderation',[AdminModerationController::class,'overview'])
+            ->middleware(RequireAdminPermission::class.':moderation.read')
+            ->name('moderation.overview');
+        Route::get('/moderation/queue',[AdminModerationController::class,'queue'])
+            ->middleware(RequireAdminPermission::class.':moderation.read')
+            ->name('moderation.queue');
+        Route::get('/moderation/cases',[AdminModerationController::class,'cases'])
+            ->middleware(RequireAdminPermission::class.':moderation.read')
+            ->name('moderation.cases');
+        Route::get('/moderation/cases/{case}',[AdminModerationController::class,'detail'])
+            ->whereUuid('case')->middleware(RequireAdminPermission::class.':moderation.read')
+            ->name('moderation.cases.show');
+        Route::post('/moderation/cases/{case}/transition',[AdminModerationController::class,'transition'])
+            ->whereUuid('case')->middleware([
+                RequireAdminPermission::class.':moderation.triage','throttle:10,1'])
+            ->name('moderation.cases.transition');
+        Route::post('/moderation/cases/{case}/enforce',[AdminModerationController::class,'enforce'])
+            ->whereUuid('case')->middleware([
+                RequireAdminPermission::class.':moderation.decide','throttle:6,1'])
+            ->name('moderation.cases.enforce');
+        Route::post('/moderation/cases/{case}/evidence',[AdminModerationController::class,'evidence'])
+            ->whereUuid('case')->middleware([
+                RequireAdminPermission::class.':moderation.evidence','throttle:6,1'])
+            ->name('moderation.cases.evidence');
+        Route::get('/moderation/actions',[AdminModerationController::class,'actions'])
+            ->middleware(RequireAdminPermission::class.':moderation.read')
+            ->name('moderation.actions');
+        Route::get('/moderation/appeals',[AdminModerationController::class,'appeals'])
+            ->middleware(RequireAdminPermission::class.':moderation.read')
+            ->name('moderation.appeals');
+        Route::post('/moderation/appeals/{appeal}/decision',
+            [AdminModerationController::class,'decideAppeal'])
+            ->whereUuid('appeal')->middleware([
+                RequireAdminPermission::class.':moderation.appeals','throttle:6,1'])
+            ->name('moderation.appeals.decision');
+        Route::get('/moderation/settings',[AdminModerationController::class,'settings'])
+            ->middleware(RequireAdminPermission::class.':moderation.read')
+            ->name('moderation.settings');
+        Route::post('/moderation/settings',[AdminModerationController::class,'saveControl'])
+            ->middleware([RequireAdminPermission::class.':moderation.manage','throttle:5,1'])
+            ->name('moderation.settings.save');
+        Route::post('/moderation/sync',[AdminModerationController::class,'sync'])
+            ->middleware([RequireAdminPermission::class.':moderation.manage','throttle:5,1'])
+            ->name('moderation.sync');
+        Route::get('/moderation/audits',[AdminModerationController::class,'audits'])
+            ->middleware(RequireAdminPermission::class.':moderation.audit')
+            ->name('moderation.audits');
 
         // M14 is a first-class operations area, NOT a submenu under
         // Accounts or Configurations. Admin roles are explicit and audited.

@@ -33,6 +33,7 @@ use App\Modules\Messaging\Http\Middleware\MessagingOperationalTelemetry;
 use App\Modules\Notifications\Http\Controllers\NotificationController;
 use App\Modules\Plans\Http\Controllers\PlanController;
 use App\Modules\Safety\Http\Controllers\SosController;
+use App\Modules\Moderation\Http\Controllers\ModerationController;
 
 Route::prefix('v1')->group(function (): void {
     // M1 mobile configuration: public rollout hints, not an authorization source.
@@ -54,6 +55,23 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:120,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        // M17: M4/M7/M13 report endpoints remain unchanged. Account reporting
+        // and appeal receipts are scoped to a trusted, authenticated device.
+        Route::get('/moderation/capabilities',[ModerationController::class,'capabilities'])
+            ->middleware('throttle:30,1');
+        Route::post('/moderation/reports',[ModerationController::class,'submit'])
+            ->middleware('throttle:30,1');
+        Route::get('/me/moderation/reports',[ModerationController::class,'reports'])
+            ->middleware('throttle:30,1');
+        Route::get('/moderation/reports/{report}',[ModerationController::class,'report'])
+            ->whereUuid('report')->middleware('throttle:30,1');
+        Route::get('/me/moderation/actions',[ModerationController::class,'actions'])
+            ->middleware('throttle:30,1');
+        Route::post('/moderation/actions/{action}/appeals',[ModerationController::class,'appeal'])
+            ->whereUuid('action')->middleware('throttle:15,1');
+        Route::get('/me/moderation/appeals',[ModerationController::class,'appeals'])
+            ->middleware('throttle:30,1');
+
         // M16: SOS remains free. Never report an alert delivered at HTTP acceptance.
         Route::get('/sos/capabilities',[SosController::class,'capabilities'])->middleware('throttle:40,1');
         Route::get('/sos/incidents',[SosController::class,'index'])->middleware('throttle:30,1');

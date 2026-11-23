@@ -101,6 +101,31 @@
     ];
   }
 
+  // M17 uses the already approved sidebar and icon partial; it is separate
+  // from Accounts, Messaging and Configurations, with no new visual system.
+  if ($navUser?->canPerform('moderation.read')) {
+    $moderationChildren = [
+      ['title'=>'Overview','route'=>'orbit.admin.moderation.overview',
+        'patterns'=>['orbit.admin.moderation.overview']],
+      ['title'=>'Report Queue','route'=>'orbit.admin.moderation.queue',
+        'patterns'=>['orbit.admin.moderation.queue']],
+      ['title'=>'Cases & Investigations','route'=>'orbit.admin.moderation.cases',
+        'patterns'=>['orbit.admin.moderation.cases','orbit.admin.moderation.cases.*']],
+      ['title'=>'Enforcement Actions','route'=>'orbit.admin.moderation.actions',
+        'patterns'=>['orbit.admin.moderation.actions']],
+      ['title'=>'Appeals','route'=>'orbit.admin.moderation.appeals',
+        'patterns'=>['orbit.admin.moderation.appeals','orbit.admin.moderation.appeals.*']],
+      ['title'=>'Settings','route'=>'orbit.admin.moderation.settings',
+        'patterns'=>['orbit.admin.moderation.settings*']],
+    ];
+    if ($navUser->canPerform('moderation.audit')) {
+      $moderationChildren[]=['title'=>'Audit Trail','route'=>'orbit.admin.moderation.audits',
+        'patterns'=>['orbit.admin.moderation.audits']];
+    }
+    $navGroups[]=['title'=>'Moderation & Reporting','icon'=>'messages',
+      'patterns'=>['orbit.admin.moderation.*'],'children'=>$moderationChildren];
+  }
+
   // M16 Safety: standalone first-class emergency operations, never nested
   // in Accounts/Configurations and never displaying private coordinates.
   if ($navUser?->canPerform('safety.read')) {

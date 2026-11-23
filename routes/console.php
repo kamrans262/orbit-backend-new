@@ -174,3 +174,19 @@ Artisan::command('orbit:sos:dispatch', function () {
     $this->info('SOS delivery and escalation: '.json_encode($stats));
 })->purpose('Revalidate SOS responders, escalate and attempt permitted privacy-safe push');
 Schedule::command('orbit:sos:dispatch')->everyMinute()->withoutOverlapping();
+
+
+/**
+ * M17 indexes existing M7 Moment and M13 encrypted-message report metadata.
+ * It does NOT access user-volunteered evidence, copy ciphertext or enact
+ * sanctions. Safe to run with enforcement disabled.
+ */
+Artisan::command('orbit:moderation:sync',function(){
+    $service=app(\App\Modules\Moderation\Services\ModerationService::class);
+    if(!$service->installed()){
+        $this->info('M17 moderation: migration not provisioned.');
+        return;
+    }
+    $this->info('Moderation report indexing: '.json_encode($service->syncSources(40)));
+})->purpose('Idempotently index existing private report references for moderation');
+Schedule::command('orbit:moderation:sync')->everyFiveMinutes()->withoutOverlapping();
