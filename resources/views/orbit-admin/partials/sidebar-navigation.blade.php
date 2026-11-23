@@ -101,6 +101,26 @@
     ];
   }
 
+  // M20 reuses the approved Admin sidebar/navigation and an existing icon.
+  // No ad administration is nested under Accounts or Configurations.
+  if ($navUser?->canPerform('advertising.read')) {
+    $adChildren=[
+      ['title'=>'Overview','route'=>'orbit.admin.advertising.overview','patterns'=>['orbit.admin.advertising.overview']],
+      ['title'=>'Sponsors','route'=>'orbit.admin.advertising.sponsors','patterns'=>['orbit.admin.advertising.sponsors*']],
+      ['title'=>'Creatives & Review','route'=>'orbit.admin.advertising.creatives','patterns'=>['orbit.admin.advertising.creatives*']],
+      ['title'=>'Campaigns','route'=>'orbit.admin.advertising.campaigns','patterns'=>['orbit.admin.advertising.campaigns*']],
+      ['title'=>'Placements & Frequency','route'=>'orbit.admin.advertising.placements','patterns'=>['orbit.admin.advertising.placements*']],
+    ];
+    if ($navUser->canPerform('advertising.analytics'))
+      $adChildren[]=['title'=>'Analytics','route'=>'orbit.admin.advertising.analytics',
+        'patterns'=>['orbit.admin.advertising.analytics']];
+    if ($navUser->canPerform('advertising.audit'))
+      $adChildren[]=['title'=>'Audit Trail','route'=>'orbit.admin.advertising.audits',
+        'patterns'=>['orbit.admin.advertising.audits']];
+    $navGroups[]=['title'=>'Advertisements & Sponsorships','icon'=>'notifications',
+      'patterns'=>['orbit.admin.advertising.*'],'children'=>$adChildren];
+  }
+
   // Reuse the existing nav-group/notifications icon; Activity is not inside
   // Configurations or Accounts and receives independent server-side RBAC.
   if ($navUser?->canPerform('activity.read')) {

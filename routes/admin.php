@@ -19,6 +19,7 @@ use App\Modules\Notifications\Http\Controllers\AdminNotificationController;
 use App\Modules\Plans\Http\Controllers\AdminPlanController;
 use App\Modules\Safety\Http\Controllers\AdminSosController;
 use App\Modules\Activity\Http\Controllers\AdminActivityController;
+use App\Modules\Advertising\Http\Controllers\AdminAdvertisingController;
 use App\Modules\Moderation\Http\Controllers\AdminModerationController;
 use App\Modules\Config\Http\Middleware\EnsureAdmin;
 use App\Modules\Config\Http\Middleware\RequireAdminPermission;
@@ -56,6 +57,7 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
                 'plans.read' => 'orbit.admin.plans.overview',
                 'safety.read' => 'orbit.admin.safety.overview',
                 'activity.read' => 'orbit.admin.activity.overview',
+                'advertising.read' => 'orbit.admin.advertising.overview',
                 'moderation.read' => 'orbit.admin.moderation.overview',
             ] as $permission => $route) {
                 if ($permission === 'circles.read' && config('orbit_circle.enabled') !== true) continue;
@@ -63,6 +65,53 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
             }
             abort(403);
         })->name('landing');
+
+        // M20: independent sponsored-content operations, same MFA/CSRF/Blade RBAC.
+        Route::get('/advertising',[AdminAdvertisingController::class,'overview'])
+            ->middleware(RequireAdminPermission::class.':advertising.read')
+            ->name('advertising.overview');
+        foreach (['sponsors','creatives','campaigns','placements'] as $section) {
+            Route::get('/advertising/'.$section,
+                [AdminAdvertisingController::class,$section])
+                ->middleware(RequireAdminPermission::class.':advertising.read')
+                ->name('advertising.'.$section);
+        }
+        Route::get('/advertising/analytics',[AdminAdvertisingController::class,'analytics'])
+            ->middleware(RequireAdminPermission::class.':advertising.analytics')
+            ->name('advertising.analytics');
+        Route::get('/advertising/audits',[AdminAdvertisingController::class,'audits'])
+            ->middleware(RequireAdminPermission::class.':advertising.audit')
+            ->name('advertising.audits');
+        Route::post('/advertising/sponsors',[AdminAdvertisingController::class,'createSponsor'])
+            ->middleware([RequireAdminPermission::class.':advertising.manage','throttle:8,1'])
+            ->name('advertising.sponsors.create');
+        Route::post('/advertising/sponsors/{sponsor}/status',[AdminAdvertisingController::class,'sponsorStatus'])
+            ->whereUuid('sponsor')->middleware([RequireAdminPermission::class.':advertising.manage','throttle:8,1'])
+            ->name('advertising.sponsors.status');
+        Route::post('/advertising/creatives',[AdminAdvertisingController::class,'uploadCreative'])
+            ->middleware([RequireAdminPermission::class.':advertising.manage','throttle:8,1'])
+            ->name('advertising.creatives.upload');
+        Route::post('/advertising/creatives/{creative}/revise',[AdminAdvertisingController::class,'reviseCreative'])
+            ->whereUuid('creative')->middleware([RequireAdminPermission::class.':advertising.manage','throttle:8,1'])
+            ->name('advertising.creatives.revise');
+        Route::get('/advertising/creatives/{creative}/preview',[AdminAdvertisingController::class,'previewCreative'])
+            ->whereUuid('creative')->middleware(RequireAdminPermission::class.':advertising.review')
+            ->name('advertising.creatives.preview');
+        Route::post('/advertising/creatives/{creative}/review',[AdminAdvertisingController::class,'reviewCreative'])
+            ->whereUuid('creative')->middleware([RequireAdminPermission::class.':advertising.review','throttle:8,1'])
+            ->name('advertising.creatives.review');
+        Route::post('/advertising/campaigns',[AdminAdvertisingController::class,'createCampaign'])
+            ->middleware([RequireAdminPermission::class.':advertising.manage','throttle:8,1'])
+            ->name('advertising.campaigns.create');
+        Route::post('/advertising/campaigns/{campaign}/transition',
+            [AdminAdvertisingController::class,'campaignTransition'])
+            ->whereUuid('campaign')->middleware([RequireAdminPermission::class.':advertising.read','throttle:8,1'])
+            ->name('advertising.campaigns.transition');
+        Route::post('/advertising/placements/{placement}/control',
+            [AdminAdvertisingController::class,'placementControl'])
+            ->whereIn('placement',['home.promo','moments.promo'])
+            ->middleware([RequireAdminPermission::class.':advertising.manage','throttle:8,1'])
+            ->name('advertising.placements.control');
 
         // M18 first-class Activity operations, under existing MFA/RBAC.
         Route::get('/activity',[AdminActivityController::class,'overview'])
