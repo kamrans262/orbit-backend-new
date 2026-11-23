@@ -112,6 +112,25 @@ final class OrbitM17ModerationTest extends TestCase
         $this->withToken($tb)->getJson('/api/v1/moderation/capabilities')->assertOk();
     }
 
+    public function test_report_is_allowed_against_own_blocked_member_without_unblocking():void
+    {
+        [$reporter,$device,$token]=$this->principal();
+        [$target]=$this->principal();
+        DB::table('blocks')->insert([
+            'blocker_id'=>$reporter->id,'blocked_id'=>$target->id,
+            'created_at'=>now(),
+        ]);
+        $payload=$this->report($token,$target->id);
+        $this->assertDatabaseHas('moderation_reports',[
+            'reporter_id'=>$reporter->id,'subject_user_id'=>$target->id,
+        ]);
+        $this->assertDatabaseHas('blocks',[
+            'blocker_id'=>$reporter->id,'blocked_id'=>$target->id,
+        ]);
+        $this->withToken($token)->getJson('/api/v1/people/'.$target->id.'/preview')
+            ->assertNotFound();
+    }
+
     public function test_source_sync_indexes_m13_reporting_without_copying_evidence():void
     {
         [$reporter,$d,$t]=$this->principal();

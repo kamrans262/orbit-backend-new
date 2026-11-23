@@ -93,8 +93,18 @@ final class ModerationService
             }
             abort_if(RateLimiter::tooManyAttempts($key,$limit),429,
                 'Please retry your report later.');
-            // Generic 404 prevents target existence and block relationship probing.
-            $this->social->assertVisible($actor,$target);
+            // A person can still report someone THEY blocked without undoing
+            // the block or reading the target's private profile. If the
+            // subject blocked the reporter, keep the normal anti-probing 404.
+            $ownBlock=DB::table('blocks')->where('blocker_id',$actor)
+                ->where('blocked_id',$target)->exists();
+            if($ownBlock) {
+                abort_unless(DB::table('orbit_users')->where('id',$target)
+                    ->where('status','active')->whereNull('deletion_requested_at')->exists(),
+                    404,'Person unavailable.');
+            }else{
+                $this->social->assertVisible($actor,$target);
+            }
             $id=(string)Str::uuid7();
             $now=now();
             DB::table('moderation_reports')->insert([
@@ -273,6 +283,11 @@ final class ModerationService
                 && DB::table('orbit_users')->where('id',$case->subject_user_id)->exists(),
                 409,'Action requires a currently valid account subject.');
             if($scope==='messaging_send'){
+                // Lock the subject before checking active M13 restrictions.
+                // Separate concurrent cases for one member cannot both pass
+                // the precheck then overwrite each other's sanction.
+                DB::table('orbit_users')->where('id',$case->subject_user_id)
+                    ->lockForUpdate()->first()??abort(409,'Account unavailable.');
                 abort_unless($this->messaging->provisioned(),503,
                     'Messaging restrictions unavailable.');
                 // Cannot overwrite an unrelated active restriction or earlier
