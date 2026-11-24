@@ -34,7 +34,9 @@ final class ConfigRegistry
             $flags[$flag->key] = $this->flagEnabled($flag, $context);
         }
         $configs = RemoteConfig::query()->where('published', true)->where('client_visible', true)
-            ->orderBy('key')->pluck('value', 'key')->all();
+            ->whereNotIn('key',['camera.operations','relay.operations'])->orderBy('key')->pluck('value', 'key')->all();
+        $camera=app(\App\Modules\Camera\Services\CameraPolicy::class)->publicHints();
+        if($camera!==null)$configs['camera.operations']=$camera;
         return ['version' => 'v1', 'flags' => $flags, 'config' => $configs, 'generated_at' => now()->toIso8601String()];
     }
 

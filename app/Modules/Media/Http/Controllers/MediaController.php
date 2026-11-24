@@ -175,6 +175,7 @@ final class MediaController extends Controller
                     'storage_mode'=>$store->mode()],201);
             }
         }
+        app(\App\Modules\Camera\Services\CameraPolicy::class)->validate((array)$m,409);
         $existing=DB::table('media_variants')->where('media_id',$media)
             ->where('variant',$d['variant'])->first();
         if($existing) {
@@ -321,6 +322,9 @@ final class MediaController extends Controller
         if($old) {
             abort_unless(hash_equals($old->payload_hash,$digest),409,'Idempotency key used for another request.');
             abort_unless($old->device_id===$device,409,'Upload session belongs to another device.');
+            if(!in_array($old->state,['ready','verifying'],true)){
+                app(\App\Modules\Camera\Services\CameraPolicy::class)->validate($data,409);
+            }
             if(in_array($old->state,['expired','aborted','failed'],true)
                 || (in_array($old->state,['initiated','uploading'],true)
                     && now()->gte($old->expires_at))) {
@@ -332,6 +336,7 @@ final class MediaController extends Controller
                     'storage_mode'=>$store->mode()],201);
             }
         }
+        app(\App\Modules\Camera\Services\CameraPolicy::class)->validate($data);
         $media=(string)Str::uuid7(); $upload=(string)Str::uuid7();
         $objectKey=config('orbit_media.path_prefix').'/'.Str::random(28).'/'.$media;
         // Fail closed before DB insert when R2 credentials/SDK are absent.
@@ -339,6 +344,7 @@ final class MediaController extends Controller
         try {
             DB::transaction(function()use($actor,$device,$data,$key,$digest,$media,$upload,$objectKey,$providerId):void{
                 DB::table('orbit_users')->where('id',$actor)->lockForUpdate()->first();
+                app(\App\Modules\Camera\Services\CameraPolicy::class)->validate($data,409,true);
                 $this->ensureBudget($actor,(int)$data['declared_bytes']);
                 DB::table('media_objects')->insert([
                     'id'=>$media,'owner_user_id'=>$actor,'purpose'=>$data['purpose'],
@@ -453,6 +459,9 @@ final class MediaController extends Controller
             $seen[$part['part_number']]=true;
         }
         $object=$this->media($u->media_id);
+        app(\App\Modules\Camera\Services\CameraPolicy::class)->validate((array)$object+[
+            'declared_bytes'=>$u->variant_id?$object->cipher_bytes:$u->declared_bytes,
+        ],409);
         $key=$this->uploadObjectKey($u);
         $onServer=$store->uploadedParts($key,$this->providerId($u));
         abort_unless(count($onServer)===count($parts),409,'Uploaded part count mismatch.');

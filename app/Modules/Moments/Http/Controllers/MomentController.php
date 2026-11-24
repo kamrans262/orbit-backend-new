@@ -143,6 +143,7 @@ final class MomentController extends Controller
             abort_if(DB::table('media_references')->where('media_id',$media->id)->whereNull('released_at')->exists(),409,
                 'Media is already attached to another consumer.');
             abort_if(DB::table('moments')->where('creator_id',$owner)->where('client_id',$d['client_id'])->exists(),409,'Client publish conflict.');
+            app(\App\Modules\Camera\Services\CameraPolicy::class)->validate((array)$media,409,true);
             $pairs=$audience->resolve($owner,$media->id,$d['audience_kind'],$d['target_ids']);
             $tags=$d['tagged_user_ids']??[];
             if($tags){

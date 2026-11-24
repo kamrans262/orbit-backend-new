@@ -73,6 +73,9 @@ final class AdminNavigation
             ['Moments', 'circles', [
                 ['Moment Management', 'moments.index', 'moments.read', ['moments.*']],
             ]],
+            ['Camera & Editing', 'settings', [
+                ['Settings & Controls', 'camera.index', 'camera.read', ['camera.*']],
+            ]],
             ['Home Dashboard', 'settings', [
                 ['Home Dashboard', 'home-dashboard.index', 'config.manage', ['home-dashboard.*']],
             ]],

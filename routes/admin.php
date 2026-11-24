@@ -42,6 +42,9 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
     Route::post('/mfa', [AdminAuthController::class, 'verifyMfa'])->middleware('throttle:8,1')->name('mfa.verify');
     Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
     Route::middleware([EnsureAdmin::class])->group(function (): void {
+        $camera=\App\Modules\Camera\Http\Controllers\AdminCameraController::class;
+        Route::get('/camera',[$camera,'index'])->middleware(RequireAdminPermission::class.':camera.read')->name('camera.index');
+        Route::post('/camera/settings',[$camera,'save'])->middleware([RequireAdminPermission::class.':camera.read',RequireAdminPermission::class.':camera.manage','throttle:6,1'])->name('camera.settings.save');
         $relay=\App\Modules\Relay\Http\Controllers\AdminRelayController::class;
         Route::get('/relay',[$relay,'overview'])->middleware(RequireAdminPermission::class.':relay.read')->name('relay.overview');
         Route::get('/relay/settings',[$relay,'settings'])->middleware(RequireAdminPermission::class.':relay.read')->name('relay.settings');
