@@ -50,6 +50,7 @@ final class OrbitM25RealtimeTest extends TestCase
             'https://oauth2.googleapis.com/token'=>Http::response(['access_token'=>'synthetic-oauth','expires_in'=>3600]),
             'https://orbit-ci-default-rtdb.firebaseio.com/*'=>function($request){
                 $this->assertTrue($request->hasHeader('Authorization','Bearer synthetic-oauth'));
+                if(str_ends_with($request->url(),'/orbit_m25/health_probe.json'))return Http::response('null',200);
                 if($request->method()==='GET'){
                     $this->assertTrue($request->hasHeader('X-Firebase-ETag','true'));
                     return Http::response('null',200,['ETag'=>'"synthetic-etag"']);
@@ -171,6 +172,7 @@ final class OrbitM25RealtimeTest extends TestCase
         DB::table('orbit_user_preferences')->insert(['user_id'=>$owner->id,'privacy'=>json_encode([
             'location_visibility'=>'Friends','location_activity'=>'Active','location_sharing_enabled'=>true,
             'ghost_mode_enabled'=>false]),'created_at'=>now(),'updated_at'=>now()]);
+        $this->conflict=true; // Force a real delayed publication instead of the normal immediate path.
         $this->withToken($ot)->postJson('/api/v1/me/location/shares',[
             'audience_type'=>'person','audience_id'=>$viewer->id,'precision'=>'approximate',
             'duration'=>'one_hour','reviewed'=>true])->assertCreated();
@@ -178,6 +180,7 @@ final class OrbitM25RealtimeTest extends TestCase
         DB::table('orbit_user_preferences')->where('user_id',$owner->id)->update(['privacy'=>json_encode([
             'location_visibility'=>'Friends','location_activity'=>'Active','location_sharing_enabled'=>true,
             'ghost_mode_enabled'=>true])]);
+        $this->conflict=false;
         $this->assertTrue(app(RealtimeSessions::class)->publish($sid));
         $this->assertSame(1,end($this->writes)['body']['signal']['revision']);
         $this->assertDatabaseHas('orbit_realtime_sessions',['session_id'=>$sid,'dirty'=>false,'visible_revision'=>1,'pending_scopes'=>null]);
@@ -225,7 +228,48 @@ final class OrbitM25RealtimeTest extends TestCase
         $this->assertDatabaseHas('orbit_realtime_recovery',['id'=>$payload['request_id'],'operation'=>'retry','affected'=>1]);
         $this->assertSame(1,DB::table('admin_audit_log')->where('action','realtime.recovery')->where('request_id',$payload['request_id'])->count());
         config(['orbit_realtime.verified'=>false]);
+        $this->travel(61)->seconds();
         $this->postJson($url,[...$payload,'request_id'=>(string)Str::uuid()])->assertStatus(409);
+        $this->travelBack();
+    }
+
+    public function test_permanently_revoked_session_cleanup_waits_for_token_replay_window():void
+    {
+        $this->enableTransport();
+        [$u,$token]=$this->person();
+        $sid=$this->withToken($token)->postJson('/api/v1/realtime/bootstrap')->assertOk()->json('data.uid');
+        DB::table('orbit_sessions')->where('id',$sid)->update(['revoked_at'=>now()]);
+        $svc=app(RealtimeSessions::class);
+        $svc->revokeInvalidUser($u->id);$svc->process();
+        $this->assertArrayHasKey('revoked',end($this->writes)['body']);
+        $cleanup=app(\App\Modules\Realtime\Services\RealtimeAuthCleanup::class);
+        $cleanup->process();
+        $this->assertDatabaseHas('orbit_realtime_auth_receipts',['session_id'=>$sid]);
+        Http::assertNotSent(fn($r)=>str_contains($r->url(),'accounts:delete'));
+        $this->travel(3)->minutes();
+        $cleanup->process();
+        $this->assertNull(end($this->writes)['body']);
+        $this->assertDatabaseHas('orbit_realtime_auth_receipts',['session_id'=>$sid]);
+        $this->travel(14)->minutes();
+        $cleanup->process();
+        Http::assertSent(fn($r)=>str_contains($r->url(),'accounts:delete')&&$r['localId']===$sid);
+        $this->assertDatabaseMissing('orbit_realtime_auth_receipts',['session_id'=>$sid]);
+        $this->travelBack();
+    }
+
+    public function test_probe_is_read_only_queued_and_reports_aggregate_health():void
+    {
+        $this->enableTransport();
+        $this->be($this->operator(['config.manage']),'admin');
+        $id=(string)Str::uuid();
+        $this->post(route('orbit.admin.operations.realtime.recovery'),[
+            'request_id'=>$id,'operation'=>'probe','reason'=>'Reviewed synthetic provider probe','confirm'=>1,
+        ])->assertRedirect();
+        Http::assertNothingSent();
+        app(\App\Modules\Realtime\Services\RealtimeRecovery::class)->processProbe();
+        $this->assertDatabaseHas('orbit_realtime_recovery',['id'=>$id,'result'=>'Reachable']);
+        $this->get(route('orbit.admin.operations.realtime'))->assertOk()->assertSee('Reachable')->assertDontSee('synthetic-oauth');
+        Http::assertNotSent(fn($r)=>$r->method()==='PUT');
     }
 
     public function test_redis_free_presence_and_legacy_gateway_exclusion():void
