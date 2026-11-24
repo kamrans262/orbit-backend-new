@@ -74,7 +74,7 @@ final class OperationalControls
     ];
     public static function reserved(?string $key):bool
     {
-        return $key!==null&&str_starts_with(strtolower($key),self::PREFIX);
+        return $key!==null&&(str_starts_with(strtolower($key),self::PREFIX)||strtolower($key)==='m24.operational_limits');
     }
     public static function keys():array{return array_map(fn($name)=>self::PREFIX.$name,array_keys(self::MODULES));}
     public function installed():bool{return Schema::hasTable('remote_configs');}
@@ -101,6 +101,17 @@ final class OperationalControls
             abort_unless(is_int($v)&&$v>=$field[2]&&$v<=$field[3],503,'Operational controls require review.');
         }
         return $values;
+    }
+    public function publicHints():?array{
+        if(!$this->installed())return null;
+        $out=[];
+        foreach(['dashboard','ping','check-in'] as $module){
+            $row=RemoteConfig::where('key',self::PREFIX.$module)->first();
+            if(!$row)continue;
+            $this->decode($module,$row);
+            $out[$module]=$this->snapshot($module);
+        }
+        return $out===[]?null:['schema_version'=>1,'modules'=>$out];
     }
     /** Applied only for HTTP; no worker-only policy is included in this registry. */
     public function overrides():array{

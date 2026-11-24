@@ -43,6 +43,13 @@ final class AdminProfileController extends Controller
         ))->header('Cache-Control', 'private, no-store');
     }
 
+    public function deletionReview(Request $request,string $deletion): Response
+    {
+        abort_unless($request->user('admin')?->canPerform('deletions.read'),403);
+        try{$review=app(\App\Modules\Profile\Services\M3ErasureProcessor::class)->preview($deletion);}
+        catch(\DomainException){abort(404,'Deletion request unavailable.');}
+        return response()->view('orbit-admin.deletion-review',['review'=>$review])->header('Cache-Control','private, no-store');
+    }
     public function settingsActivity(Request $request): Response
     {
         $actions = [

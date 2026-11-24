@@ -34,7 +34,7 @@
    @if(auth()->guard('admin')->user()->canPerform('users.read'))
    <a href="{{ route('orbit.admin.users.show', $item->user_id) }}"><strong>{{ $item->username ?: 'Unnamed account' }}</strong></a>
    @else<strong>{{ $item->user_id }}</strong>@endif
-   <small>Request {{ $item->request_id }}</small>
+   <small><a href="{{ route('orbit.admin.deletions.review',$item->request_id) }}">Review eligibility</a> · Request {{ $item->request_id }}</small>
   </td>
   <td><span class="pill {{ $item->status === 'completed' ? 'success' : ($item->status === 'pending' ? 'danger' : 'neutral') }}">{{ ucfirst($item->status) }}</span></td>
   <td>{{ $item->requested_at }}</td>

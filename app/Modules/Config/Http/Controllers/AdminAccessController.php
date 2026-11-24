@@ -54,7 +54,7 @@ final class AdminAccessController{
     }
     public function createRole(Request $r,OperationalAudit $audit){
         $actor=$this->operator($r,true);abort_unless($this->ready(),503);
-        $d=$r->validate(['name'=>'required|string|min:3|max:100|unique:admin_roles,name','permissions'=>'required|array|min:1|max:40','permissions.*'=>'required|distinct|in:'.implode(',',self::DELEGABLE),'reason'=>'required|string|min:10|max:500','confirm'=>'accepted']);
+        $d=$r->validate(['name'=>'required|string|min:3|max:80|unique:admin_roles,name','permissions'=>'required|array|min:1|max:40','permissions.*'=>'required|distinct|in:'.implode(',',self::DELEGABLE),'reason'=>'required|string|min:10|max:500','confirm'=>'accepted']);
         DB::transaction(function()use($d,$actor,$audit){
             $role=AdminRole::create(['name'=>$d['name'],'permissions'=>array_values($d['permissions'])]);
             $audit->record($actor,'administrators.role.create','role:'.$role->id,$d['reason'],[],['permissions'=>$role->permissions]);

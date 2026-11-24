@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(\App\Modules\Config\Http\Middleware\ApplyOperationalControls::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->dontFlash(['mfa_code']);
         // Stable machine-readable error contract for M14 owner APIs only.
         // Do not alter other modules' established response/error semantics.
         $exceptions->render(function (\Throwable $error, Request $request) {
