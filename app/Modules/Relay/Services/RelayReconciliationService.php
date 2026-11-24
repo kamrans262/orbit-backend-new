@@ -11,8 +11,8 @@ final class RelayReconciliationService
     public function __construct(private readonly RelayLeaseService $leases,private readonly RelayMetrics $metrics,
         private readonly MessagingEnvelopeService $messages){}
     // Fixed order and canonical standard base64 are checked before digesting.
-    // Match M13's exact sorted payload hash; additionally scope and bind IDs in
-    // the signed receipt. Stable client ID is the authoritative source ID.
+    // Use sorted M13 envelope fields; this Relay digest is separately domain/scoped.
+    // Bind envelope IDs in the signed receipt. Stable client ID is the authoritative source ID.
     public static function digest(string $scope,string $client,array $source):string {
         $sorted=[];
         foreach($source['envelopes'] as $env){
@@ -25,7 +25,7 @@ final class RelayReconciliationService
     }
     public static function receiptInput(object $lease,array $item):string {
         return implode('|',['orbit-relay-receipt-v1',$lease->id,$lease->scope_ref,$lease->device_id,
-            $lease->peer_device_id,$item['envelope_id'],$item['source_client_id'],$item['digest'],'received']);
+            $lease->peer_device_id,$item['envelope_id'],$item['source_client_id'],$item['digest'],'received',$item['receipt']['nonce'],(string)$item['receipt']['received_at']]);
     }
     private function result(array $item,string $state,string $reason,?string $source=null,bool $peer=false):array {
         return ['envelope_id'=>$item['envelope_id'],'status'=>$state,'reason_code'=>$reason,
@@ -54,7 +54,13 @@ final class RelayReconciliationService
     }
     private function proof(object $lease,array $item,array $ctx):?string {
         if(!isset($item['receipt']))return null;
-        $signature=RelayLeaseService::bytes($item['receipt']['signature_b64'],64);
+        $receipt=$item['receipt'];
+        $received=(int)$receipt['received_at'];
+        abort_unless($receipt['nonce']===$item['envelope_id']
+            && $received>=\Illuminate\Support\Carbon::parse($lease->issued_at)->timestamp
+            && $received<\Illuminate\Support\Carbon::parse($lease->expires_at)->timestamp
+            && $received<=now()->timestamp+10,422,'Invalid receipt time or nonce.');
+        $signature=RelayLeaseService::bytes($receipt['signature_b64'],64);
         $public=RelayLeaseService::bytes($ctx['peer']->identity_ed25519,32);
         abort_unless(sodium_crypto_sign_verify_detached($signature,self::receiptInput($lease,$item),$public),422,'Invalid recipient proof.');
         return hash('sha256',$signature);

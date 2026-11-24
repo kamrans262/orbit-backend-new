@@ -17,7 +17,8 @@
 <article class="stat-card"><span class="stat-label">{{ $label }}</span><strong>{{ number_format($value) }}</strong></article>
 @endforeach</div>
 <section class="panel"><div class="panel-head"><div><h2>Operational availability</h2><p>{{ $capabilities['enabled']?'Available':'Disabled' }} — {{ str_replace('_',' ',$capabilities['readiness']) }}</p></div></div>
-<div class="admin-guidance">Nearby transfer is not certified. A receipt is not a read acknowledgement or an emergency delivery guarantee.</div>
+<div class="admin-guidance">Nearby transfer availability depends on independent platform review. A receipt is not a read acknowledgement or an emergency delivery guarantee.</div>
+<div class="admin-kv"><div class="kv"><small>Latest recorded reconciliation</small><strong>{{ $lastSync ?? 'No reconciliation recorded' }}</strong></div></div>
 <div class="table-scroll"><table><thead><tr><th>DAY</th><th>OUTCOME</th><th>COUNT</th></tr></thead><tbody>
 @forelse($metrics as $metric)<tr><td>{{ $metric->day }}</td><td>{{ $metric->outcome }}</td><td>{{ $metric->total }}</td></tr>
 @empty<tr><td colspan="3">No aggregate outcomes recorded.</td></tr>@endforelse

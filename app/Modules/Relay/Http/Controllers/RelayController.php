@@ -66,7 +66,10 @@ final class RelayController
             'items.*'=>'required|array:envelope_id,source_client_id,lease_id,digest,receipt,source_envelope',
             'items.*.envelope_id'=>'required|uuid|distinct','items.*.source_client_id'=>'required|uuid|distinct',
             'items.*.lease_id'=>'required|uuid','items.*.digest'=>'required|string|regex:/^[a-f0-9]{64}$/D',
-            'items.*.receipt'=>'sometimes|array:signature_b64','items.*.receipt.signature_b64'=>'required_with:items.*.receipt|string|size:88',
+            'items.*.receipt'=>'sometimes|array:signature_b64,nonce,received_at',
+            'items.*.receipt.signature_b64'=>'required_with:items.*.receipt|string|size:88',
+            'items.*.receipt.nonce'=>'required_with:items.*.receipt|uuid',
+            'items.*.receipt.received_at'=>'required_with:items.*.receipt|integer|min:1|max:4102444800',
             'items.*.source_envelope'=>'required|array:client_id,kind,protocol,group_epoch,envelopes',
             'items.*.source_envelope.client_id'=>'required|uuid','items.*.source_envelope.kind'=>'required|in:text,emoji,sticker,reaction,reply',
             'items.*.source_envelope.protocol'=>'required|in:orbit-m13-olm-megolm-v1',
@@ -83,23 +86,27 @@ final class RelayController
         $s=$this->session($r);
         abort_unless($this->policy->provisioned(),503);
         $p=$r->validate(['cursor'=>'sometimes|string|max:2048','limit'=>'sometimes|integer|min:1|max:100']);
-        $query=DB::table('relay_reconciliations')->where('device_id',$s->device_id);
+        $query=DB::table('relay_reconciliations as r')->where('r.device_id',$s->device_id)
+            ->select('r.id','r.envelope_id','r.source_client_id','r.status','r.reason_code','r.updated_at')
+            ->selectSub(DB::table('relay_receipts as p')->whereColumn('p.reconciliation_id','r.id')
+                ->where('p.kind','received')->selectRaw('count(*)'),'verified_receipts');
         if(isset($p['cursor'])){
             try{$cursor=json_decode(Crypt::decryptString($p['cursor']),true,8,JSON_THROW_ON_ERROR);}
             catch(DecryptException|\JsonException){abort(422,'Invalid cursor.');}
             abort_unless(is_array($cursor) && ($cursor['device']??null)===$s->device_id && ($cursor['user']??null)===$s->user_id
                 && is_string($cursor['id']??null) && \Illuminate\Support\Str::isUuid($cursor['id'])
                 && is_int($cursor['expires']??null) && $cursor['expires']>=now()->timestamp,422,'Invalid cursor.');
-            $query->where('id','>',$cursor['id']);
+            $query->where('r.id','>',$cursor['id']);
         }
         $limit=(int)($p['limit']??20);
-        $items=$query->orderBy('id')->limit($limit+1)->get(['id','envelope_id','status','reason_code','updated_at']);
+        $items=$query->orderBy('r.id')->limit($limit+1)->get();
         $more=$items->count()>$limit;
         $items=$items->take($limit)->values();
         $next=$more?Crypt::encryptString(json_encode(['device'=>$s->device_id,'user'=>$s->user_id,
             'id'=>$items->last()->id,'expires'=>now()->addMinutes(15)->timestamp],JSON_THROW_ON_ERROR)):null;
         return $this->result(['items'=>$items->map(fn($item)=>[
-            'envelope_id'=>$item->envelope_id,'status'=>$item->status,'reason_code'=>$item->reason_code,
+            'envelope_id'=>$item->envelope_id,'source_client_id'=>$item->source_client_id,'status'=>$item->status,'reason_code'=>$item->reason_code,
+            'peer_receipt_verified'=>(int)$item->verified_receipts>0,
             'updated_at'=>$item->updated_at,
         ])->all(),'next_cursor'=>$next,'policy_revision'=>$this->policy->settings()['revision']]);
     }

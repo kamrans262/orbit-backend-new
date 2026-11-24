@@ -14,15 +14,16 @@ final class AdminRelayController
     public function audits(){return $this->page('audits');}
     private function page(string $area){
         $ready=$this->policy->provisioned();
-        $counts=[];$audits=collect();$metrics=collect();
+        $counts=[];$audits=collect();$metrics=collect();$lastSync=null;
         if($ready && $area==='overview'){
             $counts=[
-                'Active leases'=>DB::table('relay_leases')->whereNull('revoked_at')->where('expires_at','>',now())->count(),
+                'Unexpired, unrevoked lease records'=>DB::table('relay_leases')->whereNull('revoked_at')->where('expires_at','>',now())->count(),
                 'Expired leases'=>DB::table('relay_leases')->where('expires_at','<=',now())->count(),
                 'Revoked leases'=>DB::table('relay_leases')->whereNotNull('revoked_at')->count(),
                 'Reconciliation records'=>DB::table('relay_reconciliations')->count(),
                 'Verified receipt records'=>DB::table('relay_receipts')->count(),
             ];
+            $lastSync=DB::table('relay_reconciliations')->max('updated_at');
             $metrics=DB::table('relay_daily_metrics')->where('day','>=',now()->subDays(7)->toDateString())->orderByDesc('day')->limit(100)->get();
         }
         if($ready && $area==='audits'){
@@ -30,7 +31,7 @@ final class AdminRelayController
                 ->orderByDesc('version')->paginate(30);
         }
         return view('orbit-admin.relay',['area'=>$area,'ready'=>$ready,'settings'=>$this->policy->settings(),
-            'capabilities'=>$this->policy->capabilities(),'counts'=>$counts,'audits'=>$audits,'metrics'=>$metrics]);
+            'capabilities'=>$this->policy->capabilities(),'counts'=>$counts,'audits'=>$audits,'metrics'=>$metrics,'lastSync'=>$lastSync]);
     }
     public function save(Request $r){
         abort_unless($this->policy->provisioned(),503);
