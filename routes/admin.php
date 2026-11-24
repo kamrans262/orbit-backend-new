@@ -255,6 +255,7 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
             ->middleware(RequireAdminPermission::class.':safety.read')->name('safety.settings');
         Route::get('/safety/audits',[AdminSosController::class,'audits'])
             ->middleware(RequireAdminPermission::class.':safety.audit')->name('safety.audits');
+        Route::post('/safety/settings/reviews/{review}',[AdminSosController::class,'decideControl'])->whereUuid('review')->middleware([RequireAdminPermission::class.':safety.read',RequireAdminPermission::class.':safety.approve','throttle:6,1'])->name('safety.settings.decide');
         Route::post('/safety/settings',[AdminSosController::class,'saveControl'])
             ->middleware([RequireAdminPermission::class.':safety.manage','throttle:6,1'])
             ->name('safety.settings.save');

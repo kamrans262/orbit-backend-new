@@ -86,8 +86,9 @@
   <section class="panel"><div class="panel-head"><div><h2>Safety operational controls</h2><p>Changing these settings never disables emergency intake. Recording, location and privacy policies are not overridable here.</p></div></div>
   @foreach($controls as $control)
     <div class="kv"><small>{{ ucwords(str_replace('_',' ',$control->key)) }}</small><strong>{{ $control->key==='escalation_after_seconds'?$control->value.' seconds':($control->value==='1'?'Enabled':'Disabled') }}</strong></div>
-    @if(auth()->guard('admin')->user()?->canPerform('safety.manage'))
+    @if($reviewReady&&auth()->guard('admin')->user()?->canPerform('safety.manage'))
       <form method="post" action="{{ route('orbit.admin.safety.settings.save') }}">@csrf
+        <input name="revision" type="hidden" value="{{ $control->revision }}">
         <input name="key" type="hidden" value="{{ $control->key }}">
         @if($control->key==='escalation_after_seconds')
           <label>Delay (30–1800 seconds)<input type="number" name="value" min="30" max="1800" value="{{ $control->value }}" required></label>
@@ -95,12 +96,22 @@
           <label>Value<select name="value"><option value="1" @selected($control->value==='1')>Enabled</option><option value="0" @selected($control->value==='0')>Disabled</option></select></label>
         @endif
         <label>Reason<input name="reason" required minlength="10" maxlength="500" placeholder="Required operational reason"></label>
-        <label><input type="checkbox" name="confirm" value="1" required> Confirm audited change</label>
-        <button class="btn secondary" type="submit">Save control</button>
+        <label><input type="checkbox" name="confirm" value="1" required> Confirm reviewed policy request</label>
+        <button class="btn secondary" type="submit">Request review</button>
       </form>
     @endif
   @endforeach
   </section>
+  <section class="panel"><div class="panel-head"><h2>Independent safety policy reviews</h2><p>Optional delivery changes take effect only after independent approval. Core emergency intake is not configurable here.</p></div></div>
+  @if(!$reviewReady)<div class="admin-guidance">Review storage unavailable; safety controls cannot be modified.</div>@endif
+  <div class="table-scroll"><table><thead><tr><th>CONTROL</th><th>REQUESTED VALUE</th><th>REQUESTER</th><th>STATE</th><th>EXPIRES</th></tr></thead><tbody>
+  @forelse($reviews as $review)<tr><td>{{ ucwords(str_replace('_',' ',$review->key)) }}</td><td>{{ $review->value }}</td><td>{{ $review->requested_by }}</td><td>{{ $review->state }}</td><td>{{ $review->expires_at }}</td></tr>
+  @if($review->state==='pending'&&now()->lt($review->expires_at)&&$review->requested_by!==auth()->guard('admin')->id()&&auth()->guard('admin')->user()?->canPerform('safety.approve'))
+  <tr><td colspan="5"><form method="post" action="{{ route('orbit.admin.safety.settings.decide',$review->id) }}">@csrf
+  <label>Decision<select name="decision"><option value="reject">Reject</option><option value="approve">Approve</option></select></label><label>Reason<input name="reason" minlength="10" maxlength="500" required></label><label>Verification code<input type="password" name="mfa_code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required></label><label><input type="checkbox" name="confirm" value="1" required> Confirm independent decision</label><button class="btn primary">Record decision</button></form></td></tr>
+  @endif
+  @empty<tr><td colspan="5">No safety policy reviews.</td></tr>@endforelse
+  </tbody></table></div></section>
 @elseif($area==='audits')
   <section class="panel"><div class="panel-head"><div><h2>Security &amp; operations audit</h2><p>Administrative action history. Incident identifiers are keyed hashes; event hashes support tamper detection.</p></div></div>
   <div class="table-scroll"><table><thead><tr><th>ACTION</th><th>INCIDENT HASH</th><th>REASON</th><th>EVENT HASH</th><th>CREATED (UTC)</th></tr></thead><tbody>

@@ -201,24 +201,42 @@ final class OrbitM16SosSafetyTest extends TestCase
             'key'=>'escalation_enabled','value'=>'0',
             'reason'=>'Reviewed emergency escalation operations','confirm'=>'1',
         ])->assertForbidden();
-        $this->be($this->admin(['safety.read','safety.manage','safety.audit']),'admin');
+        $requester=$this->admin(['safety.read','safety.manage','safety.audit']);
+        $reviewer=$this->admin(['safety.read','safety.approve','safety.audit']);
+        $this->be($requester,'admin');
         $this->post('/admin/safety/settings',[
-            'key'=>'escalation_after_seconds','value'=>'120',
+            'key'=>'escalation_after_seconds','value'=>'90','revision'=>0,
             'reason'=>'Verified local escalation settings','confirm'=>'1',
         ])->assertRedirect();
+        $review=DB::table('safety_policy_reviews')->where('key','escalation_after_seconds')->value('id');
+        $this->assertNotNull($review);
+        $this->assertSame(120,(int)DB::table('sos_controls')->where('key','escalation_after_seconds')->value('value'));
+        $this->be($reviewer,'admin');
+        $decision=['decision'=>'approve','reason'=>'Independent safety review completed','confirm'=>1,'mfa_code'=>app(Totp::class)->codeAt($reviewer->totp_secret,time())];
+        $this->post('/admin/safety/settings/reviews/'.$review,$decision)->assertRedirect();
         $this->assertDatabaseHas('sos_admin_audits',['action'=>'sos.control_updated']);
         $this->get('/admin/safety/audits')->assertOk();
-        $this->assertSame(120,(int)DB::table('sos_controls')
+        $this->assertSame(90,(int)DB::table('sos_controls')
             ->where('key','escalation_after_seconds')->value('value'));
     }
     public function test_admin_delivery_controls_preserve_core_member_sos_intake(): void
     {
         [$owner,$device,$token]=$this->principal();
-        $this->be($this->admin(['safety.read','safety.manage']),'admin');
+        $requester=$this->admin(['safety.read','safety.manage','safety.approve']);
+        $reviewer=$this->admin(['safety.read','safety.approve']);
         foreach (['escalation_enabled','push_retries_enabled'] as $key) {
+            $this->be($requester,'admin');
             $this->post('/admin/safety/settings',[
-                'key'=>$key,'value'=>'0','reason'=>'Test optional delivery controls','confirm'=>'1',
+                'key'=>$key,'value'=>'0','revision'=>0,'reason'=>'Test optional delivery controls','confirm'=>'1',
             ])->assertRedirect();
+            $review=DB::table('safety_policy_reviews')->where('key',$key)->value('id');
+            $this->assertNotNull($review);
+            $this->assertSame(1,(int)DB::table('sos_controls')->where('key',$key)->value('value'));
+            $decision=['decision'=>'approve','reason'=>'Independent safety review completed','confirm'=>1,'mfa_code'=>app(Totp::class)->codeAt($requester->totp_secret,time())];
+            $this->postJson('/admin/safety/settings/reviews/'.$review,$decision)->assertForbidden();
+            $this->be($reviewer,'admin');$decision['mfa_code']=app(Totp::class)->codeAt($reviewer->totp_secret,time());
+            $this->post('/admin/safety/settings/reviews/'.$review,$decision)->assertRedirect();
+            $this->postJson('/admin/safety/settings/reviews/'.$review,$decision)->assertStatus(409);
             $this->assertSame(0,(int)DB::table('sos_controls')->where('key',$key)->value('value'));
         }
         $this->withToken($token)->getJson('/api/v1/sos/capabilities')->assertOk()

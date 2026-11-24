@@ -29,7 +29,7 @@ final class AdminSosController extends Controller
         $counts=['total'=>0,'active'=>0,'acknowledged'=>0,'cancelled'=>0,
             'resolved'=>0,'pending_jobs'=>0,'failed_jobs'=>0,'trusted_contacts'=>0];
         $incidents=collect();$responders=collect();$jobs=collect();$controls=collect();$audits=collect();
-        $states=collect();
+        $states=collect();$reviews=collect();$reviewReady=\Illuminate\Support\Facades\Schema::hasTable('safety_policy_reviews');
         if($ready){
             $counts=[
                 'total'=>DB::table('sos_incidents')->count(),
@@ -63,13 +63,16 @@ final class AdminSosController extends Controller
                 $states=DB::table('sos_delivery_jobs')->select('state')
                     ->selectRaw('COUNT(*) AS total')->groupBy('state')->get();
             }
-            if($area==='settings')$controls=DB::table('sos_controls')->orderBy('key')->get();
+            if($area==='settings'){
+                $controls=DB::table('sos_controls')->orderBy('key')->get();
+                if($reviewReady)$reviews=DB::table('safety_policy_reviews')->orderByDesc('created_at')->limit(50)->get();
+            }
             if($area==='audits')$audits=DB::table('sos_admin_audits')
                 ->select('action','incident_hash','reason','created_at','event_hash')
                 ->orderByDesc('created_at')->orderByDesc('id')->paginate(25)->withQueryString();
         }
         return response()->view('orbit-admin.sos',compact('area','ready','counts',
-            'incidents','responders','jobs','controls','audits','states'))
+            'incidents','responders','jobs','controls','audits','states','reviews','reviewReady'))
             ->header('Cache-Control','private, no-store');
     }
 
@@ -82,29 +85,60 @@ final class AdminSosController extends Controller
         ],$additional));
     }
 
+    private function reviewReady():void{
+        abort_unless(\Illuminate\Support\Facades\Schema::hasTable('safety_policy_reviews'),503,'Safety review storage not provisioned.');
+    }
+    private function validControl(string $key,int $value):void{
+        abort_unless(in_array($key,['push_retries_enabled','escalation_enabled','escalation_after_seconds'],true),422);
+        if($key==='escalation_after_seconds')abort_unless($value>=30&&$value<=1800,422,'Invalid escalation delay.');
+        else abort_unless(in_array($value,[0,1],true),422,'Invalid switch value.');
+    }
     public function saveControl(Request $request)
     {
+        $this->reviewReady();
         $data=$this->authorized($request,[
-            'key'=>['required',Rule::in([
-                'push_retries_enabled','escalation_enabled','escalation_after_seconds',
-            ])],
-            'value'=>['required','integer','between:0,1800'],
+            'key'=>['required',Rule::in(['push_retries_enabled','escalation_enabled','escalation_after_seconds'])],
+            'value'=>['required','integer','between:0,1800'],'revision'=>['required','integer','min:0'],
         ]);
-        if($data['key']==='escalation_after_seconds'){
-            abort_unless((int)$data['value']>=30,422,'Escalation delay must be at least 30 seconds.');
-        }else {
-            abort_unless(in_array((int)$data['value'],[0,1],true),422,'Invalid switch value.');
-        }
+        $this->validControl($data['key'],(int)$data['value']);
         DB::transaction(function()use($data):void{
             $admin=(string)auth()->guard('admin')->id();
-            DB::table('sos_controls')->where('key',$data['key'])->lockForUpdate()->first();
-            DB::table('sos_controls')->where('key',$data['key'])->update([
-                'value'=>(string)$data['value'],'updated_by'=>$admin,'updated_at'=>now(),
-            ]);
-            $this->audit->admin($admin,'sos.control_updated',null,
-                $data['reason'].' ['.$data['key'].']');
+            $row=DB::table('sos_controls')->where('key',$data['key'])->lockForUpdate()->first();
+            abort_unless($row&&(int)$row->revision===(int)$data['revision'],409,'Control changed; reload.');
+            if((string)$row->value===(string)(int)$data['value'])return;
+            abort_if(DB::table('safety_policy_reviews')->where('key',$row->key)->where('state','pending')->where('expires_at','>',now())->exists(),409,'A policy review is already pending.');
+            DB::table('safety_policy_reviews')->insert(['id'=>(string)\Illuminate\Support\Str::uuid7(),'key'=>$row->key,
+                'expected_revision'=>$row->revision,'value'=>(string)(int)$data['value'],'requested_by'=>$admin,'reason'=>$data['reason'],
+                'state'=>'pending','expires_at'=>now()->addMinutes(30),'created_at'=>now(),'updated_at'=>now()]);
+            $this->audit->admin($admin,'sos.control_review_requested',null,$data['reason'].' ['.$row->key.']');
         },3);
-        return back()->with('status','SOS operational policy saved and audited. Core SOS activation remains available.');
+        return back()->with('status','Safety policy submitted for independent review. Effective policy is unchanged until approval.');
+    }
+    public function decideControl(Request $request,string $review)
+    {
+        $this->reviewReady();
+        $data=$this->authorized($request,['decision'=>'required|in:approve,reject','mfa_code'=>'required|digits:6']);
+        $actor=$request->user('admin');
+        abort_unless($actor?->canPerform('safety.read')&&$actor->canPerform('safety.approve'),403);
+        abort_unless(app(\App\Modules\Config\Services\Totp::class)->verify($actor->totp_secret,(string)$data['mfa_code']),403,'Fresh verification required.');
+        DB::transaction(function()use($data,$review,$actor):void{
+            $pending=DB::table('safety_policy_reviews')->where('id',$review)->lockForUpdate()->first();
+            abort_unless($pending&&$pending->state==='pending'&&now()->lt($pending->expires_at),409,'Review expired or already decided.');
+            abort_if($pending->requested_by===$actor->id,403,'Independent reviewer required.');
+            $requester=\App\Models\AdminUser::find($pending->requested_by);
+            abort_unless($requester?->canPerform('safety.manage'),403);
+            $row=DB::table('sos_controls')->where('key',$pending->key)->lockForUpdate()->first();
+            abort_unless($row&&(int)$row->revision===(int)$pending->expected_revision,409,'Control changed; request another review.');
+            $this->validControl($pending->key,(int)$pending->value);
+            if($data['decision']==='approve'){
+                DB::table('sos_controls')->where('key',$row->key)->update(['value'=>$pending->value,'revision'=>(int)$row->revision+1,'updated_by'=>$actor->id,'updated_at'=>now()]);
+                $this->audit->admin($actor->id,'sos.control_updated',null,$data['reason'].' ['.$row->key.']');
+            }else{
+                $this->audit->admin($actor->id,'sos.control_review_rejected',null,$data['reason'].' ['.$row->key.']');
+            }
+            DB::table('safety_policy_reviews')->where('id',$review)->update(['state'=>$data['decision']==='approve'?'approved':'rejected','decided_by'=>$actor->id,'updated_at'=>now()]);
+        },3);
+        return back()->with('status','Independent safety policy decision recorded. Core emergency intake is unchanged.');
     }
 
     public function retry(Request $request,string $job)

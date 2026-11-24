@@ -16,7 +16,7 @@ final class AdminAccessController{
         'users.read','users.manage','deletions.read','settings.audit.read','social.read','social.manage',
         'circles.read','circles.manage','media.read','media.quotas.read','media.jobs.retry','media.manage',
         'moments.read','moments.manage','camera.read','camera.manage','notifications.read','notifications.manage',
-        'plans.read','plans.manage','plans.audit','safety.read','safety.audit','moderation.read','moderation.audit',
+        'plans.read','plans.manage','plans.audit','safety.read','safety.manage','safety.approve','safety.audit','moderation.read','moderation.audit',
         'activity.read','activity.manage','activity.audit','relay.read','relay.audit',
         'billing.read','billing.audit','billing.reconcile','advertising.read','advertising.manage','advertising.analytics','advertising.audit',
     ];
