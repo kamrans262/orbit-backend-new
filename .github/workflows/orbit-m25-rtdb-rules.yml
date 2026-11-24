@@ -1,0 +1,129 @@
+name: Orbit M25 RTDB rules emulator
+on:
+  push:
+    branches: [feature/m24-comprehensive-admin-2026-11-24]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CI: 'true'
+      FIREBASE_CLI_DISABLE_TELEMETRY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Prepare isolated demo-only emulator
+        run: |
+          mkdir -p "$RUNNER_TEMP/orbit-m25-rules"
+          cp firebase/database.rules.json "$RUNNER_TEMP/orbit-m25-rules/database.rules.json"
+          cd "$RUNNER_TEMP/orbit-m25-rules"
+          printf '%s\n' '{"database":{"rules":"database.rules.json"},"emulators":{"database":{"host":"127.0.0.1","port":9000},"ui":{"enabled":false}}}' > firebase.json
+          npm init -y
+          npm install --save-exact firebase-tools@13.35.1 firebase@10.14.1 @firebase/rules-unit-testing@3.0.4
+      - name: Verify M25 and legacy M5 access using local RTDB
+        run: |
+          cd "$RUNNER_TEMP/orbit-m25-rules"
+          cat > rules.test.cjs <<'JS'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const { initializeTestEnvironment, assertSucceeds, assertFails } = require('@firebase/rules-unit-testing');
+          const projectId = 'demo-orbit-m25-rules';
+          const uid = 'session-a';
+          const other = 'session-b';
+          const device = 'device-a';
+          const generation = 'generation-a';
+          const base = 'orbit_m25/sessions/';
+          const claims = {orbit_m25:true, orbit_session:uid, orbit_device:device, orbit_generation:generation};
+          const signal = {schema_version:1, revision:1};
+          const lease = {device,generation,until_ms:Date.now()+120000};
+          async function main() {
+            if (process.env.FIREBASE_DATABASE_EMULATOR_HOST !== '127.0.0.1:9000') {
+              throw new Error('Local emulator required; refusing nonlocal target');
+            }
+            const env = await initializeTestEnvironment({projectId,database:{host:'127.0.0.1',port:9000,rules:fs.readFileSync('database.rules.json','utf8')}});
+            try {
+              await env.clearDatabase();
+              const seed = async (path,value) => env.withSecurityRulesDisabled(async ctx => ctx.database().ref(path).set(value));
+              await seed(base+uid,{lease,signal});
+              await seed(base+other,{lease:{...lease,device:'device-b'},signal});
+              await seed('orbit_m5/acl/circle-a/'+uid,device);
+              await seed('orbit_m5/revisions/circle-a',1);
+              const own = env.authenticatedContext(uid,claims).database();
+              const anonymous = env.unauthenticatedContext().database();
+              const read = (db,path) => db.ref(path).once('value');
+              const denied = (db,path) => assertFails(read(db,path));
+              const visible = await assertSucceeds(read(own,base+uid+'/signal'));
+              assert.deepEqual(visible.val(),signal);
+              for (const path of ['', 'orbit_m25', 'orbit_m25/sessions',base+uid,base+uid+'/lease',base+other+'/signal']) await denied(own,path);
+              await denied(anonymous,base+uid+'/signal');
+              for (const [name,override] of Object.entries({
+                wrongDevice:{orbit_device:'device-b'},
+                wrongGeneration:{orbit_generation:'old'},
+                wrongSession:{orbit_session:other},
+                wrongTransport:{orbit_m25:false},
+                missingDevice:{orbit_device:null},
+                missingGeneration:{orbit_generation:null}
+              })) {
+                const db=env.authenticatedContext(uid,{...claims,...override}).database();
+                await denied(db,base+uid+'/signal');
+                console.log('Denied '+name);
+              }
+              await denied(env.authenticatedContext(other,claims).database(),base+uid+'/signal');
+              for(const path of [base+uid,base+uid+'/signal',base+uid+'/lease',base+other+'/signal','orbit_m5/revisions/circle-a']) {
+                await assertFails(own.ref(path).set({revision:99}));
+              }
+              await assertFails(own.ref(base+uid+'/signal').remove());
+              await seed(base+uid+'/lease',{...lease,until_ms:Date.now()-1000});
+              await denied(own,base+uid+'/signal');
+              await seed(base+uid+'/lease',{...lease,generation:'generation-b'});
+              await denied(own,base+uid+'/signal');
+              const fresh=env.authenticatedContext(uid,{...claims,orbit_generation:'generation-b'}).database();
+              await assertSucceeds(read(fresh,base+uid+'/signal'));
+              await seed(base+uid+'/lease',null);
+              await denied(fresh,base+uid+'/signal');
+              const legacy=env.authenticatedContext(uid,{orbit_m5:true,orbit_session:uid,orbit_device:device,orbit_session_expires_ms:Date.now()+120000}).database();
+              await assertSucceeds(read(legacy,'orbit_m5/revisions/circle-a'));
+              await denied(legacy,'orbit_m5/revisions');
+              await denied(legacy,'orbit_m5/acl/circle-a');
+              await denied(legacy,base+uid+'/signal');
+              await denied(own,'orbit_m5/revisions/circle-a');
+              await assertFails(legacy.ref('orbit_m5/revisions/circle-a').set(2));
+              await seed('orbit_m5/acl/circle-a/'+uid,null);
+              await denied(legacy,'orbit_m5/revisions/circle-a');
+              // Existing open subscription must not receive a new revision after revocation.
+              await seed(base+uid,{lease,signal});
+              const live=env.authenticatedContext(uid,claims).database();
+              const ref=live.ref(base+uid+'/signal');
+              let seen=[];
+              let resolveInitial, rejectInitial, resolveRevoked;
+              const initial=new Promise((resolve,reject)=>{resolveInitial=resolve;rejectInitial=reject;});
+              const revoked=new Promise(resolve=>{resolveRevoked=resolve;});
+              let initialTimer=setTimeout(()=>rejectInitial(new Error('No initial signal')),5000);
+              const callback=snapshot=>{seen.push(snapshot.val()?.revision);resolveInitial();};
+              ref.on('value',callback,err=>{resolveRevoked(err);rejectInitial(err);});
+              try {
+                await initial;
+                await seed(base+uid,{revoked:true});
+                await seed(base+uid+'/signal',{schema_version:1,revision:2});
+                let timer;
+                try {
+                  const deniedError=await Promise.race([revoked,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Listener not revoked after lease removal and new write')),5000);})]);
+                  assert.match(String(deniedError),/permission.denied/i);
+                } finally {clearTimeout(timer);}
+                assert.deepEqual(seen,[1]);
+              } finally {clearTimeout(initialTimer);ref.off('value',callback);}
+              console.log('M25/M5 rules checks passed against isolated emulator');
+            } finally { await env.cleanup(); }
+          }
+          main().catch(e=>{console.error(e);process.exitCode=1;});
+          JS
+          ./node_modules/.bin/firebase emulators:exec --only database --project demo-orbit-m25-rules 'node rules.test.cjs'
