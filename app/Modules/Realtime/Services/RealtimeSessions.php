@@ -38,14 +38,14 @@ final class RealtimeSessions
         if(!$this->enabled())return ['schema_version'=>1,'enabled'=>false,'transport'=>'https'];
         $id=(string)$session->id;
         try{
-            $row=DB::transaction(function()use($id){
+            $row=\Illuminate\Support\Facades\Cache::store('orbit_ephemeral')->lock('orbit:m25:admission',10)->block(2,fn()=>DB::transaction(function()use($id){
                 // Same lock order used by the publisher; no stale auth snapshot renews a lease.
                 DB::table('orbit_sessions')->where('id',$id)->lockForUpdate()->first();
                 $live=$this->live($id);abort_unless($live,403);
                 $client=$this->provider->client($live->platform);
                 $current=DB::table('orbit_realtime_sessions')->where('session_id',$id)->lockForUpdate()->first();
                 if(!$current||$current->lease_until_ms<=$this->nowMs()){
-                    // Advisory connection cap; a strict serialized admission test remains a release gate.
+                    // Serialize foreground admission independently of provider I/O.
                     abort_if(DB::table('orbit_realtime_sessions')->where('lease_until_ms','>',$this->nowMs())->count()>=$this->limit('connections'),503,'Realtime capacity reached.');
                 }
                 $fresh=$current===null||(int)$current->lease_until_ms<=$this->nowMs();
@@ -58,7 +58,7 @@ final class RealtimeSessions
                     ...(!$current?['created_at'=>now()]:[]),
                 ]);
                 return ['firebase'=>$client,'generation'=>$generation,'device'=>$live->device_id,'lease_until_ms'=>$until];
-            },3);
+            },3));
             if(!$this->publish($id))abort(503,'Realtime service unavailable.');
             // If revoked between signing and provider write, only a bounded
             // generic signal is accessible; all domain APIs independently deny.
@@ -167,7 +167,7 @@ final class RealtimeSessions
     public function pruneEphemeral():void
     {
         foreach(['orbit_ephemeral_cache','orbit_ephemeral_locks'] as $table){
-            $keys=DB::table($table)->where('expiration','<=',time())->orderBy('expiration')->limit(1000)->pluck('key');
+            $keys=DB::table($table)->where('expiration','<=',now()->timestamp)->orderBy('expiration')->limit(1000)->pluck('key');
             DB::table($table)->whereIn('key',$keys)->where('expiration','<=',time())->delete();
         }
     }
@@ -175,9 +175,12 @@ final class RealtimeSessions
     {
         if(!$this->enabled())return 0;
         $ids=DB::table('orbit_realtime_sessions as r')->leftJoin('orbit_sessions as s','s.id','=','r.session_id')
+            ->leftJoin('devices as d','d.id','=','s.device_id')->leftJoin('orbit_users as u','u.id','=','s.user_id')
             ->where('r.available_at','<=',now())->where(function($q){
                 $q->where('r.dirty',true)->orWhere('r.lease_until_ms','<=',$this->nowMs())
-                    ->orWhereNull('s.id')->orWhereNotNull('s.revoked_at')->orWhere('s.expires_at','<=',now());
+                    ->orWhereNull('s.id')->orWhereNotNull('s.revoked_at')->orWhere('s.expires_at','<=',now())
+                    ->orWhereNull('d.id')->orWhereNotNull('d.revoked_at')->orWhere('d.trust_state','!=','trusted')
+                    ->orWhereNull('u.id')->orWhere('u.status','!=','active')->orWhereNotNull('u.deletion_requested_at');
             })->orderBy('r.available_at')->limit($this->limit('worker_batch'))->pluck('r.session_id');
         foreach($ids as $id)$this->publish($id);
         return $ids->count();

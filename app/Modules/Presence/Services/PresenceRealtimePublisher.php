@@ -56,14 +56,14 @@ final class PresenceRealtimePublisher
     public function clearCircle(string $circle): void
     {
         if (!$this->enabled()) return;
-        $users=DB::table('circle_members')->where('circle_id',$circle)->limit(1000)
+        $users=DB::table('circle_members')->where('circle_id',$circle)->when($this->firebase(),fn($q)=>$q->where(fn($r)=>$r->whereNull('removed_at')->orWhere('removed_at','>=',now()->subSeconds(5))))->limit(1000)
             ->pluck('user_id')->unique()->all();
         foreach ($users as $viewer) $this->emit($viewer,['type'=>'presence.circle_clear','circle_id'=>$circle]);
     }
     public function clearUser(string $user): void
     {
         if (!$this->enabled()) return;
-        $ids=DB::table('circle_members')->where('user_id',$user)->limit(100)->pluck('circle_id');
+        $ids=DB::table('circle_members')->where('user_id',$user)->when($this->firebase(),fn($q)=>$q->whereNull('removed_at'))->limit(100)->pluck('circle_id');
         foreach ($ids as $id) $this->clearCircle($id);
     }
     public function safelyClearCircle(string $circle): void

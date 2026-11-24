@@ -36,14 +36,14 @@ final class LocationRealtimePublisher
 
     public function invalidate(string $owner,bool $clear=true): void
     {
-        if (!$this->tickets->enabled()) return;
+        if (!$this->firebase()&&!$this->tickets->enabled()) return;
         try {
             $shares=DB::table('location_shares')->where('owner_id',$owner)
                 ->where(function($q): void {
                     $q->where('status','active')
                       ->orWhere(function($r): void {
                           $r->whereIn('status',['revoked','expired'])
-                            ->where('updated_at','>=',now()->subDays(7));
+                            ->where('updated_at','>=',$this->firebase()?now()->subSeconds(5):now()->subDays(7));
                       });
                 })
                 ->limit((int)config('orbit_location.max_map_candidates',200)+1)->get();

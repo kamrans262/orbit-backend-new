@@ -63,7 +63,7 @@ final class PingService
                 'context_type' => $context, 'context_id' => $circle,
                 'created_at' => now(), 'updated_at' => now(),
             ]) === 1;
-            if ($inserted&&$this->policy->allows($sender,$recipient,$context,$circle)) app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('ping',[$sender,$recipient]);
+            if ($inserted&&app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('ping')&&$this->policy->allows($sender,$recipient,$context,$circle)) app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('ping',[$sender,$recipient]);
             if ($inserted) app(\App\Modules\Notifications\Services\NotificationSourceOutbox::class)->record('ping', $eventId);
             return $inserted;
         });
