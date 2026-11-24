@@ -7,6 +7,8 @@ return [
     'database_url'=>env('ORBIT_M25_FIREBASE_DATABASE_URL',''),
     'service_account_path'=>env('ORBIT_M25_FIREBASE_SERVICE_ACCOUNT_PATH',''),
     'api_key'=>env('ORBIT_M25_FIREBASE_API_KEY',''),
+    'android_api_key'=>env('ORBIT_M25_FIREBASE_ANDROID_API_KEY',''),
+    'ios_api_key'=>env('ORBIT_M25_FIREBASE_IOS_API_KEY',''),
     'sender_id'=>env('ORBIT_M25_FIREBASE_SENDER_ID',''),
     'android_app_id'=>env('ORBIT_M25_FIREBASE_ANDROID_APP_ID',''),
     'ios_app_id'=>env('ORBIT_M25_FIREBASE_IOS_APP_ID',''),

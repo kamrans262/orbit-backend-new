@@ -13,14 +13,13 @@ final class FirebaseRealtimeProvider
     public function settings(): array
     {
         $v=config('orbit_realtime');
-        foreach (['project_id','database_url','service_account_path','api_key','sender_id','android_app_id','ios_app_id','ios_bundle_id'] as $k) {
+        foreach (['project_id','database_url','service_account_path','api_key','android_api_key','ios_api_key','sender_id','android_app_id','ios_app_id','ios_bundle_id'] as $k) {
             $v[$k]=trim((string)($v[$k]??''));
         }
         // Legacy settings may be reused, but must never point at another project.
         $aliases=[
             'project_id'=>['orbit_circle.firebase.project_id','orbit_moments.fcm.project_id'],
             'database_url'=>['orbit_circle.firebase.database_url'],
-            'api_key'=>['orbit_circle.firebase.api_key','orbit_moments.fcm.api_key'],
             'sender_id'=>['orbit_circle.firebase.sender_id','orbit_moments.fcm.sender_id'],
             'android_app_id'=>['orbit_moments.fcm.android_app_id'],
             'ios_app_id'=>['orbit_moments.fcm.ios_app_id'],
@@ -47,7 +46,19 @@ final class FirebaseRealtimeProvider
         if(!preg_match('/^https:\/\/'.$base.'(?:-default-rtdb)?(?:\.firebaseio\.com|\.[a-z0-9-]+\.firebasedatabase\.app)$/D',rtrim($v['database_url'],'/')))
             throw new RuntimeException('Firebase database origin mismatch.');
         $v['database_url']=rtrim($v['database_url'],'/');
-        if($v['api_key']===''||!ctype_digit($v['sender_id']))throw new RuntimeException('Firebase client settings unavailable.');
+        // Client API keys may legitimately differ between Android and iOS.
+        // Explicit per-platform keys override a shared fallback. Legacy M5's
+        // key is scoped to its registered app; M7's shared key is fallback only.
+        $m5Key=trim((string)config('orbit_circle.firebase.api_key',''));
+        $m7Key=trim((string)config('orbit_moments.fcm.api_key',''));
+        foreach(['android','ios'] as $platform){
+            $key=$platform.'_api_key';
+            $legacy=$legacyApp!==''&&str_contains($legacyApp,':'.$platform.':')?$m5Key:'';
+            if($v[$key]!==''&&$legacy!==''&&$v[$key]!==$legacy)throw new RuntimeException('Firebase platform key conflict.');
+            $v[$key]=$v[$key]?:($legacy?:($v['api_key']?:$m7Key));
+        }
+        if(!ctype_digit($v['sender_id'])||($v['android_api_key']===''&&$v['ios_api_key']===''))
+            throw new RuntimeException('Firebase client settings unavailable.');
         foreach(['android','ios'] as $platform){
             $id=$v[$platform.'_app_id'];
             if($id!==''&&!preg_match('/^1:'.preg_quote($v['sender_id'],'/').':'.$platform.':[a-f0-9]+$/D',$id))
@@ -79,9 +90,9 @@ final class FirebaseRealtimeProvider
     {
         $v=$this->settings();
         $this->credentials($v);
-        if(!in_array($platform,['android','ios'],true)||$v[$platform.'_app_id']===''||($platform==='ios'&&$v['ios_bundle_id']===''))
+        if(!in_array($platform,['android','ios'],true)||$v[$platform.'_app_id']===''||$v[$platform.'_api_key']===''||($platform==='ios'&&$v['ios_bundle_id']===''))
             throw new RuntimeException('Firebase platform unavailable.');
-        return ['project_id'=>$v['project_id'],'database_url'=>$v['database_url'],'api_key'=>$v['api_key'],
+        return ['project_id'=>$v['project_id'],'database_url'=>$v['database_url'],'api_key'=>$v[$platform.'_api_key'],
             'sender_id'=>$v['sender_id'],'app_id'=>$v[$platform.'_app_id'],'ios_bundle_id'=>$platform==='ios'?$v['ios_bundle_id']:null];
     }
 
@@ -101,7 +112,7 @@ final class FirebaseRealtimeProvider
     {
         try{
             $v=$this->settings();$this->credentials($v);
-            if($v['android_app_id']===''||$v['ios_app_id']===''||$v['ios_bundle_id']==='')return 'Platform registration incomplete';
+            if($v['android_app_id']===''||$v['ios_app_id']===''||$v['android_api_key']===''||$v['ios_api_key']===''||$v['ios_bundle_id']==='')return 'Platform registration incomplete';
             return 'Local configuration valid; live verification required';
         }catch(\Throwable){return 'Local configuration incomplete or invalid';}
     }

@@ -287,6 +287,54 @@ final class OrbitM25RealtimeTest extends TestCase
         $this->assertGreaterThan(0,(int)DB::table('orbit_realtime_metrics')->sum('published'));
     }
 
+    public function test_rolled_back_source_mutation_never_publishes_or_retains_dirty_revision():void
+    {
+        $this->enableTransport();
+        [$u,$token]=$this->person();
+        $sid=$this->withToken($token)->postJson('/api/v1/realtime/bootstrap')->assertOk()->json('data.uid');
+        $before=count($this->writes);
+        try {
+            DB::transaction(function()use($u,$sid){
+                app(RealtimeSessions::class)->signalUsers('ping',[$u->id],['kind'=>'self','id'=>$u->id]);
+                $this->assertDatabaseHas('orbit_realtime_sessions',['session_id'=>$sid,'revision'=>2,'dirty'=>true]);
+                throw new \RuntimeException('synthetic source rollback');
+            });
+            $this->fail('Rollback did not occur');
+        }catch(\RuntimeException $e){$this->assertSame('synthetic source rollback',$e->getMessage());}
+        $this->assertDatabaseHas('orbit_realtime_sessions',['session_id'=>$sid,'revision'=>1,'dirty'=>false,'pending_scopes'=>null]);
+        $this->assertSame($before,count($this->writes));
+    }
+
+    public function test_provider_cleanup_is_bound_to_owner_even_after_local_session_purge():void
+    {
+        $this->enableTransport();
+        [$u,$token]=$this->person();[$other,$otherToken]=$this->person();
+        $sid=$this->withToken($token)->postJson('/api/v1/realtime/bootstrap')->assertOk()->json('data.uid');
+        $cleanup=app(\App\Modules\Realtime\Services\RealtimeAuthCleanup::class);
+        $this->assertTrue($cleanup->pendingForUser($u->id));
+        DB::table('orbit_sessions')->where('id',$sid)->delete();
+        $this->assertTrue($cleanup->pendingForUser($u->id));
+        $this->assertFalse($cleanup->pendingForUser($other->id));
+        app(RealtimeSessions::class)->process();$cleanup->process();
+        $this->travel(17)->minutes();$cleanup->process();
+        $this->assertFalse($cleanup->pendingForUser($u->id));
+        $this->travelBack();
+    }
+
+    public function test_platform_keys_are_independent_and_project_conflicts_fail_closed():void
+    {
+        $this->enableTransport();
+        config(['orbit_realtime.android_api_key'=>'android-only','orbit_realtime.ios_api_key'=>'ios-only',
+            'orbit_realtime.ios_app_id'=>'1:123:ios:def','orbit_realtime.ios_bundle_id'=>'com.orbit.test']);
+        $provider=app(\App\Modules\Realtime\Services\FirebaseRealtimeProvider::class);
+        $this->assertSame('android-only',$provider->client('android')['api_key']);
+        $this->assertSame('ios-only',$provider->client('ios')['api_key']);
+        config(['orbit_circle.firebase.project_id'=>'different-project']);
+        [$user,$token]=$this->person();
+        $this->withToken($token)->postJson('/api/v1/realtime/bootstrap')->assertStatus(503);
+        Http::assertNothingSent();
+    }
+
     public function test_redis_free_presence_and_legacy_gateway_exclusion():void
     {
         config(['orbit_realtime.enabled'=>true,'orbit_realtime.verified'=>false,

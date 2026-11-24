@@ -207,11 +207,14 @@ final class MessagingConversationService
 
     public function updateConsent(string $circle,string $subject,bool $enabled): array
     {
+        return DB::transaction(function()use($circle,$subject,$enabled){
         if($enabled){
             abort_unless($this->access->circleSenderAllowed($circle,$subject)
                 || $this->canStartConsent($circle,$subject),403,'Circle privacy does not allow messaging.');
         }else{
+            $members=app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging')?$this->consentRefreshUsers($circle,$subject):[];
             app(CircleConsentPolicy::class)->revoke($circle,$subject,'message');
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',$members,['kind'=>'clear']);
             return ['circle_id'=>$circle,'enabled'=>false];
         }
         DB::table('circle_permissions')->updateOrInsert([
@@ -222,7 +225,16 @@ final class MessagingConversationService
                 'duration'=>'persistent','typing_enabled'=>true],JSON_THROW_ON_ERROR),
             'updated_at'=>now(),
         ]);
+        if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging'))
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',$this->consentRefreshUsers($circle,$subject),['kind'=>'clear']);
         return ['circle_id'=>$circle,'enabled'=>true];
+        },3);
+    }
+
+    private function consentRefreshUsers(string $circle,string $subject):array
+    {
+        $members=DB::table('circle_members')->where('circle_id',$circle)->whereNull('removed_at')->limit(200)->pluck('user_id')->all();
+        return array_values(array_unique([$subject,...array_filter($members,fn($u)=>$u!==$subject&&$this->access->canCirclePair($circle,$subject,$u))]));
     }
 
     private function canStartConsent(string $circle,string $subject): bool
