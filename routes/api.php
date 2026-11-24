@@ -10,6 +10,7 @@ use App\Modules\Social\Http\Controllers\SocialContactController;
 use App\Modules\Social\Http\Controllers\SocialInviteController;
 use App\Modules\Circle\Http\Controllers\CircleController;
 use App\Modules\Circle\Http\Middleware\EnsureCircleM5Enabled;
+use App\Modules\Circle\Http\Middleware\CircleCodeThrottle;
 use App\Modules\Media\Http\Controllers\MediaController;
 use App\Modules\Moments\Http\Controllers\MomentController;
 use App\Modules\Moments\Http\Controllers\MomentInteractionController;
@@ -321,8 +322,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/circles', [CircleController::class, 'create'])->middleware('throttle:10,1');
         Route::get('/circles/archived', [CircleController::class, 'archived']);
         Route::get('/circles/invites/incoming', [CircleController::class, 'incoming']);
-        Route::post('/circles/invites/code/preview', [CircleController::class, 'previewCode'])->middleware('throttle:orbit-circle-code-preview');
-        Route::post('/circles/invites/code/redeem', [CircleController::class, 'redeemCode'])->middleware('throttle:orbit-circle-code-redeem');
+        Route::post('/circles/invites/code/preview', [CircleController::class, 'previewCode'])->middleware(CircleCodeThrottle::class.':orbit-circle-code-preview');
+        Route::post('/circles/invites/code/redeem', [CircleController::class, 'redeemCode'])->middleware(CircleCodeThrottle::class.':orbit-circle-code-redeem');
         Route::post('/circles/invites/{invite}/accept', [CircleController::class, 'accept'])->whereUuid('invite')->middleware('throttle:20,1');
         Route::post('/circles/invites/{invite}/decline', [CircleController::class, 'decline'])->whereUuid('invite')->middleware('throttle:20,1');
         Route::get('/circles/{circle}', [CircleController::class, 'detail'])->whereUuid('circle');

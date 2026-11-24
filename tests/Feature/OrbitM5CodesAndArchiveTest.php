@@ -272,6 +272,9 @@ final class OrbitM5CodesAndArchiveTest extends TestCase
         config()->set('orbit_circle.archive_enabled',false);
         $this->withToken($ta)->postJson('/api/v1/circles/'.$id.'/archive',
             ['confirmation'=>'ARCHIVE'])->assertNotFound();
+        config()->set('orbit_circle.temporary_circles_enabled',false);
         $this->withToken($ta)->getJson('/api/v1/circles/archived')->assertNotFound();
+        config()->set('orbit_circle.temporary_circles_enabled',true);
+        $this->withToken($ta)->getJson('/api/v1/circles/archived')->assertOk();
     }
 }

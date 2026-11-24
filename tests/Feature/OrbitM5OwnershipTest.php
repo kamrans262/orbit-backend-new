@@ -47,6 +47,7 @@ final class OrbitM5OwnershipTest extends TestCase
             ['invitee_id'=>$b->id])->assertCreated()->json('data.id');
         $this->withToken($tb)->postJson('/api/v1/circles/invites/'.$invite.'/accept')->assertOk();
 
+        config()->set('orbit_circle.ownership_transfer_enabled',false);
         $url='/api/v1/circles/'.$id.'/ownership-transfer';
         $payload=['recipient_id'=>$b->id,'confirmation'=>'TRANSFER'];
         $this->withToken($ta)->postJson($url,$payload)->assertNotFound();
