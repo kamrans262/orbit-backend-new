@@ -224,11 +224,45 @@ final class AdminAdvertisingController extends Controller
             && $width <= config('orbit_advertising.max_width')
             && $height <= config('orbit_advertising.max_height'),422,
             'Image dimensions are outside the allowed range.');
-        $extension=['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp'][$mime];
-        $name=(string)Str::uuid7().'.'.$extension;
-        $path=Storage::disk('local')->putFileAs('advertising/creatives',$file,$name);
-        abort_unless($path,503,'Private asset storage unavailable.');
-        return [$path,hash_file('sha256',$file->getRealPath()),$mime,$width,$height];
+        // Re-encode approved raster formats rather than copying originals.
+        // This strips EXIF/GPS, text chunks, comments and embedded trailers
+        // from uploaded advertising artwork before private persistence.
+        $source=match ($mime) {
+            'image/jpeg'=>@imagecreatefromjpeg($file->getRealPath()),
+            'image/png'=>@imagecreatefrompng($file->getRealPath()),
+            'image/webp'=>@imagecreatefromwebp($file->getRealPath()),
+        };
+        abort_unless($source instanceof \GdImage,422,'Image decoder rejected creative.');
+        $temp=tempnam(sys_get_temp_dir(),'orbit-ad-');
+        if ($temp === false) {
+            imagedestroy($source);
+            abort(503,'Creative sanitization unavailable.');
+        }
+        try {
+            if ($mime==='image/png' || $mime==='image/webp') {
+                imagealphablending($source,false);
+                imagesavealpha($source,true);
+            }
+            $encoded=match ($mime) {
+                'image/jpeg'=>imagejpeg($source,$temp,88),
+                'image/png'=>imagepng($source,$temp,6),
+                'image/webp'=>imagewebp($source,$temp,86),
+            };
+            abort_unless($encoded,422,'Creative image encoding failed.');
+            $content=file_get_contents($temp);
+            abort_unless(is_string($content)&&strlen($content)>0
+                && strlen($content)<=(int)config('orbit_advertising.asset_max_bytes'),
+                422,'Sanitized image exceeds safe limits.');
+            $extension=['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp'][$mime];
+            $name=(string)Str::uuid7().'.'.$extension;
+            $path='advertising/creatives/'.$name;
+            abort_unless(Storage::disk('local')->put($path,$content),
+                503,'Private asset storage unavailable.');
+            return [$path,hash('sha256',$content),$mime,$width,$height];
+        } finally {
+            imagedestroy($source);
+            @unlink($temp);
+        }
     }
 
     public function uploadCreative(Request $r)
