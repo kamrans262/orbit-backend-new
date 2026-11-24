@@ -58,6 +58,8 @@ jobs:
         run: |
           php artisan migrate:rollback --step=2 --force
           php artisan migrate --force
+      - name: M25 synthetic Firebase transport and SQL leases
+        run: php artisan test --compact --display-warnings tests/Feature/OrbitM25RealtimeTest.php
       - name: M24 operational settings, runtime and access reviews
         run: php artisan test --compact --display-warnings tests/Feature/OrbitM24OperationalControlsTest.php
       - name: Billing verification and regression

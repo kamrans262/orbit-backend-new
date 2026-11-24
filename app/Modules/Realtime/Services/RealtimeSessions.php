@@ -18,7 +18,7 @@ final class RealtimeSessions
     {
         if(config('orbit_realtime.enabled')!==true||config('orbit_realtime.verified')!==true)return false;
         try{
-            return $this->limit('allow')===1&&($module===null||
+            return \Illuminate\Support\Facades\Schema::hasTable('orbit_realtime_sessions')&&$this->limit('allow')===1&&($module===null||
                 (config('orbit_realtime.modules.'.$module)===true&&$this->limit('allow_'.$module)===1));
         }catch(\Throwable){return false;}
 
@@ -65,7 +65,7 @@ final class RealtimeSessions
             abort_unless($this->live($id),403);
             return ['schema_version'=>1,'enabled'=>true,'transport'=>'firebase_rtdb','uid'=>$id,
                 'custom_token'=>$this->provider->customToken($id,$row['device'],$row['generation']),
-                'firebase'=>$row['firebase'],'lease_until_ms'=>$row['lease_until_ms'],'renew_after_seconds'=>30,
+                'firebase'=>$row['firebase'],'generation'=>$row['generation'],'modules'=>array_values(array_filter(array_keys(config('orbit_realtime.modules',[])),fn($m)=>$this->enabled($m))),'lease_until_ms'=>$row['lease_until_ms'],'renew_after_seconds'=>30,
                 'signal_path'=>'orbit_m25/sessions/'.$id.'/signal'];
         }catch(\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e){throw $e;}
         catch(\Throwable){abort(503,'Realtime service unavailable.');}
