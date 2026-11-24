@@ -21,6 +21,20 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Relay uses operation-specific buckets, so an authenticated
+        // capability lookup, key registration or retry on a shared IP cannot
+        // consume the entire lease bucket. Preserve the existing global ceiling.
+        foreach (['capabilities'=>40,'leases'=>10,'revoke'=>20,'reconcile'=>20,'sync'=>40] as $operation=>$limit) {
+            RateLimiter::for('orbit-relay-'.$operation, function(Request $request) use($operation,$limit):array {
+                $session=$request->attributes->get('orbit_session');
+                return [
+                    Limit::perMinute($limit)->by('relay:'.$operation.':device:'.($session?->device_id??'unauth:'.$request->ip())),
+                    Limit::perMinute($limit*3)->by('relay:'.$operation.':account:'.($session?->user_id??'unauth:'.$request->ip())),
+                    Limit::perMinute($limit*10)->by('relay:'.$operation.':ip:'.$request->ip()),
+                ];
+            });
+        }
+
         // M5 QR codes are recipient-bound and scanned by authenticated devices.
         // Per-IP-only throttles were locking out distinct trusted accounts
         // behind the same household or office Wi-Fi. Keep strict per-account

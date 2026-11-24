@@ -59,11 +59,11 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
         Route::prefix('relay')->group(function (): void {
             $controller=\App\Modules\Relay\Http\Controllers\RelayController::class;
-            Route::get('/capabilities',[$controller,'capabilities'])->middleware('throttle:40,1');
-            Route::post('/leases',[$controller,'leases'])->middleware('throttle:10,1');
-            Route::post('/leases/{lease}/revoke',[$controller,'revoke'])->whereUuid('lease')->middleware('throttle:20,1');
-            Route::post('/reconcile',[$controller,'reconcile'])->middleware('throttle:20,1');
-            Route::get('/sync',[$controller,'sync'])->middleware('throttle:40,1');
+            Route::get('/capabilities',[$controller,'capabilities'])->middleware('throttle:orbit-relay-capabilities');
+            Route::post('/leases',[$controller,'leases'])->middleware('throttle:orbit-relay-leases');
+            Route::post('/leases/{lease}/revoke',[$controller,'revoke'])->whereUuid('lease')->middleware('throttle:orbit-relay-revoke');
+            Route::post('/reconcile',[$controller,'reconcile'])->middleware('throttle:orbit-relay-reconcile');
+            Route::get('/sync',[$controller,'sync'])->middleware('throttle:orbit-relay-sync');
         });
 
         // M20: first-party sponsored placements. Always disabled without

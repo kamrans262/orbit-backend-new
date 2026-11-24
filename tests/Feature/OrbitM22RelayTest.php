@@ -75,13 +75,16 @@ final class OrbitM22RelayTest extends TestCase
         $pair=sodium_crypto_sign_keypair();
         $secret=sodium_crypto_sign_secretkey($pair);
         $prekey=random_bytes(32);
-        $this->withToken($token)->postJson('/api/v1/me/messaging/keys',[
+        $payload=[
             'identity_ed25519'=>base64_encode(sodium_crypto_sign_publickey($pair)),
             'signed_prekey_x25519'=>base64_encode($prekey),'signed_prekey_id'=>$id,
             'signed_prekey_signature'=>base64_encode(sodium_crypto_sign_detached(
                 'orbit-m13-signed-prekey-v1|'.$device->id.'|'.$id.'|'.$prekey,$secret)),
             'one_time_prekeys'=>[],
-        ])->assertOk();
+        ];
+        $registered=app(\App\Modules\Messaging\Services\MessagingKeyService::class)
+            ->register((string)$device->user_id,(string)$device->id,$payload);
+        $this->assertTrue($registered['registered']);
         return $secret;
     }
     private function direct():array {
@@ -272,5 +275,17 @@ final class OrbitM22RelayTest extends TestCase
         $this->withToken($ta)->getJson('/api/v1/relay/capabilities')->assertJsonPath('data.enabled',false);
         $this->batch($ta,[$this->item($lease,$thread,$da,$db)])->assertStatus(503);
         $this->assertDatabaseCount('messaging_messages',0);
+    }
+
+    public function test_relay_rate_limits_are_operation_and_device_scoped():void{
+        [$a,$da,$ta,$b,$db,$tb,$thread,$secret]=$this->direct();
+        $p=$this->leasePayload($thread,$db);
+        for($i=0;$i<10;$i++){
+            $this->withToken($ta)->postJson('/api/v1/relay/leases',$p)->assertOk();
+        }
+        $this->postJson('/api/v1/relay/leases',$p)->assertStatus(429);
+        $this->getJson('/api/v1/relay/capabilities')->assertOk();
+        $this->withToken($tb)->postJson('/api/v1/relay/leases',$this->leasePayload($thread,$da))->assertOk();
+        $this->assertDatabaseCount('relay_leases',2);
     }
 }
