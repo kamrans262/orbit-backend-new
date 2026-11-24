@@ -85,6 +85,25 @@ final class OrbitM21AdminNavigationTest extends TestCase
         foreach(['/admin/circles','/admin/media','/admin/moments'] as $url)$this->get($url)->assertForbidden();
     }
 
+    public function test_read_roles_cannot_execute_existing_mutation_endpoints(): void
+    {
+        $this->be($this->admin(['users.read','circles.read','media.read','moments.read',
+            'notifications.read','plans.read','safety.read','moderation.read','activity.read','advertising.read']),'admin');
+        $id=(string)Str::uuid();
+        foreach ([
+            '/admin/users/'.$id.'/status',
+            '/admin/media/jobs/retry',
+            '/admin/moments/reports/'.$id.'/action',
+            '/admin/notifications/jobs/'.$id.'/retry',
+            '/admin/plans/cancel',
+            '/admin/safety/run',
+            '/admin/moderation/cases/'.$id.'/enforce',
+            '/admin/activity/control',
+            '/admin/advertising/sponsors',
+        ] as $path) $this->post($path,[])->assertForbidden();
+        $this->delete('/admin/users/'.$id)->assertForbidden();
+    }
+
     public function test_admin_session_and_no_permission_boundaries(): void
     {
         $this->get('/admin/start')->assertRedirect(route('orbit.admin.login'));

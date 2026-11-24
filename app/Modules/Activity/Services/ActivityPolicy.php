@@ -18,7 +18,8 @@ final class ActivityPolicy
     {
         return Schema::hasTable('activity_events')
             && Schema::hasTable('activity_controls')
-            && Schema::hasTable('activity_projection_runs');
+            && Schema::hasTable('activity_projection_runs')
+            && Schema::hasTable('activity_admin_audits');
     }
 
     public function assertReady(): void

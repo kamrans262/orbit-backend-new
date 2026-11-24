@@ -58,7 +58,7 @@ final class AdminSosController extends Controller
                 $jobs=DB::table('sos_delivery_jobs')
                     ->select('id','state','attempts','next_attempt_at',
                         'provider_accepted_at','last_error_code','created_at')
-                    ->when($request->filled('state'),fn($q)=>$q->where('state',$request->validate(['state'=>['required','string','max:24']])['state']))
+                    ->when($request->filled('state'),fn($q)=>$q->where('state',$request->validate(['state'=>['required',Rule::in(['pending','retry','processing','accepted','failed','suppressed'])]])['state']))
                     ->orderByDesc('created_at')->orderByDesc('id')->paginate(25)->withQueryString();
                 $states=DB::table('sos_delivery_jobs')->select('state')
                     ->selectRaw('COUNT(*) AS total')->groupBy('state')->get();

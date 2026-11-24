@@ -12,11 +12,12 @@ final class AdvertisingPolicy
 
     public function installed(): bool
     {
-        return Schema::hasTable('ad_sponsors')
-            && Schema::hasTable('ad_placements')
-            && Schema::hasTable('ad_creatives')
-            && Schema::hasTable('ad_decisions')
-            && Schema::hasTable('ad_measurement_events');
+        foreach (['ad_sponsors','ad_sponsor_contacts','ad_creatives','ad_creative_revisions',
+            'ad_campaigns','ad_placements','ad_campaign_placements','ad_decisions',
+            'ad_frequency_windows','ad_measurement_events','ad_daily_aggregates','ad_admin_audits'] as $table) {
+            if (!Schema::hasTable($table)) return false;
+        }
+        return true;
     }
 
     public function trusted(string $user, string $device): void

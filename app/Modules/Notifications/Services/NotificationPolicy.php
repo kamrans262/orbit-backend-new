@@ -14,11 +14,12 @@ final class NotificationPolicy
 {
     public function installed(): bool
     {
-        return Schema::hasTable('notification_events') &&
-            Schema::hasTable('notification_inbox') &&
-            Schema::hasTable('notification_device_tokens') &&
-            Schema::hasTable('notification_jobs') &&
-            Schema::hasTable('notification_controls');
+        foreach (['notification_events','notification_inbox','notification_device_tokens',
+            'notification_jobs','notification_controls','notification_attempts',
+            'notification_templates','notification_admin_audits'] as $table) {
+            if (!Schema::hasTable($table)) return false;
+        }
+        return true;
     }
 
     public function assertReady(): void

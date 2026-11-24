@@ -406,6 +406,61 @@ final class OrbitM20AdvertisingTest extends TestCase
             ->where('creative_id',$creative->id)->count());
     }
 
+    public function test_admin_directories_reach_older_records_and_preserve_campaign_form_selections(): void
+    {
+        [$sponsor,$creative,$campaign]=$this->creativeReady();
+        $manager=$this->admin(['advertising.read','advertising.manage','advertising.analytics','advertising.audit']);
+        $this->be($manager,'admin');
+        DB::table('ad_sponsors')->where('id',$sponsor)->update(['display_name'=>'ZZZ older sponsor','created_at'=>now()->subYears(2)]);
+        DB::table('ad_creatives')->where('id',$creative)->update(['title'=>'Older creative target','created_at'=>now()->subYears(2)]);
+        DB::table('ad_campaigns')->where('id',$campaign)->update(['name'=>'Older campaign target','created_at'=>now()->subYears(2)]);
+        $sp=DB::table('ad_sponsors')->where('id',$sponsor)->first();
+        $cr=DB::table('ad_creatives')->where('id',$creative)->first();
+        $ca=DB::table('ad_campaigns')->where('id',$campaign)->first();
+        $sponsors=[];$creatives=[];$campaigns=[];$audits=[];$daily=[];
+        for($i=0;$i<151;$i++){
+            $sid=(string)Str::uuid();$cid=(string)Str::uuid();$aid=(string)Str::uuid();
+            $sponsors[]=array_replace((array)$sp,['id'=>$sid,'display_name'=>'AAA sponsor '.sprintf('%03d',$i),'created_at'=>now(),'updated_at'=>now()]);
+            $creatives[]=array_replace((array)$cr,['id'=>$cid,'sponsor_id'=>$sid,'title'=>'Recent creative '.$i,'created_at'=>now(),'updated_at'=>now()]);
+            $campaigns[]=array_replace((array)$ca,['id'=>$aid,'sponsor_id'=>$sid,'creative_id'=>$cid,'name'=>'Recent campaign '.$i,'created_at'=>now(),'updated_at'=>now()]);
+            $daily[]=['campaign_id'=>$aid,'placement_key'=>'home.promo','day_utc'=>now()->toDateString(),'impressions'=>0,'clicks'=>0,'updated_at'=>now()];
+            $audits[]=['id'=>(string)Str::uuid(),'admin_id'=>$manager->id,'action'=>'campaign.created','subject_type'=>'campaign','subject_id'=>$aid,'reason'=>'Recent audited fixture','created_at'=>now()];
+        }
+        DB::table('ad_sponsors')->insert($sponsors);
+        DB::table('ad_creatives')->insert($creatives);
+        DB::table('ad_campaigns')->insert($campaigns);
+        DB::table('ad_daily_aggregates')->insert($daily);
+        DB::table('ad_admin_audits')->insert($audits);
+        DB::table('ad_daily_aggregates')->insert(['campaign_id'=>$campaign,'placement_key'=>'home.promo','day_utc'=>'2024-01-01','impressions'=>17,'clicks'=>3,'updated_at'=>now()]);
+        DB::table('ad_admin_audits')->insert(['id'=>(string)Str::uuid(),'admin_id'=>$manager->id,'action'=>'campaign.created','subject_type'=>'campaign','subject_id'=>$campaign,'reason'=>'Older audited fixture','created_at'=>'2024-01-01 00:00:00']);
+        $this->get('/admin/advertising/sponsors')->assertOk()->assertDontSee('ZZZ older sponsor');
+        $this->get('/admin/advertising/sponsors?page=7')->assertOk()->assertSee('ZZZ older sponsor')->assertSee($sponsor);
+        $this->get('/admin/advertising/sponsors?query='.urlencode('ZZZ older').'&status=verified')->assertOk()->assertSee($sponsor);
+        $this->get('/admin/advertising/creatives?page=7')->assertOk()->assertSee('Older creative target')->assertSee($creative);
+        $this->get('/admin/advertising/creatives?query='.$creative)->assertOk()->assertSee('ZZZ older sponsor');
+        $this->get('/admin/advertising/campaigns?page=7')->assertOk()->assertSee('Older campaign target');
+        $page=$this->get('/admin/advertising/campaigns?query='.$campaign)->assertOk()
+            ->assertSee('Older creative target')->assertSee('value="'.$sponsor.'"',false)
+            ->assertSee('value="'.$creative.'"',false);
+        $this->assertMatchesRegularExpression('/value="home\\.promo"\\s+checked(?:="checked")?> Home promo<\\/label>/', $page->getContent());
+        $this->get('/admin/advertising/analytics?page=7')->assertOk()->assertSee('2024-01-01');
+        $this->get('/admin/advertising/analytics?from=2024-01-01&to=2024-01-01&campaign_id='.$campaign)->assertOk()->assertSee('2024-01-01');
+        $this->get('/admin/advertising/audits?page=7')->assertOk()->assertSee('Older audited fixture');
+        $this->get('/admin/advertising/audits?to=2024-01-01')->assertOk()->assertSee('Older audited fixture')->assertDontSee('Recent audited fixture');
+        $this->get('/admin/advertising/campaigns?status=unknown')->assertRedirect();
+        $this->post('/admin/advertising/campaigns/'.$campaign.'/edit',[
+            'revision'=>3,'name'=>'Older campaign edited','sponsor_id'=>$sponsor,'creative_id'=>$creative,
+            'starts_at'=>now()->subHour()->format('Y-m-d H:i:s'),'ends_at'=>now()->addDay()->format('Y-m-d H:i:s'),
+            'priority'=>5,'placements'=>['home.promo'],'reason'=>'Keep existing placement on revision','confirm'=>'1',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('ad_campaign_placements',['campaign_id'=>$campaign,'placement_key'=>'home.promo']);
+        $this->assertDatabaseHas('ad_campaigns',['id'=>$campaign,'revision'=>4,'status'=>'draft']);
+        $this->be($this->admin(['advertising.read']),'admin');
+        $this->get('/admin/advertising/campaigns?query='.$campaign)->assertOk()->assertDontSee('Save Revised Campaign');
+        $this->post('/admin/advertising/campaigns/'.$campaign.'/edit',[])->assertForbidden();
+        $this->get('/admin/advertising/audits')->assertForbidden();
+    }
+
     public function test_campaign_edits_invalidate_approval_and_scheduled_state_is_time_scoped(): void
     {
         [$sponsor,$creative,$campaign]=$this->creativeReady();

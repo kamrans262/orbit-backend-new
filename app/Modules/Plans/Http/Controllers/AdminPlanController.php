@@ -53,7 +53,7 @@ final class AdminPlanController extends Controller
             if($area==='reminders'){
                 $queue=DB::table('plan_reminder_jobs')->select(
                     'id','state','attempts','due_at','error_code','created_at')
-                    ->when($r->filled('state'),fn($q)=>$q->where('state',$r->validate(['state'=>['required',Rule::in(['pending','retry','processing','sent','failed','suppressed','cancelled'])]])['state']))
+                    ->when($r->filled('state'),fn($q)=>$q->where('state',$r->validate(['state'=>['required',Rule::in(['pending','retry','processing','sent','failed','suppressed'])]])['state']))
                     ->orderByDesc('created_at')->orderByDesc('id')->paginate(25)->withQueryString();
                 $reminderStates=DB::table('plan_reminder_jobs')
                     ->select('state')->selectRaw('count(*) as total')->groupBy('state')->get();
