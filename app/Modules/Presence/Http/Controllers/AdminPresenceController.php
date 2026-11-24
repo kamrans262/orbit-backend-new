@@ -13,8 +13,8 @@ final class AdminPresenceController extends Controller
         return response()->view('orbit-admin.presence', [
             'moduleEnabled'=>config('orbit_presence.enabled') === true,
             'lease'=>(int) config('orbit_presence.lease_seconds',90),
-            'store'=>config('orbit_presence.store','redis') === 'redis' ? 'Redis configured' : 'Nonproduction adapter',
-            'gateway'=>config('orbit_presence.realtime_enabled') === true,
+            'store'=>config('orbit_presence.store')==='redis'&&config('orbit_realtime.enabled')!==true?'Legacy Redis configured':'Database-backed ephemeral leases',
+            'gateway'=>app(\App\Modules\Presence\Services\PresenceRealtimePublisher::class)->enabled(),
             'consumer'=>config('orbit_circle.consumer_enabled.presence') === true,
         ])->header('Cache-Control','private, no-store');
     }

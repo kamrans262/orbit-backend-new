@@ -3,6 +3,12 @@
 @section('crumb',strtoupper($definition[0]).' / SETTINGS')
 @section('content')
 <div class="page-heading"><div><p class="eyebrow">OPERATIONS / SETTINGS</p><h1>{{ $definition[0] }} Settings</h1><p>Manage supported operational limits. Existing user permissions and deployment safety gates remain in effect.</p></div></div>
+@if($module==='realtime'&&$realtimeHealth)
+<section class="panel"><div class="panel-head"><div><h2>Real-time service health</h2><p>Aggregate service metrics only. Configuration is not proof of provider connectivity.</p></div></div>
+<div class="admin-kv">@foreach($realtimeHealth as $name=>$value)<div class="kv"><small>{{ $name }}</small><strong>{{ $value }}</strong></div>@endforeach</div>
+<div class="admin-guidance">The deployment verification gate remains independent. Pause delivery here; existing authorization leases expire within 60 seconds. No private account data or provider credentials are displayed.</div>
+</section>
+@endif
 <section class="panel"><div class="panel-head"><div><h2>Settings &amp; Controls</h2><p>Policy revision {{ $settings['revision'] }} · effective on subsequent requests</p></div></div>
 @if(!$controls->installed())
 <div class="admin-guidance">Configuration storage has not been provisioned.</div>
@@ -12,7 +18,7 @@
 <div class="form-grid">
 @foreach($definition[3] as $key=>$field)
 @if($field[2]===0&&$field[3]===1)
-<label>{{ $field[1] }}<select name="values[{{ $key }}]"><option value="0" @selected((int)old('values.'.$key,$settings['values'][$key])===0)>Hidden</option>@if($controls->ceiling($field)===1)<option value="1" @selected((int)old('values.'.$key,$settings['values'][$key])===1)>Visible</option>@endif</select></label>
+<label>{{ $field[1] }}<select name="values[{{ $key }}]"><option value="0" @selected((int)old('values.'.$key,$settings['values'][$key])===0)>{{ $module==='realtime'?'Paused':'Hidden' }}</option>@if($controls->ceiling($field)===1)<option value="1" @selected((int)old('values.'.$key,$settings['values'][$key])===1)>{{ $module==='realtime'?'Allowed (subject to deployment gates)':'Visible' }}</option>@endif</select></label>
 @else
 <label>{{ $field[1] }}<input type="number" step="1" name="values[{{ $key }}]" min="{{ $field[2] }}" max="{{ $controls->ceiling($field) }}" value="{{ old('values.'.$key,$settings['values'][$key]) }}" required></label>
 @endif

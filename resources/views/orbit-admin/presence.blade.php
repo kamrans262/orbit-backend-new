@@ -10,7 +10,7 @@
 <section class="panel">
   <div class="panel-head"><div><p class="eyebrow">SERVICE STATUS / CONNECTIVITY</p>
   <h2>Presence service status</h2>
-  <p>Real-time activity requires connected presence storage and a secure WebSocket gateway. Configuration alone does not confirm connectivity.</p></div></div>
+  <p>Real-time activity requires verified presence storage and an approved real-time transport. Configuration alone does not confirm connectivity.</p></div></div>
   <div class="admin-guidance" role="status">
     Presence API: <strong>{{ $moduleEnabled ? 'Enabled' : 'Unavailable — presence storage not connected' }}</strong>.
     Instant activity updates: <strong>{{ $gateway ? 'Configured — connection verification required' : 'Not connected' }}</strong>.

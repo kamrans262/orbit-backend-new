@@ -8,11 +8,20 @@ use Illuminate\Support\Str;
 
 final class RealtimeSessions
 {
+    private int $inlineSent=0;
+    private function limit(string $key):int
+    {
+        return app(\App\Modules\Config\Services\OperationalControls::class)->effective('realtime',$key);
+    }
     public function __construct(private readonly FirebaseRealtimeProvider $provider){}
     public function enabled(?string $module=null):bool
     {
-        return config('orbit_realtime.enabled')===true&&config('orbit_realtime.verified')===true
-            &&($module===null||config('orbit_realtime.modules.'.$module)===true);
+        if(config('orbit_realtime.enabled')!==true||config('orbit_realtime.verified')!==true)return false;
+        try{
+            return $this->limit('allow')===1&&($module===null||
+                (config('orbit_realtime.modules.'.$module)===true&&$this->limit('allow_'.$module)===1));
+        }catch(\Throwable){return false;}
+
     }
     private function nowMs():int{return (int)now()->getTimestampMs();}
     private function live(string $id):?object
@@ -35,6 +44,10 @@ final class RealtimeSessions
                 $live=$this->live($id);abort_unless($live,403);
                 $client=$this->provider->client($live->platform);
                 $current=DB::table('orbit_realtime_sessions')->where('session_id',$id)->lockForUpdate()->first();
+                if(!$current||$current->lease_until_ms<=$this->nowMs()){
+                    // Advisory connection cap; a strict serialized admission test remains a release gate.
+                    abort_if(DB::table('orbit_realtime_sessions')->where('lease_until_ms','>',$this->nowMs())->count()>=$this->limit('connections'),503,'Realtime capacity reached.');
+                }
                 $fresh=$current===null||(int)$current->lease_until_ms<=$this->nowMs();
                 $generation=$fresh?(string)Str::uuid():$current->generation;
                 $until=min($this->nowMs()+60000,\Illuminate\Support\Carbon::parse($live->expires_at)->getTimestampMs());
@@ -64,18 +77,30 @@ final class RealtimeSessions
         $users=array_values(array_unique($users));
         foreach(array_chunk($users,100) as $chunk){
             DB::table('orbit_realtime_sessions as r')->join('orbit_sessions as s','s.id','=','r.session_id')
-                ->whereIn('s.user_id',$chunk)->whereNull('s.revoked_at')->where('s.expires_at','>',now())
+                ->join('devices as d','d.id','=','s.device_id')->join('orbit_users as u','u.id','=','s.user_id')
+                ->whereIn('s.user_id',$chunk)->whereColumn('s.user_id','d.user_id')->whereNull('s.revoked_at')->where('s.expires_at','>',now())
+                ->where('d.trust_state','trusted')->whereNull('d.revoked_at')->whereNotNull('d.public_key')
+                ->where('u.status','active')->whereNull('u.deletion_requested_at')
                 ->where('r.lease_until_ms','>',$this->nowMs())->select('r.session_id')
-                ->orderBy('r.session_id')->chunkById(50,function($rows){
+                ->orderBy('r.session_id')->chunkById(50,function($rows)use($module){
                     $ids=$rows->pluck('session_id')->all();
                     DB::table('orbit_realtime_sessions')->whereIn('session_id',$ids)
                         ->increment('revision',1,['dirty'=>true,'updated_at'=>now()]);
                     // Bounded immediate sends; the durable dirty revision remains for cron.
-                    DB::afterCommit(function()use($ids){
-                        foreach(array_slice($ids,0,2) as $id)$this->publish($id);
-                    });
+                    if($module!=='sos')DB::afterCommit(fn()=>$this->inline($ids));
                 },'r.session_id','session_id');
         }
+    }
+    private function inline(array $ids):void
+    {
+        try{
+            foreach($ids as $id){
+                if($this->inlineSent >= $this->limit('inline_batch'))break;
+                if(!DB::table('orbit_realtime_sessions')->where('session_id',$id)->where('available_at','<=',now())->exists())continue;
+                $this->inlineSent++;
+                $this->publish($id);
+            }
+        }catch(\Throwable){Log::warning('M25 immediate publication deferred.');}
     }
     public function publish(string $id):bool
     {
@@ -128,7 +153,7 @@ final class RealtimeSessions
             DB::table('orbit_realtime_sessions')->where('session_id',$id)->update([
                 'lease_until_ms'=>0,'dirty'=>true,'available_at'=>now(),
             ]);
-            DB::afterCommit(fn()=>$this->publish($id));
+            DB::afterCommit(fn()=>$this->inline([$id]));
         }
     }
     public function markErasedSessions(array $ids):void
@@ -137,7 +162,7 @@ final class RealtimeSessions
         DB::table('orbit_realtime_sessions')->whereIn('session_id',$ids)->update([
             'lease_until_ms'=>0,'dirty'=>true,'available_at'=>now(),
         ]);
-        DB::afterCommit(function()use($ids){foreach(array_slice($ids,0,2) as $id)$this->publish($id);});
+        DB::afterCommit(fn()=>$this->inline($ids));
     }
     public function pruneEphemeral():void
     {
@@ -153,7 +178,7 @@ final class RealtimeSessions
             ->where('r.available_at','<=',now())->where(function($q){
                 $q->where('r.dirty',true)->orWhere('r.lease_until_ms','<=',$this->nowMs())
                     ->orWhereNull('s.id')->orWhereNotNull('s.revoked_at')->orWhere('s.expires_at','<=',now());
-            })->orderBy('r.available_at')->limit(20)->pluck('r.session_id');
+            })->orderBy('r.available_at')->limit($this->limit('worker_batch'))->pluck('r.session_id');
         foreach($ids as $id)$this->publish($id);
         return $ids->count();
     }

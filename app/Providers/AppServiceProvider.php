@@ -11,6 +11,9 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        // Reuse OAuth only within a request/worker scope; never cache service tokens in SQL.
+        $this->app->scoped(\App\Modules\Realtime\Services\FirebaseRealtimeProvider::class);
+        $this->app->scoped(\App\Modules\Realtime\Services\RealtimeSessions::class);
         $this->app->bind(\App\Modules\Media\Services\MediaObjectStore::class,
             function () {
                 return config('orbit_media.driver') === 'hostinger_private'

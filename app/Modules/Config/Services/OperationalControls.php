@@ -56,6 +56,24 @@ final class OperationalControls
             'show_people'=>['orbit_dashboard.sections.people','Show people summary',0,1],
             'show_moments'=>['orbit_dashboard.sections.moments','Show Moments summary',0,1],
         ]],
+        'realtime'=>['Firebase Real-Time','config.manage','config.manage',[
+            'allow'=>['orbit_realtime.admin_allow','Permit reviewed real-time delivery',0,1],
+            'worker_batch'=>['orbit_realtime.worker_batch','Maximum retry jobs per run',1,20],
+            'inline_batch'=>['orbit_realtime.inline_batch','Maximum immediate publishes per request',1,2],
+            'connections'=>['orbit_realtime.max_connections','Maximum admitted foreground sessions',1,90],
+            'allow_presence'=>['orbit_realtime.admin_modules.presence','Allow presence update signals',0,1],
+            'allow_location'=>['orbit_realtime.admin_modules.location','Allow location update signals',0,1],
+            'allow_circles'=>['orbit_realtime.admin_modules.circles','Allow circles update signals',0,1],
+            'allow_social'=>['orbit_realtime.admin_modules.social','Allow social update signals',0,1],
+            'allow_moments'=>['orbit_realtime.admin_modules.moments','Allow moments update signals',0,1],
+            'allow_ping'=>['orbit_realtime.admin_modules.ping','Allow ping update signals',0,1],
+            'allow_check_in'=>['orbit_realtime.admin_modules.check_in','Allow check in update signals',0,1],
+            'allow_messaging'=>['orbit_realtime.admin_modules.messaging','Allow messaging update signals',0,1],
+            'allow_notifications'=>['orbit_realtime.admin_modules.notifications','Allow notifications update signals',0,1],
+            'allow_plans'=>['orbit_realtime.admin_modules.plans','Allow plans update signals',0,1],
+            'allow_sos'=>['orbit_realtime.admin_modules.sos','Allow sos update signals',0,1],
+            'allow_activity'=>['orbit_realtime.admin_modules.activity','Allow activity update signals',0,1],
+        ]],
         'presence'=>['Presence','config.manage','config.manage',[
             'circle_members'=>['orbit_presence.max_circle_members','Maximum circle snapshot members',1,50],
             'typing_seconds'=>['orbit_presence.typing_ttl_seconds','Typing indicator validity (seconds)',3,5],
@@ -157,6 +175,14 @@ final class OperationalControls
     /** Resolve a named worker cap directly at execution, including Artisan and queue processes.
      * No global config mutation, no worker activation, no increase over caller or deployment limits.
      */
+    /** Same reviewed caps for HTTP, deferred callbacks and scheduled workers. */
+    public function effective(string $module,string $key):int{
+        $field=$this->definition($module)[3][$key]??throw new \InvalidArgumentException('Unsupported operational control.');
+        $ceiling=min($field[3],(int)config($field[0]));
+        $row=$this->installed()?RemoteConfig::where('key',self::PREFIX.$module)->first():null;
+        $values=$row?$this->decode($module,$row):[];
+        return min($ceiling,$values[$key]??$ceiling);
+    }
     public function workerLimit(string $module,string $key,int $requested):int{
         if(!in_array($key,self::WORKER_FIELDS[$module]??[],true))throw new \InvalidArgumentException('Unsupported operational worker control.');
         $field=$this->definition($module)[3][$key];

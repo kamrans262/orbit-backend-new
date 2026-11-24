@@ -55,6 +55,7 @@ final class AdminNavigation
                 ['Overview', 'dashboard', 'config.manage', ['dashboard']],
                 ['Feature Flags', 'flags.index', 'config.manage', ['flags.*']],
                 ['Remote Config', 'config.index', 'config.manage', ['config.*', 'rollback']],
+                ['Firebase Real-Time', 'operations.realtime', 'config.manage', ['operations.realtime*']],
             ]],
             ['Administrators & Access', 'users', [
                 ['Administrators & Roles', 'administrators.index', '*', ['administrators.*']],

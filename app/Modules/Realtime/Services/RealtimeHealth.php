@@ -1,0 +1,24 @@
+<?php
+namespace App\Modules\Realtime\Services;
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+final class RealtimeHealth
+{
+    public function snapshot():array
+    {
+        $out=['Delivery'=>app(RealtimeSessions::class)->enabled()?'Eligible — live verification required':'Disabled'];
+        if(!Schema::hasTable('orbit_realtime_sessions'))return $out+['Storage'=>'Not provisioned'];
+        $table=DB::table('orbit_realtime_sessions');
+        return $out+[
+            'Storage'=>'Provisioned',
+            'Active leases'=>(clone $table)->where('lease_until_ms','>',now()->getTimestampMs())->count(),
+            'Pending updates'=>(clone $table)->where('dirty',true)->count(),
+            'Pending expiry cleanup'=>(clone $table)->where('lease_until_ms','<=',now()->getTimestampMs())->count(),
+            'Retrying sessions'=>(clone $table)->where('attempts','>',0)->count(),
+            'Oldest pending update'=>(clone $table)->where('dirty',true)->min('updated_at')??'None',
+            'Last recorded successful publish'=>(clone $table)->max('last_success_at')??'None',
+        ];
+    }
+}

@@ -14,6 +14,7 @@ final class AdminOperationalControlsController{
         $def=$this->guard($module,$controls);
         return response()->view('orbit-admin.operational-controls',[
             'module'=>$module,'definition'=>$def,'controls'=>$controls,'settings'=>$controls->snapshot($module),
+            'realtimeHealth'=>$module==='realtime'?app(\App\Modules\Realtime\Services\RealtimeHealth::class)->snapshot():null,
             'history'=>$controls->installed()?$registry->history('remote',OperationalControls::PREFIX.$module):collect(),
         ])->header('Cache-Control','private, no-store');
     }
