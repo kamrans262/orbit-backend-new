@@ -59,7 +59,7 @@ jobs:
               await seed('orbit_m5/revisions/circle-a',1);
               const own = env.authenticatedContext(uid,claims).database();
               const anonymous = env.unauthenticatedContext().database();
-              const read = (db,path) => db.ref(path).once('value');
+              const read = (db,path) => (path === '' ? db.ref() : db.ref(path)).once('value');
               const denied = (db,path) => assertFails(read(db,path));
               const visible = await assertSucceeds(read(own,base+uid+'/signal'));
               assert.deepEqual(visible.val(),signal);
