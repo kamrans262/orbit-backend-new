@@ -47,7 +47,7 @@
 @elseif(in_array($area,['queue','cases'],true))
   <section class="panel">
     <div class="panel-head"><div><h2>{{ $area==='queue'?'Open Report Queue':'Case Directory' }}</h2><p>Server-owned metadata only. Reporters, voluntary evidence and private message contents are omitted.</p></div></div>
-    <form method="get" action="{{ route('orbit.admin.moderation.'.$area) }}" class="heading-actions" style="display:flex;flex-wrap:wrap;gap:8px">
+    <form method="get" action="{{ route('orbit.admin.moderation.'.$area) }}" class="heading-actions" style="display:flex;flex-wrap:wrap;gap:8px"><label>Case UUID<input name="case_id" maxlength="36" value="{{ request('case_id') }}"></label>
       <select name="status" aria-label="Filter status"><option value="">All states</option>
         @foreach(['pending','triaged','investigating','actioned','dismissed','reopened'] as $state)
           <option value="{{ $state }}" @selected(request('status')===$state)>{{ ucfirst($state) }}</option>
@@ -187,7 +187,7 @@
       <td><a href="{{ route('orbit.admin.moderation.cases.show',['case'=>$item->case_id]) }}"><code>{{ substr($item->case_id,0,8) }}…</code></a></td>
       <td>{{ $item->scope }}</td><td>{{ $item->reason_code }}</td><td>{{ $item->status }}</td><td>{{ $item->ends_at??'—' }}</td><td>{{ $item->created_at }}</td>
     </tr>@empty<tr><td colspan="6">No moderation actions.</td></tr>@endforelse
-  </tbody></table></div></section>
+  </tbody></table></div>{{ $actions->links() }}</section>
 @elseif($area==='appeals')
   <section class="panel"><div class="panel-head"><div><h2>Appeals & independent review</h2><p>A moderator cannot review an appeal of their own action. Case evidence and reporter identity remain confidential.</p></div></div>
   <div class="table-scroll"><table><thead><tr><th>APPEAL</th><th>CASE</th><th>SCOPE</th><th>STATUS</th><th>SUBMITTED</th><th>REVIEW</th></tr></thead><tbody>
@@ -209,7 +209,7 @@
       @else <span class="subtle">{{ $item->decision_code??'No available action' }}</span> @endif
       </td></tr>
     @empty<tr><td colspan="6">No submitted appeals.</td></tr>@endforelse
-  </tbody></table></div></section>
+  </tbody></table></div>{{ $appeals->links() }}</section>
 @elseif($area==='settings')
   <section class="panel"><div class="panel-head"><div><h2>Moderation operational controls</h2><p>Intake, M4 blocks, emergency access, original-source evidence and encryption are not disabled by this page.</p></div></div>
   @foreach($controls as $item)
@@ -227,16 +227,16 @@
   @endforeach
   </section>
 @elseif($area==='audits')
-  <section class="panel"><div class="panel-head"><div><h2>Case decision audit</h2><p>Latest 80 hashed actor events; no chat evidence, notes or reporter identifiers.</p></div></div>
+  <section class="panel"><div class="panel-head"><div><h2>Case decision audit</h2><p>Paginated hashed actor events; no chat evidence, notes or reporter identifiers.</p></div></div>
   <div class="table-scroll"><table><thead><tr><th>CASE</th><th>EVENT</th><th>REASON</th><th>REVISION</th><th>TIME</th></tr></thead><tbody>
     @forelse($events as $item)<tr><td><code>{{ substr($item->case_id,0,8) }}…</code></td><td>{{ $item->action }}</td><td>{{ $item->reason_code??'—' }}</td><td>{{ $item->revision_after }}</td><td>{{ $item->created_at }}</td></tr>
     @empty<tr><td colspan="5">No moderation decisions yet.</td></tr>@endforelse
-  </tbody></table></div></section>
+  </tbody></table></div>{{ $events->links() }}</section>
   <section class="panel"><div class="panel-head"><div><h2>Operational control audit</h2><p>Recorded old/new values, approver and hashed reason. No plaintext investigation narrative.</p></div></div>
   <div class="table-scroll"><table><thead><tr><th>SETTING</th><th>FROM</th><th>TO</th><th>WHEN</th></tr></thead><tbody>
     @forelse($controlAudits as $item)<tr><td>{{ $item->key }}</td><td>{{ $item->old_value }}</td><td>{{ $item->new_value }}</td><td>{{ $item->created_at }}</td></tr>
     @empty<tr><td colspan="4">No settings changed.</td></tr>@endforelse
-  </tbody></table></div></section>
+  </tbody></table></div>{{ $controlAudits->links() }}</section>
 @endif
 @endif
 @endsection

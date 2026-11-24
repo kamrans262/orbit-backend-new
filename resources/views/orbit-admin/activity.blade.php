@@ -91,7 +91,7 @@
       <tr><td>{{ $run->created_at }}</td><td>{{ $run->status }}</td>
       <td>{{ $run->moments_added }}</td><td>{{ $run->check_ins_added }}</td><td>{{ $run->invalidated }}</td></tr>
       @empty<tr><td colspan="5">No source projections yet.</td></tr>@endforelse
-      </tbody></table></div>
+      </tbody></table></div>{{ $runs->links() }}
   </section>
 @endif
 @if($area==='audits' && auth()->guard('admin')->user()?->canPerform('activity.audit'))
@@ -101,7 +101,7 @@
     <tbody>@forelse($audits as $record)
       <tr><td>{{ $record->created_at }}</td><td>{{ $record->admin_id }}</td><td>{{ $record->action }}</td><td>{{ $record->subject_key }}</td><td>{{ $record->old_value??'—' }}</td><td>{{ $record->new_value??'—' }}</td><td>{{ $record->reason }}</td></tr>
     @empty<tr><td colspan="7">No Activity administration changes recorded.</td></tr>@endforelse
-    </tbody></table></div>
+    </tbody></table></div>{{ $audits->links() }}
   </section>
 @endif
 @endif

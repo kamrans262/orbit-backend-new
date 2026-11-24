@@ -35,17 +35,17 @@ final class AdminActivityController extends Controller
             $controls = DB::table('activity_controls')->orderBy('key')->get();
             if ($area === 'operations') {
                 $runs = DB::table('activity_projection_runs')
-                    ->orderByDesc('created_at')->limit(50)->get([
+                    ->orderByDesc('created_at')->orderByDesc('id')->paginate(25,[
                         'moments_added','check_ins_added','invalidated',
                         'status','error_code','created_at',
-                    ]);
+                    ])->withQueryString();
             }
             if ($area === 'audits') {
                 $audits = DB::table('activity_admin_audits')
-                    ->orderByDesc('created_at')->limit(80)->get([
+                    ->orderByDesc('created_at')->orderByDesc('id')->paginate(25,[
                         'action','subject_key','reason','admin_id',
                         'old_value','new_value','created_at',
-                    ]);
+                    ])->withQueryString();
             }
         }
         return response()->view('orbit-admin.activity',

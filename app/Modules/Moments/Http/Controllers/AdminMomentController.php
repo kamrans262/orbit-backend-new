@@ -38,7 +38,7 @@ final class AdminMomentController extends Controller
             ->first(['id','state','audience_kind','published_at','rail_expires_at','view_expires_at','purge_due_at','audience_revision']);
         // No reporter identity, plaintext, encrypted bytes, key, filename, viewer or audience roster.
         $reports=DB::table('moment_reports')->where('status','pending')
-            ->orderBy('created_at')->limit(25)->get(['id','reason','status','created_at','evidence_consent','consent_evidence_ciphertext']);
+            ->orderBy('created_at')->orderBy('id')->paginate(25,['id','reason','status','created_at','evidence_consent','consent_evidence_ciphertext'],'reports_page')->withQueryString();
         // Metadata only: debugging without identities or E2EE ciphertext.
         $failures=DB::table('moment_lifecycle_jobs')
             ->where('state','pending')->where('attempts','>',0)

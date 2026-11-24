@@ -60,8 +60,8 @@ final class AdminMediaController extends Controller
         $failedJobs=$r->user('admin')?->canPerform('media.jobs.retry')
             ? DB::table('media_delete_jobs')->where('status','pending')
                 ->where('attempts','>',0)
-                ->orderBy('next_attempt_at')->limit(20)
-                ->get(['id','attempts','next_attempt_at'])
+                ->orderBy('next_attempt_at')->orderBy('id')
+                ->paginate(25,['id','attempts','next_attempt_at'],'jobs_page')->withQueryString()
             : collect();
         return response()->view('orbit-admin.media',compact('metrics','row','quota','failedJobs','installed','enabled'))
             ->header('Cache-Control','private, no-store')

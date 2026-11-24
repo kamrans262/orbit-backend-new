@@ -82,6 +82,7 @@
   @empty
   <div class="admin-guidance" role="status">No failed cleanup jobs are waiting for retry.</div>
   @endforelse
+  {{ $failedJobs->links() }}
 </section>
 <section class="panel" style="margin-top:18px">
   <div class="panel-head"><div><p class="eyebrow">ELEVATED PRIVILEGE / AUDITED ACTION</p><h2>Retry failed storage cleanup</h2>

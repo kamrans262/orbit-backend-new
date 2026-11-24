@@ -42,13 +42,14 @@ final class AdminSosController extends Controller
                 'trusted_contacts'=>DB::table('sos_trusted_contacts')->where('state','accepted')->count(),
             ];
             if($area==='incidents') {
-                $args=$request->validate(['status'=>['sometimes',Rule::in(['active','resolved','cancelled'])]]);
+                $args=$request->validate(['status'=>['nullable',Rule::in(['active','resolved','cancelled'])],'incident_id'=>['nullable','uuid']]);
                 $incidents=DB::table('sos_incidents as i')->select('i.id','i.status',
                     'i.created_at','i.closed_at','i.escalated_at','i.revision')
                     ->selectSub(DB::table('sos_recipients as r')->selectRaw('COUNT(*)')
                         ->whereColumn('r.incident_id','i.id'),'recipient_count')
                     ->when($args['status']??null,fn($q,$v)=>$q->where('i.status',$v))
-                    ->orderByDesc('i.created_at')->limit(50)->get();
+                    ->when($args['incident_id']??null,fn($q,$id)=>$q->where('i.id',$id))
+                    ->orderByDesc('i.created_at')->orderByDesc('i.id')->paginate(25)->withQueryString();
             }
             if($area==='responders')$responders=DB::table('sos_recipients')
                 ->select('state','source')->selectRaw('COUNT(*) AS total')
@@ -57,14 +58,15 @@ final class AdminSosController extends Controller
                 $jobs=DB::table('sos_delivery_jobs')
                     ->select('id','state','attempts','next_attempt_at',
                         'provider_accepted_at','last_error_code','created_at')
-                    ->orderByDesc('created_at')->limit(50)->get();
+                    ->when($request->filled('state'),fn($q)=>$q->where('state',$request->validate(['state'=>['required','string','max:24']])['state']))
+                    ->orderByDesc('created_at')->orderByDesc('id')->paginate(25)->withQueryString();
                 $states=DB::table('sos_delivery_jobs')->select('state')
                     ->selectRaw('COUNT(*) AS total')->groupBy('state')->get();
             }
             if($area==='settings')$controls=DB::table('sos_controls')->orderBy('key')->get();
             if($area==='audits')$audits=DB::table('sos_admin_audits')
                 ->select('action','incident_hash','reason','created_at','event_hash')
-                ->orderByDesc('created_at')->limit(100)->get();
+                ->orderByDesc('created_at')->orderByDesc('id')->paginate(25)->withQueryString();
         }
         return response()->view('orbit-admin.sos',compact('area','ready','counts',
             'incidents','responders','jobs','controls','audits','states'))

@@ -85,6 +85,7 @@
  @endif
  @empty<div class="admin-guidance" role="status">No pending reports.</div>
  @endforelse
+ {{ $reports->links() }}
 </section>
 <div class="admin-guidance" role="note" style="margin-top:20px">
  <strong>Security boundary:</strong> E2EE content cannot be decrypted by administrators. A report reason alone is not proof of the content.

@@ -39,27 +39,29 @@ final class AdminPlanController extends Controller
                 'events'=>DB::table('plan_change_events')->whereNull('projected_at')->count(),
             ];
             if($area==='directory'){
-                $args=$r->validate(['status'=>['sometimes',Rule::in(['scheduled','cancelled'])]]);
+                $args=$r->validate(['status'=>['nullable',Rule::in(['scheduled','cancelled'])],'plan_id'=>['nullable','uuid']]);
                 $directory=DB::table('plans as p')
                     ->select('p.id','p.status','p.revision','p.created_at','p.starts_at')
                     ->selectSub(DB::table('plan_invitees as i')->selectRaw('count(*)')
                         ->whereColumn('i.plan_id','p.id'),'invited_count')
                     ->when($args['status']??null,fn($q,$s)=>$q->where('p.status',$s))
-                    ->orderByDesc('p.created_at')->limit(50)->get();
+                    ->when($args['plan_id']??null,fn($q,$id)=>$q->where('p.id',$id))
+                    ->orderByDesc('p.created_at')->orderByDesc('p.id')->paginate(25)->withQueryString();
             }
             if($area==='attendance')$attendance=DB::table('plan_invitees')
                 ->select('state')->selectRaw('count(*) as total')->groupBy('state')->get();
             if($area==='reminders'){
                 $queue=DB::table('plan_reminder_jobs')->select(
                     'id','state','attempts','due_at','error_code','created_at')
-                    ->orderByDesc('created_at')->limit(40)->get();
+                    ->when($r->filled('state'),fn($q)=>$q->where('state',$r->validate(['state'=>['required',Rule::in(['pending','retry','processing','sent','failed','suppressed','cancelled'])]])['state']))
+                    ->orderByDesc('created_at')->orderByDesc('id')->paginate(25)->withQueryString();
                 $reminderStates=DB::table('plan_reminder_jobs')
                     ->select('state')->selectRaw('count(*) as total')->groupBy('state')->get();
             }
             if($area==='settings')$controls=DB::table('plan_controls')->orderBy('key')->get();
             if($area==='audits')$audits=DB::table('plan_admin_audits')
                 ->select('action','plan_hash','reason','created_at')
-                ->orderByDesc('created_at')->limit(100)->get();
+                ->orderByDesc('created_at')->orderByDesc('id')->paginate(25)->withQueryString();
         }
         return response()->view('orbit-admin.plans',compact(
             'area','ready','counts','directory','attendance','queue','audits','reminderStates','controls'

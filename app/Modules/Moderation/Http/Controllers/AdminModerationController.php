@@ -44,13 +44,15 @@ final class AdminModerationController extends Controller
                     'status'=>['nullable',Rule::in(['pending','triaged','investigating','actioned','dismissed','reopened'])],
                     'source'=>['nullable',Rule::in(['account','moment','messaging'])],
                     'priority'=>['nullable',Rule::in(['normal','urgent'])],
+                    'case_id'=>['nullable','uuid'],
                 ]);
                 $query=DB::table('moderation_cases');
                 if($area==='queue')$query->whereIn('status',['pending','triaged','investigating','reopened']);
                 if($filter['status']??null)$query->where('status',$filter['status']);
                 if($filter['source']??null)$query->where('source_kind',$filter['source']);
                 if($filter['priority']??null)$query->where('priority',$filter['priority']);
-                $cases=$query->orderByDesc('created_at')->paginate(25,[
+                if($filter['case_id']??null)$query->where('id',$filter['case_id']);
+                $cases=$query->orderByDesc('created_at')->orderByDesc('id')->paginate(25,[
                     'id','source_kind','status','priority','revision','created_at',
                 ])->withQueryString();
             }
@@ -79,23 +81,23 @@ final class AdminModerationController extends Controller
                     ->orderBy('name')->get()->filter(fn($u)=>$u->canPerform('moderation.triage'));
             }
             if($area==='actions')$actions=DB::table('moderation_actions')
-                ->orderByDesc('created_at')->limit(60)->get([
+                ->orderByDesc('created_at')->orderByDesc('id')->paginate(25,[
                     'id','case_id','scope','reason_code','status','ends_at','created_at',
-                ]);
+                ])->withQueryString();
             if($area==='appeals')$appeals=DB::table('moderation_appeals as p')
                 ->join('moderation_actions as a','a.id','=','p.action_id')
                 ->select('p.id','p.status','p.revision','p.created_at',
                     'p.decision_code','p.decided_at','a.case_id','a.scope')
-                ->orderByDesc('p.created_at')->limit(60)->get();
+                ->orderByDesc('p.created_at')->orderByDesc('p.id')->paginate(25)->withQueryString();
             if($area==='settings')$controls=DB::table('moderation_controls')->orderBy('key')->get();
             if($area==='audits')$controlAudits=DB::table('moderation_control_audits')
-                ->orderByDesc('created_at')->limit(50)->get([
+                ->orderByDesc('created_at')->orderByDesc('id')->paginate(25,[
                     'key','old_value','new_value','created_at',
-                ]);
+                ],'controls_page')->withQueryString();
             if($area==='audits')$events=DB::table('moderation_case_events')
-                ->orderByDesc('id')->limit(80)->get([
+                ->orderByDesc('id')->paginate(25,[
                     'case_id','action','reason_code','revision_after','created_at',
-                ]);
+                ],'events_page')->withQueryString();
         }
         return response()->view('orbit-admin.moderation',compact(
             'area','ready','counts','cases','case','events','actions','appeals',

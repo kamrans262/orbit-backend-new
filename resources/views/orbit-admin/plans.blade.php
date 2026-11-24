@@ -37,16 +37,16 @@
 </section>
 @elseif($area==='directory')
 <section class="panel">
- <div class="panel-head"><div><h2>Plan Directory</h2><p>Latest 50 records. Operational identifiers and state only; private titles, descriptions, places and participant identities are hidden.</p></div></div>
+ <div class="panel-head"><div><h2>Plan Directory</h2><p>Paginated operational records. Operational identifiers and state only; private titles, descriptions, places and participant identities are hidden.</p></div></div>
  <form method="get" action="{{ route('orbit.admin.plans.directory') }}" class="heading-actions" style="display:flex;gap:8px;flex-wrap:wrap">
-  <select name="status"><option value="">All states</option>@foreach(['scheduled','cancelled'] as $status)<option value="{{ $status }}" @selected(request('status')===$status)>{{ ucfirst($status) }}</option>@endforeach</select>
+  <label>Plan UUID<input name="plan_id" maxlength="36" value="{{ request('plan_id') }}"></label><select name="status"><option value="">All states</option>@foreach(['scheduled','cancelled'] as $status)<option value="{{ $status }}" @selected(request('status')===$status)>{{ ucfirst($status) }}</option>@endforeach</select>
   <button class="btn secondary" type="submit">Filter</button>
  </form>
  <div class="table-scroll"><table><thead><tr><th>OPAQUE PLAN ID</th><th>STATE</th><th>REVISION</th><th>INVITEES</th><th>CREATED (UTC)</th></tr></thead><tbody>
  @forelse($directory as $p)
   <tr><td><code title="{{ $p->id }}">{{ substr($p->id,0,8) }}…</code></td><td><span class="pill {{ $p->status==='cancelled'?'danger':'neutral' }}">{{ $p->status }}</span></td><td>{{ $p->revision }}</td><td>{{ $p->invited_count }}</td><td>{{ $p->created_at }}</td></tr>
  @empty<tr><td colspan="5">No matching plans.</td></tr>@endforelse
- </tbody></table></div>
+ </tbody></table></div>{{ $directory->links() }}
 </section>
 @if(auth()->guard('admin')->user()?->canPerform('plans.manage'))
 <section class="panel">
@@ -67,7 +67,8 @@
 @empty<tr><td colspan="2">No invitations recorded.</td></tr>@endforelse
 </tbody></table></div></section>
 @elseif($area==='reminders')
-<section class="panel"><div class="panel-head"><div><h2>Reminder queue</h2><p>Latest 40 jobs; current delivery eligibility is rechecked during dispatch.</p></div></div>
+<section class="panel"><div class="panel-head"><div><h2>Reminder queue</h2><p>Reminder jobs; current delivery eligibility is rechecked during dispatch.</p></div></div>
+<form class="admin-filters" method="get" action="{{ route('orbit.admin.plans.reminders') }}"><label>State<select name="state"><option value="">All states</option>@foreach($reminderStates as $state)<option value="{{ $state->state }}" @selected(request('state')===$state->state)>{{ ucfirst($state->state) }}</option>@endforeach</select></label><button class="btn primary">Filter</button><a class="btn secondary" href="{{ route('orbit.admin.plans.reminders') }}">Reset</a></form>
 <div class="stat-grid">@foreach($reminderStates as $item)<article class="stat-card"><span class="stat-label">{{ ucfirst($item->state) }}</span><strong>{{ number_format($item->total) }}</strong></article>@endforeach</div>
 <div class="table-scroll"><table><thead><tr><th>JOB</th><th>STATE</th><th>ATTEMPTS</th><th>DUE (UTC)</th><th>ERROR</th><th>ACTION</th></tr></thead><tbody>
 @forelse($queue as $job)
@@ -80,7 +81,7 @@
 @else<span class="subtle">No action</span>@endif
 </td></tr>
 @empty<tr><td colspan="6">No reminder jobs.</td></tr>@endforelse
-</tbody></table></div></section>
+</tbody></table></div>{{ $queue->links() }}</section>
 @if(auth()->guard('admin')->user()?->canPerform('plans.manage'))
 <section class="panel"><div class="panel-head"><div><h2>Bounded manual processing</h2><p>Process up to 20 eligible events/reminders. The global scheduler must be configured separately.</p></div></div>
 <form method="post" action="{{ route('orbit.admin.plans.process') }}">@csrf
@@ -104,12 +105,12 @@
 @endforeach
 </section>
 @elseif($area==='audits')
-<section class="panel"><div class="panel-head"><div><h2>Operational audit trail</h2><p>Last 100 admin actions. Plan UUIDs are stored as hashes; no private plan contents are logged.</p></div></div>
+<section class="panel"><div class="panel-head"><div><h2>Operational audit trail</h2><p>Administrative action history. Plan UUIDs are stored as hashes; no private plan contents are logged.</p></div></div>
 <div class="table-scroll"><table><thead><tr><th>ACTION</th><th>HASH PREFIX</th><th>REASON</th><th>TIME</th></tr></thead><tbody>
 @forelse($audits as $audit)
 <tr><td>{{ $audit->action }}</td><td><code>{{ $audit->plan_hash?substr($audit->plan_hash,0,12).'…':'—' }}</code></td><td>{{ $audit->reason }}</td><td>{{ $audit->created_at }}</td></tr>
 @empty<tr><td colspan="4">No administrative changes.</td></tr>@endforelse
-</tbody></table></div></section>
+</tbody></table></div>{{ $audits->links() }}</section>
 @endif
 @endif
 @endsection

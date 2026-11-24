@@ -40,16 +40,16 @@
   </section>
 @elseif($area==='incidents')
   <section class="panel">
-    <div class="panel-head"><div><h2>Incident Directory</h2><p>Latest 50 operational records. IDs are truncated; no names, coordinates, private Circle titles or contacts are shown.</p></div></div>
+    <div class="panel-head"><div><h2>Incident Directory</h2><p>Paginated operational records. IDs are truncated; no names, coordinates, private Circle titles or contacts are shown.</p></div></div>
     <form method="get" action="{{ route('orbit.admin.safety.incidents') }}" class="heading-actions" style="display:flex;gap:8px;flex-wrap:wrap">
-      <select name="status"><option value="">All states</option>@foreach(['active','resolved','cancelled'] as $status)<option value="{{ $status }}" @selected(request('status')===$status)>{{ ucfirst($status) }}</option>@endforeach</select>
+      <label>Incident UUID<input name="incident_id" maxlength="36" value="{{ request('incident_id') }}"></label><select name="status"><option value="">All states</option>@foreach(['active','resolved','cancelled'] as $status)<option value="{{ $status }}" @selected(request('status')===$status)>{{ ucfirst($status) }}</option>@endforeach</select>
       <button class="btn secondary" type="submit">Filter incidents</button>
     </form>
     <div class="table-scroll"><table><thead><tr><th>INCIDENT</th><th>STATE</th><th>RESPONDERS</th><th>ESCALATED</th><th>RECEIVED (UTC)</th><th>CLOSED</th></tr></thead><tbody>
     @forelse($incidents as $item)
       <tr><td><code>{{ substr($item->id,0,8) }}…</code></td><td><span class="pill {{ $item->status==='active'?'danger':'neutral' }}">{{ ucfirst($item->status) }}</span></td><td>{{ $item->recipient_count }}</td><td>{{ $item->escalated_at?'Yes':'No' }}</td><td>{{ $item->created_at }}</td><td>{{ $item->closed_at??'—' }}</td></tr>
     @empty<tr><td colspan="6">No matching SOS incidents.</td></tr>@endforelse
-    </tbody></table></div>
+    </tbody></table></div>{{ $incidents->links() }}
   </section>
 @elseif($area==='responders')
   <section class="panel"><div class="panel-head"><div><h2>Responder status</h2><p>Aggregate active and historical response state by routing category; recipient identities are not exposed.</p></div></div>
@@ -59,6 +59,7 @@
   </tbody></table></div></section>
 @elseif($area==='delivery')
   <section class="panel"><div class="panel-head"><div><h2>Delivery queue</h2><p>Push-provider acceptance is not a device-display, read or emergency-response receipt. In-app availability is tracked separately.</p></div></div>
+  <form class="admin-filters" method="get" action="{{ route('orbit.admin.safety.delivery') }}"><label>State<select name="state"><option value="">All states</option>@foreach($states as $state)<option value="{{ $state->state }}" @selected(request('state')===$state->state)>{{ ucfirst($state->state) }}</option>@endforeach</select></label><button class="btn primary">Filter</button><a class="btn secondary" href="{{ route('orbit.admin.safety.delivery') }}">Reset</a></form>
   <div class="stat-grid">@foreach($states as $row)<article class="stat-card"><span class="stat-label">{{ ucfirst($row->state) }}</span><strong>{{ number_format($row->total) }}</strong></article>@endforeach</div>
   <div class="table-scroll"><table><thead><tr><th>JOB</th><th>STATE</th><th>ATTEMPTS</th><th>RETRY AT</th><th>ERROR CODE</th><th>ACTION</th></tr></thead><tbody>
   @forelse($jobs as $job)
@@ -72,7 +73,7 @@
     @else <span class="subtle">No action</span> @endif
     </td></tr>
   @empty<tr><td colspan="6">No push delivery jobs.</td></tr>@endforelse
-  </tbody></table></div></section>
+  </tbody></table></div>{{ $jobs->links() }}</section>
   @if(auth()->guard('admin')->user()?->canPerform('safety.manage'))
     <section class="panel"><div class="panel-head"><div><h2>Bounded manual worker</h2><p>Runs one limited pass through eligibility, escalation and provider jobs. Does not contact emergency services.</p></div></div>
     <form method="post" action="{{ route('orbit.admin.safety.run') }}">@csrf
@@ -101,11 +102,11 @@
   @endforeach
   </section>
 @elseif($area==='audits')
-  <section class="panel"><div class="panel-head"><div><h2>Security &amp; operations audit</h2><p>Last 100 administrative actions. Incident identifiers are keyed hashes; event hashes support tamper detection.</p></div></div>
+  <section class="panel"><div class="panel-head"><div><h2>Security &amp; operations audit</h2><p>Administrative action history. Incident identifiers are keyed hashes; event hashes support tamper detection.</p></div></div>
   <div class="table-scroll"><table><thead><tr><th>ACTION</th><th>INCIDENT HASH</th><th>REASON</th><th>EVENT HASH</th><th>CREATED (UTC)</th></tr></thead><tbody>
   @forelse($audits as $a)<tr><td>{{ $a->action }}</td><td><code>{{ $a->incident_hash?substr($a->incident_hash,0,12).'…':'—' }}</code></td><td>{{ $a->reason }}</td><td><code>{{ substr($a->event_hash,0,12) }}…</code></td><td>{{ $a->created_at }}</td></tr>
   @empty<tr><td colspan="5">No SOS administration events.</td></tr>@endforelse
-  </tbody></table></div></section>
+  </tbody></table></div>{{ $audits->links() }}</section>
 @endif
 @endif
 @endsection
