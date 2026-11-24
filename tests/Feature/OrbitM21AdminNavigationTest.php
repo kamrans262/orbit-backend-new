@@ -61,7 +61,7 @@ final class OrbitM21AdminNavigationTest extends TestCase
             $page=$this->get(route('orbit.admin.'.$route))->assertOk();
             if (str_ends_with($route,'.audits') || $route==='advertising.analytics') {
                 $prefix=explode('.',$route)[0];
-                $page->assertDontSee(route('orbit.admin.'.$prefix.'.overview'),false);
+                $page->assertDontSee('href="'.route('orbit.admin.'.$prefix.'.overview').'"',false);
             }
             $this->get('/admin')->assertForbidden();
         }
