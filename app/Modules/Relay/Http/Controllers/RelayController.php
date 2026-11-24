@@ -31,7 +31,7 @@ final class RelayController
     public function leases(Request $r):JsonResponse {
         $s=$this->session($r);
         if(!$this->policy->capabilities()['enabled'])return $this->result(['code'=>'relay_unavailable'],503);
-        abort_if(array_diff(array_keys($r->all()),['scope_ref','content_type','peer_device_ref','device_key_id','protocol_version','client_nonce']),422);
+        abort_if(array_diff(array_keys($r->all()),['scope_ref','content_type','peer_device_ref','device_key_id','protocol_version','client_nonce'])!==[],422);
         $input=$r->validate([
             'scope_ref'=>'required|uuid','content_type'=>'required|in:direct_message',
             'peer_device_ref'=>'required|uuid','device_key_id'=>'required|integer|min:1',
@@ -60,13 +60,14 @@ final class RelayController
         $cap=$this->policy->capabilities();
         if(!$cap['enabled'])return $this->result(['code'=>'relay_unavailable'],503);
         abort_if(strlen($r->getContent())>5242880,413,'Relay batch too large.');
-        abort_if(array_diff(array_keys($r->all()),['batch_id','items']),422);
+        abort_if(array_diff(array_keys($r->all()),['batch_id','items'])!==[],422);
         $p=$r->validate([
             'batch_id'=>'required|uuid','items'=>'required|array|list|min:1|max:'.$cap['limits']['batch_limit'],
             'items.*'=>'required|array:envelope_id,source_client_id,lease_id,digest,receipt,source_envelope',
             'items.*.envelope_id'=>'required|uuid|distinct','items.*.source_client_id'=>'required|uuid|distinct',
             'items.*.lease_id'=>'required|uuid','items.*.digest'=>'required|string|regex:/^[a-f0-9]{64}$/D',
-            'items.*.receipt'=>'sometimes|array:signature_b64,nonce,received_at',
+            'items.*.receipt'=>'sometimes|required|array:signature_b64,nonce,received_at,peer_digest',
+            'items.*.receipt.peer_digest'=>'required_with:items.*.receipt|string|regex:/^[a-f0-9]{64}$/D',
             'items.*.receipt.signature_b64'=>'required_with:items.*.receipt|string|size:88',
             'items.*.receipt.nonce'=>'required_with:items.*.receipt|uuid',
             'items.*.receipt.received_at'=>'required_with:items.*.receipt|integer|min:1|max:4102444800',

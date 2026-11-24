@@ -113,7 +113,8 @@ final class OrbitM22RelayTest extends TestCase
             'source_envelope'=>$source,'digest'=>RelayReconciliationService::digest($thread,$source['client_id'],$source)];
         if($secret!==null){
             $row=DB::table('relay_leases')->where('id',$lease['lease_id'])->first();
-            $item['receipt']=['nonce'=>$item['envelope_id'],'received_at'=>now()->timestamp];
+            $item['receipt']=['nonce'=>$item['envelope_id'],'received_at'=>now()->timestamp,
+                'peer_digest'=>RelayReconciliationService::peerDigest($thread,$source['client_id'],$source,$peer->id)];
             $item['receipt']['signature_b64']=base64_encode(sodium_crypto_sign_detached(
                 RelayReconciliationService::receiptInput($row,$item),$secret));
         }
@@ -231,5 +232,45 @@ final class OrbitM22RelayTest extends TestCase
         $this->assertDatabaseCount('relay_reconciliations',0);
         $this->assertDatabaseCount('messaging_messages',1);
         $this->assertDatabaseCount('messaging_envelopes',2);
+    }
+
+    public function test_recipient_digest_mismatch_signed_by_real_peer_and_empty_receipt_fail():void{
+        [$a,$da,$ta,$b,$db,$tb,$thread,$secret]=$this->direct();
+        $lease=$this->lease($ta,$thread,$db);
+        $item=$this->item($lease,$thread,$da,$db,$secret);
+        $item['receipt']['peer_digest']=str_repeat('a',64);
+        $row=DB::table('relay_leases')->where('id',$lease['lease_id'])->first();
+        $item['receipt']['signature_b64']=base64_encode(sodium_crypto_sign_detached(
+            RelayReconciliationService::receiptInput($row,$item),$secret));
+        $this->batch($ta,[$item])->assertOk()->assertJsonPath('data.results.0.status','rejected');
+        $item['receipt']=[];
+        $this->batch($ta,[$item])->assertUnprocessable();
+        $this->assertDatabaseCount('messaging_messages',0);
+    }
+    public function test_batch_isolates_item_failure_and_late_receipt_is_idempotent():void{
+        [$a,$da,$ta,$b,$db,$tb,$thread,$secret]=$this->direct();
+        $lease=$this->lease($ta,$thread,$db);
+        $good=$this->item($lease,$thread,$da,$db,$secret);
+        $unsigned=$good;unset($unsigned['receipt']);
+        $bad=$this->item($lease,$thread,$da,$db);
+        $bad['digest']=str_repeat('f',64);
+        $this->batch($ta,[$bad,$unsigned])->assertOk()->assertJsonPath('data.results.0.status','rejected')
+            ->assertJsonPath('data.results.1.status','accepted')->assertJsonPath('data.results.1.peer_receipt_verified',false);
+        $this->batch($ta,[$good])->assertOk()->assertJsonPath('data.results.0.status','duplicate')
+            ->assertJsonPath('data.results.0.peer_receipt_verified',true);
+        $this->withToken($ta)->getJson('/api/v1/relay/sync')->assertJsonPath('data.items.0.peer_receipt_verified',true);
+        $this->assertDatabaseCount('messaging_messages',1);$this->assertDatabaseCount('relay_receipts',1);
+    }
+    public function test_settings_revision_revokes_lease_without_disabling_messaging():void{
+        [$a,$da,$ta,$b,$db,$tb,$thread,$secret]=$this->direct();
+        $lease=$this->lease($ta,$thread,$db);
+        $this->be($this->admin(['relay.read','relay.manage']),'admin');
+        $this->post('/admin/relay/settings',['enabled'=>0,'lease_seconds'=>300,'batch_limit'=>10,'frame_bytes'=>16384,
+            'revision'=>1,'reason'=>'Emergency Relay disable test','confirm'=>1])->assertRedirect(route('orbit.admin.relay.settings'));
+        $this->assertDatabaseHas('relay_leases',['id'=>$lease['lease_id'],'reason'=>'policy_changed']);
+        $this->assertTrue(config('orbit_messaging.enabled'));
+        $this->withToken($ta)->getJson('/api/v1/relay/capabilities')->assertJsonPath('data.enabled',false);
+        $this->batch($ta,[$this->item($lease,$thread,$da,$db)])->assertStatus(503);
+        $this->assertDatabaseCount('messaging_messages',0);
     }
 }

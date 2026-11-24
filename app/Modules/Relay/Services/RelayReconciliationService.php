@@ -23,9 +23,18 @@ final class RelayReconciliationService
         $canonical=[$scope,$client,$source['kind'],$source['protocol'],(int)$source['group_epoch'],array_values($sorted)];
         return hash('sha256',json_encode($canonical,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES));
     }
+    public static function peerDigest(string $scope,string $client,array $source,string $peer):string {
+        foreach($source['envelopes'] as $env){
+            if($env['device_id']!==$peer)continue;
+            $canonical=[$scope,$client,$source['kind'],$source['protocol'],(int)$source['group_epoch'],
+                ['device_id'=>$env['device_id'],'ciphertext_b64'=>$env['ciphertext_b64'],'protocol_header_b64'=>$env['protocol_header_b64']]];
+            return hash('sha256',json_encode($canonical,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES));
+        }
+        abort(422,'Recipient envelope missing.');
+    }
     public static function receiptInput(object $lease,array $item):string {
         return implode('|',['orbit-relay-receipt-v1',$lease->id,$lease->scope_ref,$lease->device_id,
-            $lease->peer_device_id,$item['envelope_id'],$item['source_client_id'],$item['digest'],'received',$item['receipt']['nonce'],(string)$item['receipt']['received_at']]);
+            $lease->peer_device_id,$item['envelope_id'],$item['source_client_id'],$item['digest'],$item['receipt']['peer_digest'],'received',$item['receipt']['nonce'],(string)$item['receipt']['received_at']]);
     }
     private function result(array $item,string $state,string $reason,?string $source=null,bool $peer=false):array {
         return ['envelope_id'=>$item['envelope_id'],'status'=>$state,'reason_code'=>$reason,
@@ -60,6 +69,8 @@ final class RelayReconciliationService
             && $received>=\Illuminate\Support\Carbon::parse($lease->issued_at)->timestamp
             && $received<\Illuminate\Support\Carbon::parse($lease->expires_at)->timestamp
             && $received<=now()->timestamp+10,422,'Invalid receipt time or nonce.');
+        abort_unless(hash_equals(self::peerDigest($lease->scope_ref,$item['source_client_id'],
+            $item['source_envelope'],$lease->peer_device_id),$receipt['peer_digest']),422,'Recipient envelope digest mismatch.');
         $signature=RelayLeaseService::bytes($receipt['signature_b64'],64);
         $public=RelayLeaseService::bytes($ctx['peer']->identity_ed25519,32);
         abort_unless(sodium_crypto_sign_verify_detached($signature,self::receiptInput($lease,$item),$public),422,'Invalid recipient proof.');
@@ -114,6 +125,7 @@ final class RelayReconciliationService
                         DB::table('relay_receipts')->insert(['id'=>(string)Str::uuid7(),'reconciliation_id'=>$id,
                             'recipient_device_id'=>$lease->peer_device_id,'digest'=>$item['digest'],'proof_hash'=>$proof,
                             'kind'=>'received','received_at'=>now()]);
+                        DB::table('relay_reconciliations')->where('id',$id)->update(['updated_at'=>now()]);
                         $this->metrics->record('verified_receipt');
                     }elseif($proof!==null && $verified){
                         abort_unless(hash_equals($verified->proof_hash,$proof),409,'Receipt conflict.');
