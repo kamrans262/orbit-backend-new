@@ -78,9 +78,10 @@ final class MessagingTypingService
 
     public function circleSetting(string $circle,string $user,bool $enabled): array
     {
+        return DB::transaction(function()use($circle,$user,$enabled){
         $row=DB::table('circle_permissions')->where('circle_id',$circle)
             ->where('scope_key','user:'.$user)->where('subject_user_id',$user)
-            ->where('permission_key','message')->first();
+            ->where('permission_key','message')->lockForUpdate()->first();
         abort_unless($row && app(CircleConsentPolicy::class)
             ->consentCurrentlyValid($row,'message'),403,
             'Enable Circle messaging consent first.');
@@ -90,7 +91,17 @@ final class MessagingTypingService
         DB::table('circle_permissions')->where('circle_id',$circle)
             ->where('scope_key','user:'.$user)->where('permission_key','message')
             ->update(['value_json'=>json_encode($options,JSON_THROW_ON_ERROR),'updated_at'=>now()]);
+        if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging')){
+            $thread=DB::table('messaging_conversations')->where('circle_id',$circle)->first();
+            if($thread){
+                if(!$enabled)$this->cache()->forget($this->key($thread->id,$user));
+                $members=DB::table('circle_members')->where('circle_id',$circle)->whereNull('removed_at')->limit(200)->pluck('user_id')->all();
+                $members=array_values(array_filter($members,fn($member)=>$member===$user||$this->access->canCirclePair($circle,$user,$member)));
+                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',$members,['kind'=>'clear']);
+            }
+        }
         return ['circle_id'=>$circle,'typing_enabled'=>$enabled,
             'message_consent_unchanged'=>true];
+        },3);
     }
 }

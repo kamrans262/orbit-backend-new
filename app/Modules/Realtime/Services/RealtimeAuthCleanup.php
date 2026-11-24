@@ -9,12 +9,16 @@ final class RealtimeAuthCleanup
 {
     public function __construct(private readonly FirebaseRealtimeProvider $provider){}
     /** Called under the Orbit session row lock before a new lease is published. */
-    public function register(string $id):void
+    public function register(string $id,?string $user=null):void
     {
         $hash=$this->provider->projectFingerprint();
         $r=DB::table('orbit_realtime_auth_receipts')->where('session_id',$id)->lockForUpdate()->first();
         if($r&&!hash_equals($r->project_hash,$hash))throw new \RuntimeException('Realtime project change requires reviewed cleanup.');
+        $user??=DB::table('orbit_sessions')->where('id',$id)->value('user_id');
+        $owner=$user?hash_hmac('sha256','m25:'.$user,(string)config('app.key')):($r?->owner_hash??null);
+        if($r?->owner_hash&&$owner!==$r->owner_hash)throw new \RuntimeException('Realtime cleanup owner mismatch.');
         DB::table('orbit_realtime_auth_receipts')->updateOrInsert(['session_id'=>$id],[
+            'owner_hash'=>$owner,
             'project_hash'=>$hash,'tombstone_after'=>null,'auth_after'=>null,'available_at'=>now(),'attempts'=>0,
         ]);
     }
@@ -27,8 +31,9 @@ final class RealtimeAuthCleanup
     public function pendingForUser(string $user):bool
     {
         if(!Schema::hasTable('orbit_realtime_auth_receipts'))return false;
-        return DB::table('orbit_realtime_auth_receipts as r')->join('orbit_sessions as s','s.id','=','r.session_id')
-            ->where('s.user_id',$user)->exists();
+        return DB::table('orbit_realtime_auth_receipts as r')->leftJoin('orbit_sessions as s','s.id','=','r.session_id')
+            ->where(fn($q)=>$q->where('s.user_id',$user)->orWhere('r.owner_hash',hash_hmac('sha256','m25:'.$user,(string)config('app.key')))
+                ->orWhere(fn($q)=>$q->whereNull('s.id')->whereNull('r.owner_hash')))->exists();
     }
     public function process():int
     {

@@ -28,6 +28,8 @@ final class DeleteOrbitUser
             $deviceIds = DB::table('devices')->where('user_id', $userId)->pluck('id')->all();
             $sessionIds = DB::table('orbit_sessions')->where('user_id', $userId)->pluck('id')->all();
 
+            if(app(\App\Modules\Realtime\Services\RealtimeAuthCleanup::class)->pendingForUser($userId))
+                throw new \DomainException('M25 provider metadata cleanup requires verification before erasure.');
             app(\App\Modules\Realtime\Services\RealtimeSessions::class)->markErasedSessions($sessionIds);
             if(Schema::hasTable('orbit_ephemeral_cache')&&
                 (config('orbit_presence.store')==='orbit_ephemeral'||config('orbit_realtime.enabled')===true)){

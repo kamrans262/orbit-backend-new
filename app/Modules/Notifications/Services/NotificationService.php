@@ -214,13 +214,16 @@ final class NotificationService
             ->where('e.source_type','moment_notice')
             ->whereNull('n.read_at')->whereNotNull('m.read_at')
             ->limit(max(1,min(500,$limit)))->get(['n.id','m.read_at']);
+        return DB::transaction(function()use($rows,$owner){
         $updated=0;
         foreach($rows as $row) {
             $updated+=DB::table('notification_inbox')->where('id',$row->id)
                 ->where('recipient_user_id',$owner)->whereNull('read_at')
                 ->update(['read_at'=>$row->read_at]);
         }
+        if($updated)app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('notifications',[$owner],['kind'=>'self','id'=>$owner]);
         return $updated;
+        },3);
     }
 
     /**
@@ -264,7 +267,13 @@ final class NotificationService
             ->where(fn($q)=>$q->where('created_at','<',$cutoff)
                 ->orWhere(fn($t)=>$t->whereNotNull('expires_at')->where('expires_at','<=',now())))
             ->orderBy('id')->limit(min($limit,1000))->pluck('id');
-        return $expired->isEmpty()?0:DB::table('notification_inbox')
-            ->whereIn('id',$expired)->update(['invalidated_at'=>now()]);
+        if($expired->isEmpty())return 0;
+        return DB::transaction(function()use($expired){
+            $rows=DB::table('notification_inbox')->whereIn('id',$expired)->whereNull('invalidated_at')->lockForUpdate()->get(['id','recipient_user_id']);
+            $updated=DB::table('notification_inbox')->whereIn('id',$rows->pluck('id'))->update(['invalidated_at'=>now()]);
+            foreach($rows->pluck('recipient_user_id')->unique() as $user)
+                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('notifications',[$user],['kind'=>'self','id'=>$user]);
+            return $updated;
+        },3);
     }
 }

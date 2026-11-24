@@ -361,6 +361,7 @@ final class PlanService
                     ->update(['state'=>'suppressed','updated_at'=>now()]);
                 if($state==='joined')$this->reminders($plan);
                 $this->enqueueEvent($plan,$plan->organizer_id,'rsvp');
+                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('plans',[$actor],['kind'=>'self','id'=>$actor]);
             }
             return $this->present($plan,$actor);
         },3);
