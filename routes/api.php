@@ -38,6 +38,8 @@ use App\Modules\Advertising\Http\Controllers\AdvertisingController;
 use App\Modules\Moderation\Http\Controllers\ModerationController;
 
 Route::prefix('v1')->group(function (): void {
+    Route::post('/billing/webhooks/apple',[\App\Modules\Billing\Http\Controllers\BillingController::class,'apple'])->middleware('throttle:60,1');
+    Route::post('/billing/webhooks/google',[\App\Modules\Billing\Http\Controllers\BillingController::class,'google'])->middleware('throttle:60,1');
     // M1 mobile configuration: public rollout hints, not an authorization source.
     Route::get('/config/bootstrap', ConfigBootstrapController::class)->middleware('throttle:60,1');
 
@@ -57,6 +59,11 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:120,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        $billing=\App\Modules\Billing\Http\Controllers\BillingController::class;
+        Route::get('/billing/catalog',[$billing,'catalog'])->middleware('throttle:30,1');
+        Route::get('/billing/entitlement',[$billing,'entitlement'])->middleware('throttle:30,1');
+        Route::post('/billing/purchase-context',[$billing,'context'])->middleware('throttle:6,1');
+        Route::post('/billing/verify',[$billing,'verify'])->middleware('throttle:10,1');
         Route::prefix('relay')->group(function (): void {
             $controller=\App\Modules\Relay\Http\Controllers\RelayController::class;
             Route::get('/capabilities',[$controller,'capabilities'])->middleware(\App\Modules\Relay\Http\Middleware\RelayRateLimit::class.':capabilities');

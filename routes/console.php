@@ -226,3 +226,10 @@ Artisan::command('orbit:relay:prune',function(){
     $this->info('Relay metadata retention: '.json_encode(app(\App\Modules\Relay\Services\RelayMetrics::class)->prune()));
 })->purpose('Prune bounded expired Relay metadata and old aggregate counters');
 Schedule::command('orbit:relay:prune')->hourly()->withoutOverlapping();
+
+
+// M19 sandbox reconciliation. No-op while billing is disabled.
+Artisan::command('orbit:billing:reconcile',function(){
+    $this->info('Billing reconciliation: '.json_encode(app(\App\Modules\Billing\Services\BillingService::class)->work(20)));
+})->purpose('Reconcile verified sandbox subscriptions and durable provider events');
+Schedule::command('orbit:billing:reconcile')->everyFiveMinutes()->withoutOverlapping();
