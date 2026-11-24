@@ -37,7 +37,10 @@ final class RealtimeAudience
     }
     public function moment(string $id,bool $clear=false):void
     {
-        if($this->sessions->enabled('moments'))$this->sessions->signalUsers('moments',$this->momentUsers($id,$clear));
+        if(!$this->sessions->enabled('moments'))return;
+        $current=$this->momentUsers($id);
+        $this->sessions->signalUsers('moments',$current,['kind'=>'moment','id'=>$id]);
+        if($clear)$this->sessions->signalUsers('moments',array_values(array_diff($this->momentUsers($id,true),$current)),['kind'=>'clear']);
     }
     public function activity(string $type,string $id):void
     {
@@ -46,7 +49,7 @@ final class RealtimeAudience
         if(!$event)return;
         $policy=app(\App\Modules\Activity\Services\ActivityPolicy::class);
         $users=$type==='moment'?$this->momentUsers($id):$this->checkInUsers($id,true);
-        $this->sessions->signalUsers('activity',array_values(array_filter($users,fn($u)=>$policy->allows($event,$u))));
+        $this->sessions->signalUsers('activity',array_values(array_filter($users,fn($u)=>$policy->allows($event,$u))),['kind'=>'activity','id'=>$event->id]);
     }
     public function sos(string $incident,?array $only=null):void
     {
@@ -58,7 +61,7 @@ final class RealtimeAudience
             if($only!==null)$q->whereIn('user_id',$only);
             $policy=app(\App\Modules\Safety\Services\SosPolicy::class);
             $users=$q->limit(1000)->get()->filter(fn($r)=>$policy->recipientEligible($row,$r))->pluck('user_id')->all();
-            $this->sessions->signalUsers('sos',[$row->initiator_id,...$users]);
+            $this->sessions->signalUsers('sos',[$row->initiator_id,...$users],['kind'=>'sos','id'=>$incident]);
         }catch(\Throwable){Log::warning('M25 supplemental SOS signal deferred.');}
     }
 }

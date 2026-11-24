@@ -163,7 +163,7 @@ final class MessagingEnvelopeService
             }
             DB::table('messaging_conversations')->where('id',$row->id)
                 ->update(['updated_at'=>$now]);
-            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',$targetUsers);
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',$targetUsers,['kind'=>'conversation','id'=>$row->id,'subject'=>$sender]);
             app(\App\Modules\Notifications\Services\NotificationSourceOutbox::class)->record('message', $id);
             return [['id'=>$id,'conversation_id'=>$row->id,'kind'=>$payload['kind'],
                 'group_epoch'=>(int)$row->group_epoch,'accepted'=>true,
@@ -255,7 +255,7 @@ final class MessagingEnvelopeService
         if($read)$updates['read_at']=$env->read_at??now();
         DB::table('messaging_envelopes')->where('id',$envelopeId)->update($updates);
         if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging')&&($env->delivered_at===null||($read&&$env->read_at===null))&&in_array($env->sender_id,$this->access->recipients($conversation,$user),true))
-            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',[$env->sender_id,$user]);
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',[$env->sender_id,$user],['kind'=>'conversation','id'=>$conversation->id,'subject'=>$user]);
         return ['envelope_id'=>$envelopeId,'delivered'=>true,
             'read'=>$read||$env->read_at!==null];
     }
@@ -306,7 +306,7 @@ final class MessagingEnvelopeService
         abort_unless($message,404,'Message unavailable.');
         abort_unless(Schema::hasTable('messaging_redactions'),503,
             'Private message deletion synchronization requires migration.');
-        DB::transaction(function()use($id,$conversation):void{
+        DB::transaction(function()use($id,$conversation,$sender):void{
             $targets=DB::table('messaging_envelopes')
                 ->where('message_id',$id)->pluck('recipient_device_id');
             foreach($targets as $device){
@@ -320,6 +320,8 @@ final class MessagingEnvelopeService
             DB::table('messaging_messages')->where('id',$id)
                 ->whereNull('redacted_at')->update(['redacted_at'=>now()]);
             DB::table('messaging_envelopes')->where('message_id',$id)->delete();
+            if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging'))
+                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',[$sender,...$this->access->recipients($conversation,$sender)],['kind'=>'conversation','id'=>$conversation->id,'subject'=>$sender]);
         });
         return ['message_id'=>$id,'redacted'=>true];
     }

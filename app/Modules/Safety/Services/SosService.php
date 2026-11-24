@@ -194,7 +194,7 @@ final class SosService
                     'state'=>'acknowledged','acknowledged_at'=>now(),'updated_at'=>now(),
                 ]);
                 $this->audit->incident($id,$actor,'sos.acknowledged');
-                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('sos',[$actor,$incident->initiator_id]);
+                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('sos',[$actor,$incident->initiator_id],['kind'=>'sos','id'=>$id]);
             }
             return $this->present($incident,$actor);
         },3);

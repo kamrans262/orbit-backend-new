@@ -59,7 +59,7 @@ final class LocationRealtimePublisher
                 }
             }
             if($this->firebase()){
-                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('location',array_values(array_diff(array_unique($viewers),[$owner])));
+                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('location',array_values(array_diff(array_unique($viewers),[$owner])),$clear?['kind'=>'clear']:['kind'=>'location','id'=>$owner]);
                 return;
             }
             foreach(array_unique($viewers) as $viewer) {

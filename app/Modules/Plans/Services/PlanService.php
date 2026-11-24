@@ -42,7 +42,7 @@ final class PlanService
             'created_at'=>now(),'updated_at'=>now(),
         ]);
         if($user===$plan->organizer_id||$this->policy->canViewRecord($plan,$user))
-            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('plans',[$user,$plan->organizer_id]);
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('plans',[$user,$plan->organizer_id],['kind'=>'plan','id'=>$plan->id]);
     }
 
     private function reminders(object $plan): void

@@ -43,7 +43,7 @@ final class MessagingTypingService
         $key=$this->key($conversation->id,$user);
         if(!$active){
             $this->cache()->forget($key);
-            if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging')&&$this->allowed($conversation,$user))app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',$this->access->recipients($conversation,$user));
+            if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging')&&$this->allowed($conversation,$user))app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',$this->access->recipients($conversation,$user),['kind'=>'conversation','id'=>$conversation->id,'subject'=>$user]);
             return ['accepted'=>true,'expires_in'=>0];
         }
         abort_unless($this->allowed($conversation,$user),403,
@@ -52,7 +52,7 @@ final class MessagingTypingService
             return ['accepted'=>false,'expires_in'=>5];
         }
         $this->cache()->put($key,true,5);
-        if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging'))app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',$this->access->recipients($conversation,$user));
+        if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging'))app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',$this->access->recipients($conversation,$user),['kind'=>'conversation','id'=>$conversation->id,'subject'=>$user]);
         return ['accepted'=>true,'expires_in'=>5];
     }
 

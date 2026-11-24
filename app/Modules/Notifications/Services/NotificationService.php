@@ -53,8 +53,9 @@ final class NotificationService
                 if (!Str::isUuid($user)
                     || !$this->policy->targetAllowed($category, $targetId, $user, $context, $type))
                     continue;
+                $noticeId=(string)Str::uuid();
                 $added = DB::table('notification_inbox')->insertOrIgnore([
-                    'id'=>(string) Str::uuid(), 'event_id'=>$eventId,
+                    'id'=>$noticeId, 'event_id'=>$eventId,
                     'recipient_user_id'=>$user, 'category'=>$category, 'type'=>$type,
                     'target_id'=>$targetId, 'context_id'=>$context, 'template_key'=>$template,
                     'created_at'=>$eventTime, 'expires_at'=>$expiresAt,
@@ -64,7 +65,7 @@ final class NotificationService
                         : null,
                 ]);
                 $created+=$added;
-                if($added)app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('notifications',[$user]);
+                if($added)app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('notifications',[$user],['kind'=>'notice','id'=>$noticeId]);
             }
         }, 3);
         return $created;
@@ -143,7 +144,7 @@ final class NotificationService
             $changed=DB::table('notification_inbox')->where('id',$notice)
                 ->where('recipient_user_id',$user)->whereNull('read_at')
                 ->update(['read_at'=>now()]);
-            if($changed)app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('notifications',[$user]);
+            if($changed)app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('notifications',[$user],['kind'=>'self','id'=>$user]);
             if($row->category==='moments') {
                 $source=DB::table('notification_events')->where('id',$row->event_id)->first();
                 if($source && $source->source_type==='moment_notice')

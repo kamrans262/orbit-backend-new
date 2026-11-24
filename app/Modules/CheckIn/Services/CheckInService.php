@@ -161,7 +161,7 @@ final class CheckInService
             ]) === 1;
             if ($created) {
                 $this->writeAudience($id, 1, $scopes, $recipients);
-                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('check_in',[$creator,...$recipients]);
+                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('check_in',[$creator,...$recipients],['kind'=>'check_in','id'=>$id]);
                 app(\App\Modules\Notifications\Services\NotificationSourceOutbox::class)->record('check_in', $id);
             }
             return $created;
@@ -235,7 +235,8 @@ final class CheckInService
             DB::table('checkins')->where('id', $id)->update([
                 'audience_revision' => $revision, 'updated_at' => now(),
             ]);
-            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('check_in',array_unique([$owner,...$previous,...$recipients]));
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('check_in',array_unique([$owner,...$recipients]),['kind'=>'check_in','id'=>$id]);
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('check_in',array_values(array_diff($previous,$recipients,[$owner])),['kind'=>'clear']);
             return $this->present($this->ownerRecord($id, $owner), $owner);
         });
     }

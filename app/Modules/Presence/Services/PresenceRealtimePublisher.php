@@ -21,7 +21,7 @@ final class PresenceRealtimePublisher
     private function emit(string $viewer, array $event): void
     {
         if($this->firebase()){
-            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('presence',[$viewer]);
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('presence',[$viewer],isset($event['subject_id'])?['kind'=>'presence','id'=>$event['circle_id'],'subject'=>$event['subject_id'],'typing'=>$event['type']==='presence.typing']:['kind'=>'clear']);
             return;
         }
         $channel='orbit:m9:viewer:'.hash_hmac('sha256',$viewer,(string)config('app.key'));

@@ -183,7 +183,9 @@ final class CircleFirebaseBridge
         if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('circles')){
             // Removed members receive only a generic cache-clear hint at mutation time.
             $users=DB::table('circle_members')->where('circle_id',$circleId)->where(fn($q)=>$q->whereNull('removed_at')->orWhere('removed_at','>=',now()->subSeconds(5)))->limit(1000)->pluck('user_id')->all();
-            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('circles',$users);
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('circles',$users,['kind'=>'circle','id'=>$circleId]);
+            $removed=DB::table('circle_members')->where('circle_id',$circleId)->where('removed_at','>=',now()->subSeconds(5))->limit(1000)->pluck('user_id')->all();
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('circles',$removed,['kind'=>'clear']);
         }
         if (!$this->enabled()) return;
         DB::afterCommit(function () use ($circleId): void {
