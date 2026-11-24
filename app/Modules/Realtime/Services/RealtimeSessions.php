@@ -37,7 +37,7 @@ final class RealtimeSessions
             ->whereColumn('s.user_id','d.user_id')->whereNull('s.revoked_at')->where('s.expires_at','>',now())
             ->where('d.trust_state','trusted')->whereNull('d.revoked_at')->whereNotNull('d.public_key')
             ->where('u.status','active')->whereNull('u.deletion_requested_at')
-            ->first(['s.id','s.device_id','s.expires_at','d.platform']);
+            ->first(['s.id','s.user_id','s.device_id','s.expires_at','d.platform']);
     }
     public function bootstrap(OrbitSession $session):array
     {
@@ -60,7 +60,8 @@ final class RealtimeSessions
                 $revision=(int)($current?->revision??0)+($fresh?1:0);
                 DB::table('orbit_realtime_sessions')->updateOrInsert(['session_id'=>$id],[
                     'device_id'=>$live->device_id,'generation'=>$generation,'lease_until_ms'=>$until,
-                    'revision'=>$revision,'dirty'=>true,'available_at'=>now(),'attempts'=>0,'updated_at'=>now(),
+                    'revision'=>$revision,'visible_revision'=>$fresh?max(1,(int)($current?->visible_revision??0)+1):(int)$current->visible_revision,
+                    ...($fresh?['pending_scopes'=>null]:[]),'dirty'=>true,'available_at'=>now(),'attempts'=>0,'updated_at'=>now(),
                     ...(!$current?['created_at'=>now()]:[]),
                 ]);
                 return ['firebase'=>$client,'generation'=>$generation,'device'=>$live->device_id,'lease_until_ms'=>$until];
@@ -77,10 +78,13 @@ final class RealtimeSessions
         catch(\Throwable){abort(503,'Realtime service unavailable.');}
     }
     /** Only server-selected recipients; no client supplied channel or payload. */
-    public function signalUsers(string $module,array $users):void
+    public function signalUsers(string $module,array $users,?array $scope=null):void
     {
         if(!$this->enabled($module)||!$users)return;
-        $users=array_values(array_unique($users));
+        $users=array_slice(array_values(array_unique($users)),0,1000);
+        // Unscoped mutation-time invalidations are deliberately very short lived.
+        $scope=$scope??['kind'=>'clear'];
+        $scope['module']=$module;$scope['until']=$this->nowMs()+($scope['kind']==='clear'?5000:60000);
         foreach(array_chunk($users,100) as $chunk){
             DB::table('orbit_realtime_sessions as r')->join('orbit_sessions as s','s.id','=','r.session_id')
                 ->join('devices as d','d.id','=','s.device_id')->join('orbit_users as u','u.id','=','s.user_id')
@@ -88,10 +92,30 @@ final class RealtimeSessions
                 ->where('d.trust_state','trusted')->whereNull('d.revoked_at')->whereNotNull('d.public_key')
                 ->where('u.status','active')->whereNull('u.deletion_requested_at')
                 ->where('r.lease_until_ms','>',$this->nowMs())->select('r.session_id')
-                ->orderBy('r.session_id')->chunkById(50,function($rows)use($module){
+                ->orderBy('r.session_id')->chunkById(50,function($rows)use($module,$scope){
                     $ids=$rows->pluck('session_id')->all();
-                    DB::table('orbit_realtime_sessions')->whereIn('session_id',$ids)
-                        ->increment('revision',1,['dirty'=>true,'updated_at'=>now()]);
+                    DB::transaction(function()use($ids,$scope){
+                        foreach(DB::table('orbit_realtime_sessions')->whereIn('session_id',$ids)->orderBy('session_id')->lockForUpdate()->get() as $row){
+                            if((int)$row->lease_until_ms<=$this->nowMs())continue;
+                            $pending=json_decode($row->pending_scopes??'[]',true)?:[];
+                            $pending=array_values(array_filter($pending,fn($v)=>($v['until']??0)>$this->nowMs()));
+                            // Bounded latest descriptors only; duplicate sources coalesce.
+                            $key=hash('sha256',json_encode(array_diff_key($scope,['until'=>true]),JSON_THROW_ON_ERROR));
+                            $found=false;
+                            foreach($pending as &$entry){
+                                if(($entry['key']??null)===$key){
+                                    $entry['count']=min(100,(int)$entry['count']+1);
+                                    $entry['until']=$scope['until'];$found=true;break;
+                                }
+                            }
+                            unset($entry);
+                            if(!$found)$pending[]=$scope+['key'=>$key,'count'=>1];
+                            $pending=array_slice($pending,-32);
+                            DB::table('orbit_realtime_sessions')->where('session_id',$row->session_id)->increment('revision',1,[
+                                'pending_scopes'=>json_encode($pending,JSON_THROW_ON_ERROR),'dirty'=>true,'updated_at'=>now(),
+                            ]);
+                        }
+                    });
                     // Bounded immediate sends; the durable dirty revision remains for cron.
                     if($module!=='sos')DB::afterCommit(fn()=>$this->inline($ids));
                 },'r.session_id','session_id');
@@ -123,12 +147,19 @@ final class RealtimeSessions
                     return false;
                 }
                 if(!$r->dirty)return true;
+                $visible=(int)$r->visible_revision;
+                $pending=json_decode($r->pending_scopes??'[]',true)?:[];
+                foreach($pending as $scope){
+                    if(($scope['until']??0)<=$this->nowMs()||!$this->enabled($scope['module']??''))continue;
+                    if(app(RealtimeSignalPolicy::class)->allows($scope,(string)$live->user_id,(string)$live->device_id))
+                        $visible+=max(1,min(100,(int)($scope['count']??1)));
+                }
                 $this->provider->replace($id,[
                     'lease'=>['device'=>$r->device_id,'generation'=>$r->generation,'until_ms'=>(int)$r->lease_until_ms],
-                    'signal'=>['schema_version'=>1,'revision'=>(int)$r->revision],
+                    'signal'=>['schema_version'=>1,'revision'=>$visible],
                 ]);
                 DB::table('orbit_realtime_sessions')->where('session_id',$id)->update([
-                    'published_revision'=>$r->revision,'dirty'=>false,'attempts'=>0,'available_at'=>now(),'last_success_at'=>now(),
+                    'published_revision'=>$r->revision,'visible_revision'=>$visible,'pending_scopes'=>null,'dirty'=>false,'attempts'=>0,'available_at'=>now(),'last_success_at'=>now(),
                 ]);
                 return true;
             },1);
@@ -157,7 +188,7 @@ final class RealtimeSessions
         foreach($ids as $id){
             if($this->live($id))continue;
             DB::table('orbit_realtime_sessions')->where('session_id',$id)->update([
-                'lease_until_ms'=>0,'dirty'=>true,'available_at'=>now(),
+                'lease_until_ms'=>0,'pending_scopes'=>null,'dirty'=>true,'available_at'=>now(),
             ]);
             DB::afterCommit(fn()=>$this->inline([$id]));
         }
