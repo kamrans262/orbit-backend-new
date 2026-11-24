@@ -15,15 +15,9 @@
     <p>Uses only the approved Orbit Admin navigation, forms, cards, tables and confirmation styles. Advertisements remain globally disabled until the policy gates are approved.</p>
   </div></div>
   <div class="heading-actions" style="display:flex;flex-wrap:wrap;gap:8px">
-    @foreach(['overview'=>'Overview','sponsors'=>'Sponsors','creatives'=>'Creatives & Review','campaigns'=>'Campaigns','placements'=>'Placements & Frequency'] as $tab=>$label)
-      <a class="btn {{ $area===$tab?'primary':'secondary' }}" href="{{ route('orbit.admin.advertising.'.$tab) }}">{{ $label }}</a>
+    @foreach(\App\Modules\Config\Services\AdminNavigation::workspace(auth()->guard('admin')->user(), 'advertising') as $link)
+      <a class="btn {{ request()->routeIs(...$link['patterns'])?'primary':'secondary' }}" href="{{ route($link['route']) }}">{{ $link['title'] }}</a>
     @endforeach
-    @if(auth()->guard('admin')->user()?->canPerform('advertising.analytics'))
-      <a class="btn {{ $area==='analytics'?'primary':'secondary' }}" href="{{ route('orbit.admin.advertising.analytics') }}">Analytics</a>
-    @endif
-    @if(auth()->guard('admin')->user()?->canPerform('advertising.audit'))
-      <a class="btn {{ $area==='audits'?'primary':'secondary' }}" href="{{ route('orbit.admin.advertising.audits') }}">Audit Trail</a>
-    @endif
   </div>
 </section>
 @if(!$ready)
@@ -221,8 +215,8 @@
                 <option value="{{ $creative->id }}" @selected($creative->id===$campaign->creative_id)>{{ $creative->title }}</option>
               @endif @endforeach
             </select></label>
-            <label>Start UTC<input name="starts_at" type="datetime-local" value="{{ IlluminateSupportCarbon::parse($campaign->starts_at)->format('Y-m-dTH:i') }}" required></label>
-            <label>End UTC<input name="ends_at" type="datetime-local" value="{{ IlluminateSupportCarbon::parse($campaign->ends_at)->format('Y-m-dTH:i') }}" required></label>
+            <label>Start UTC<input name="starts_at" type="datetime-local" value="{{ \Illuminate\Support\Carbon::parse($campaign->starts_at)->format('Y-m-dTH:i') }}" required></label>
+            <label>End UTC<input name="ends_at" type="datetime-local" value="{{ \Illuminate\Support\Carbon::parse($campaign->ends_at)->format('Y-m-dTH:i') }}" required></label>
             <label>Priority<input name="priority" type="number" min="1" max="10" required value="{{ $campaign->priority }}"></label>
             <label><input type="checkbox" name="placements[]" value="home.promo"> Home promo</label>
             <label><input type="checkbox" name="placements[]" value="moments.promo"> Moments promo</label>

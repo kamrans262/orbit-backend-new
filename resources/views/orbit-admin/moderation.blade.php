@@ -12,12 +12,9 @@
 <section class="panel">
   <div class="panel-head"><div><h2>Moderation workspace</h2><p>Uses the existing Orbit Administration layout, tables, cards, filters and confirmation controls.</p></div></div>
   <div class="heading-actions" style="display:flex;flex-wrap:wrap;gap:8px">
-    @foreach(['overview'=>'Overview','queue'=>'Report Queue','cases'=>'Cases & Investigations','actions'=>'Enforcement Actions','appeals'=>'Appeals','settings'=>'Settings'] as $tab=>$label)
-      <a href="{{ route('orbit.admin.moderation.'.$tab) }}" class="btn {{ $area===$tab?'primary':'secondary' }}">{{ $label }}</a>
+    @foreach(\App\Modules\Config\Services\AdminNavigation::workspace(auth()->guard('admin')->user(), 'moderation') as $link)
+      <a class="btn {{ request()->routeIs(...$link['patterns'])?'primary':'secondary' }}" href="{{ route($link['route']) }}">{{ $link['title'] }}</a>
     @endforeach
-    @if(auth()->guard('admin')->user()?->canPerform('moderation.audit'))
-      <a href="{{ route('orbit.admin.moderation.audits') }}" class="btn {{ $area==='audits'?'primary':'secondary' }}">Audit Trail</a>
-    @endif
   </div>
 </section>
 @if(!$ready)

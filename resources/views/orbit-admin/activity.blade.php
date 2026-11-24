@@ -15,11 +15,9 @@
     <p>Only existing Orbit Admin styling and navigation are used. This workspace is separate from Configurations and Notifications.</p>
   </div></div>
   <div class="heading-actions" style="display:flex;flex-wrap:wrap;gap:8px">
-  @foreach(['overview'=>'Overview','sources'=>'Source Controls','operations'=>'Projection Operations','audits'=>'Audit Trail'] as $tab=>$label)
-    @if($tab!=='audits' || auth()->guard('admin')->user()?->canPerform('activity.audit'))
-    <a href="{{ route('orbit.admin.activity.'.$tab) }}" class="btn {{ $area===$tab?'primary':'secondary' }}">{{ $label }}</a>
-    @endif
-  @endforeach
+    @foreach(\App\Modules\Config\Services\AdminNavigation::workspace(auth()->guard('admin')->user(), 'activity') as $link)
+      <a class="btn {{ request()->routeIs(...$link['patterns'])?'primary':'secondary' }}" href="{{ route($link['route']) }}">{{ $link['title'] }}</a>
+    @endforeach
   </div>
 </section>
 @if(!$ready)

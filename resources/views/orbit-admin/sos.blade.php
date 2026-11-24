@@ -12,10 +12,8 @@
 <section class="panel">
   <div class="panel-head"><div><h2>Safety workspace</h2><p>Dedicated, role-restricted operations using the existing Orbit Administration design.</p></div></div>
   <div class="heading-actions" style="display:flex;flex-wrap:wrap;gap:8px">
-    @foreach(['overview'=>'Overview','incidents'=>'Incident Directory','responders'=>'Responders','delivery'=>'Delivery Operations','settings'=>'Settings','audits'=>'Audit Trail'] as $tab=>$label)
-      @if($tab!=='audits' || auth()->guard('admin')->user()?->canPerform('safety.audit'))
-        <a href="{{ route('orbit.admin.safety.'.$tab) }}" class="btn {{ $area===$tab?'primary':'secondary' }}">{{ $label }}</a>
-      @endif
+    @foreach(\App\Modules\Config\Services\AdminNavigation::workspace(auth()->guard('admin')->user(), 'safety') as $link)
+      <a class="btn {{ request()->routeIs(...$link['patterns'])?'primary':'secondary' }}" href="{{ route($link['route']) }}">{{ $link['title'] }}</a>
     @endforeach
   </div>
 </section>

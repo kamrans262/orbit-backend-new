@@ -13,12 +13,8 @@
   <div class="panel-head"><div><h2>Notifications workspace</h2>
     <p>This is a dedicated area, separate from Accounts and Configurations. Every management action requires permission, confirmation and an audit reason.</p></div></div>
   <div class="heading-actions" style="display:flex;flex-wrap:wrap;gap:8px">
-    @foreach([
-      'overview'=>'Overview','jobs'=>'Delivery Queue','devices'=>'Push Devices',
-      'templates'=>'Templates','settings'=>'Settings & Controls','audits'=>'Audit Trail'
-    ] as $tab=>$title)
-    <a class="btn {{ $area===$tab?'primary':'secondary' }}"
-      href="{{ route('orbit.admin.notifications.'.$tab) }}">{{ $title }}</a>
+    @foreach(\App\Modules\Config\Services\AdminNavigation::workspace(auth()->guard('admin')->user(), 'notifications') as $link)
+      <a class="btn {{ request()->routeIs(...$link['patterns'])?'primary':'secondary' }}" href="{{ route($link['route']) }}">{{ $link['title'] }}</a>
     @endforeach
   </div>
 </section>

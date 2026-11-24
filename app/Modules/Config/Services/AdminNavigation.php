@@ -14,11 +14,13 @@ final class AdminNavigation
     public static function groups(?AdminUser $user): array
     {
         $groups = [];
+        $allowed = [];
         foreach (self::definitions() as [$title,$icon,$entries]) {
             $children = [];
             foreach ($entries as [$label,$route,$permission,$patterns]) {
                 $name = 'orbit.admin.'.$route;
-                if (!$user?->canPerform($permission) || !Route::has($name)) continue;
+                $allowed[$permission] ??= $user?->canPerform($permission) ?? false;
+                if (!$allowed[$permission] || !Route::has($name)) continue;
                 $children[] = ['title'=>$label, 'route'=>$name,
                     'patterns'=>array_map(fn ($pattern) => 'orbit.admin.'.$pattern, $patterns)];
             }
@@ -27,6 +29,18 @@ final class AdminNavigation
                 'patterns'=>array_values(array_unique(array_merge(...array_column($children,'patterns'))))];
         }
         return $groups;
+    }
+
+    public static function workspace(?AdminUser $user, string $prefix): array
+    {
+        foreach (self::groups($user) as $group) {
+            foreach ($group['children'] as $link) {
+                if (str_starts_with($link['route'], 'orbit.admin.'.$prefix.'.')) {
+                    return $group['children'];
+                }
+            }
+        }
+        return [];
     }
 
     public static function firstRoute(?AdminUser $user): ?string
