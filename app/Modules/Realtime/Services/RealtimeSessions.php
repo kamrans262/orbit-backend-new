@@ -203,6 +203,8 @@ final class RealtimeSessions
     }
     public function pruneEphemeral():void
     {
+        // Pending authorization descriptors cannot survive expired access, even during provider outage.
+        DB::table('orbit_realtime_sessions')->where('lease_until_ms','<=',$this->nowMs())->whereNotNull('pending_scopes')->update(['pending_scopes'=>null]);
         foreach(['orbit_ephemeral_cache','orbit_ephemeral_locks'] as $table){
             $keys=DB::table($table)->where('expiration','<=',now()->timestamp)->orderBy('expiration')->limit(1000)->pluck('key');
             DB::table($table)->whereIn('key',$keys)->where('expiration','<=',now()->timestamp)->delete();

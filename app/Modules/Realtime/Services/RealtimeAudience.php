@@ -42,6 +42,15 @@ final class RealtimeAudience
         $this->sessions->signalUsers('moments',$current,['kind'=>'moment','id'=>$id]);
         if($clear)$this->sessions->signalUsers('moments',array_values(array_diff($this->momentUsers($id,true),$current)),['kind'=>'clear']);
     }
+    /** At expiry/restriction, only the owner and current grant snapshot receive a bounded cache clear. */
+    public function momentClear(object $moment):void
+    {
+        if(!$this->sessions->enabled('moments'))return;
+        $users=DB::table('moment_recipients')->where('moment_id',$moment->id)
+            ->where('version',$moment->audience_revision)->whereNull('revoked_at')->limit(1000)->pluck('viewer_id')->all();
+        $this->sessions->signalUsers('moments',[$moment->creator_id,...$users],['kind'=>'clear']);
+    }
+
     public function activity(string $type,string $id):void
     {
         if(!$this->sessions->enabled('activity'))return;

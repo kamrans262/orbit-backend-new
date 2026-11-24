@@ -112,6 +112,7 @@ final class AdminMomentController extends Controller
             abort_unless($moment,404);
             DB::table('moment_reports')->where('id',$report)->update(['status'=>$data['action']==='dismiss'?'dismissed':'actioned','updated_at'=>now()]);
             if($data['action']==='restrict' && $moment->state==='published'){
+                app(\App\Modules\Realtime\Services\RealtimeAudience::class)->momentClear($moment);
                 DB::table('moments')->where('id',$moment->id)->update([
                     'state'=>'restricted','audience_revision'=>$moment->audience_revision+1,'updated_at'=>now(),
                 ]);

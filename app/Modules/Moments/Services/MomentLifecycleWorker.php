@@ -25,6 +25,7 @@ final class MomentLifecycleWorker
                             DB::table('moments')->where('id',$m->id)->update(['state'=>'expired','updated_at'=>now()]);
                             DB::table('moment_events_outbox')->insert(['id'=>(string)Str::uuid7(),'moment_id'=>$m->id,'event_type'=>'moment.expired.v1',
                                 'audience_revision'=>$m->audience_revision,'status'=>'pending','created_at'=>now()]);
+                            app(\App\Modules\Realtime\Services\RealtimeAudience::class)->momentClear($m);
                             $stats['expired']++;
                         }
                     } elseif($j->job_type==='purge'){

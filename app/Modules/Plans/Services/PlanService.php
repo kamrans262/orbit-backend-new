@@ -162,6 +162,7 @@ final class PlanService
             }
             $this->attachInvitees($plan,$normalized['invitee_ids'],$normalized['circle_ids']);
             $this->reminders($plan);
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('plans',[$actor],['kind'=>'plan','id'=>$id]);
             return [$this->present($plan,$actor),true];
         },3);
     }
@@ -288,6 +289,7 @@ final class PlanService
             foreach(DB::table('plan_invitees')->where('plan_id',$id)
                 ->whereIn('state',['invited','joined'])->pluck('user_id') as $user)
                 $this->enqueueEvent($plan,$user,'updated');
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('plans',[$actor],['kind'=>'plan','id'=>$id]);
             return $this->present($plan,$actor,true);
         },3);
     }
@@ -314,6 +316,7 @@ final class PlanService
             ->whereIn('state',['pending','retry','processing'])
             ->update(['state'=>'suppressed','updated_at'=>now()]);
         $updated=DB::table('plans')->where('id',$plan->id)->first();
+        app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('plans',[$plan->organizer_id],['kind'=>'plan','id'=>$plan->id]);
         foreach(DB::table('plan_invitees')->where('plan_id',$plan->id)
             ->whereIn('state',['invited','joined'])->pluck('user_id') as $user)
             $this->enqueueEvent($updated,$user,'cancelled');

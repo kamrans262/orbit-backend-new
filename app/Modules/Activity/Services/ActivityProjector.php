@@ -75,6 +75,7 @@ final class ActivityProjector
                     ->orWhere('expires_at', '>', now()));
             }
             if (!$q->exists()) {
+                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('activity',[$row->actor_user_id],['kind'=>'self','id'=>$row->actor_user_id]);
                 $stats['invalidated'] += DB::table('activity_events')
                     ->where('id', $row->id)->whereNull('invalidated_at')
                     ->update(['invalidated_at' => now(), 'updated_at' => now()]);

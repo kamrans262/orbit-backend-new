@@ -222,12 +222,14 @@ final class MessagingEnvelopeService
         $this->access->assertConversation($conversation,$user);
         $ids=$input['delivered_envelope_ids'] ?? [];
         if($ids){
+            $senders=app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging')?DB::table('messaging_envelopes as e')->join('messaging_messages as m','m.id','=','e.message_id')->where('m.conversation_id',$conversation->id)->where('e.recipient_device_id',$device)->whereIn('e.id',$ids)->whereNull('e.delivered_at')->distinct()->pluck('m.sender_id')->all():[];
             DB::table('messaging_envelopes as e')
                 ->join('messaging_messages as m','m.id','=','e.message_id')
                 ->where('m.conversation_id',$conversation->id)
                 ->where('e.recipient_device_id',$device)
                 ->whereIn('e.id',$ids)->whereNull('e.delivered_at')
                 ->update(['e.delivered_at'=>now()]);
+            if($senders)app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',array_values(array_intersect($senders,$this->access->recipients($conversation,$user))),['kind'=>'conversation','id'=>$conversation->id,'subject'=>$user]);
         }
         return $this->page($conversation,$user,$device,
             (int)($input['limit']??(int)config('orbit_messaging.sync_max',200)),

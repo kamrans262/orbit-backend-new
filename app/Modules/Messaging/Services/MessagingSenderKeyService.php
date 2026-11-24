@@ -141,6 +141,7 @@ final class MessagingSenderKeyService
                     'created_at'=>$now,
                 ]);
             }
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',$targetUsers,['kind'=>'conversation','id'=>$row->id,'subject'=>$user]);
             return [[
                 'id'=>$id,'conversation_id'=>$row->id,
                 'group_epoch'=>(int)$row->group_epoch,
