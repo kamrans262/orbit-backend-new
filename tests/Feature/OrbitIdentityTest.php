@@ -329,6 +329,7 @@ final class OrbitIdentityTest extends TestCase
 
     public function test_admin_suspension_requires_permission_and_revokes_sessions(): void
     {
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
         $tokens = $this->signIn();
         $this->registerTrustedDevice($tokens);
         $user = OrbitUser::firstOrFail();
@@ -356,7 +357,19 @@ final class OrbitIdentityTest extends TestCase
         $this->assertDatabaseHas('admin_audit_log', [
             'action' => 'users.status', 'target' => 'user:'.$user->id,
         ]);
-        $this->withToken($tokens['access_token'])->getJson('/api/v1/me')->assertUnauthorized();
+        // Every protected member module must reject the same revoked session.
+        foreach ([
+            '/me', '/me/profile', '/me/preferences/privacy', '/friends', '/circles',
+            '/media/'.Str::uuid(), '/moments', '/dashboard/summary',
+            '/me/presence/settings', '/location/capabilities', '/pings/capabilities',
+            '/check-ins/capabilities', '/messaging/capabilities', '/me/notifications',
+            '/plans', '/sos/capabilities', '/moderation/capabilities',
+            '/activity/capabilities', '/ads/capabilities',
+        ] as $path) {
+            $this->withToken($tokens['access_token'])->getJson('/api/v1'.$path)->assertUnauthorized();
+        }
+        $this->postJson('/api/v1/auth/refresh',['refresh_token'=>$tokens['refresh_token']])
+            ->assertUnauthorized();
     }
 
     public function test_password_enrollment_requires_verified_trusted_device_and_never_overwrites(): void

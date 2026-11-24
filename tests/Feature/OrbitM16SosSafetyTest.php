@@ -211,6 +211,23 @@ final class OrbitM16SosSafetyTest extends TestCase
         $this->assertSame(120,(int)DB::table('sos_controls')
             ->where('key','escalation_after_seconds')->value('value'));
     }
+    public function test_admin_delivery_controls_preserve_core_member_sos_intake(): void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $this->be($this->admin(['safety.read','safety.manage']),'admin');
+        foreach (['escalation_enabled','push_retries_enabled'] as $key) {
+            $this->post('/admin/safety/settings',[
+                'key'=>$key,'value'=>'0','reason'=>'Test optional delivery controls','confirm'=>'1',
+            ])->assertRedirect();
+            $this->assertSame(0,(int)DB::table('sos_controls')->where('key',$key)->value('value'));
+        }
+        $this->withToken($token)->getJson('/api/v1/sos/capabilities')->assertOk()
+            ->assertJsonPath('data.sos_enabled',true)
+            ->assertJsonPath('data.server_intake_available',true)
+            ->assertJsonPath('data.external_emergency_services_connected',false);
+        $this->withToken($token)->postJson('/api/v1/sos/incidents',$this->payload())->assertCreated();
+    }
+
     public function test_empty_circle_falls_back_to_trusted_contact_without_delay(): void
     {
         [$owner,$device,$token]=$this->principal();

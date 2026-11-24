@@ -137,6 +137,15 @@ final class OrbitMessagingAdminTest extends TestCase
             'display_name'=>'Restricted Member',
             'username'=>'member_'.Str::random(8),'status'=>'active',
         ]);
+        $device=\App\Models\OrbitDevice::create([
+            'user_id'=>$account->id,'device_public_id'=>(string)Str::uuid(),
+            'name'=>'Integration test','platform'=>'android','public_key'=>base64_encode(random_bytes(32)),
+            'trust_state'=>'trusted','attestation_state'=>'verified','approved_at'=>now(),
+        ]);
+        $token=app(\App\Modules\Identity\Services\TokenService::class)->issue($account,$device,null)['access_token'];
+        $this->withToken($token)->getJson('/api/v1/messaging/capabilities')->assertOk()
+            ->assertJsonPath('data.can_send_messages',true)
+            ->assertJsonPath('data.server_content_readable',false);
         $operator=$this->admin(['config.manage'],'OperationsOnly');
         $moderator=$this->admin(['messages.moderate'],'SafetyTeam');
         $endpoint='/admin/messaging/restrictions/'.$account->id;
@@ -153,6 +162,9 @@ final class OrbitMessagingAdminTest extends TestCase
         ])->assertRedirect();
         $policy=app(MessagingSendRestrictionService::class);
         $this->assertTrue($policy->isRestricted($account->id));
+        $this->withToken($token)->getJson('/api/v1/messaging/capabilities')->assertOk()
+            ->assertJsonPath('data.can_send_messages',false)
+            ->assertJsonPath('data.server_content_readable',false);
         $this->assertDatabaseHas('messaging_send_restrictions',[
             'user_id'=>$account->id,'reason'=>'spam',
         ]);
@@ -167,6 +179,8 @@ final class OrbitMessagingAdminTest extends TestCase
             'user_id'=>$account->id,
         ]);
         $this->assertDatabaseCount('messaging_send_restriction_audits',2);
+        $this->withToken($token)->getJson('/api/v1/messaging/capabilities')->assertOk()
+            ->assertJsonPath('data.can_send_messages',true);
         $this->assertDatabaseHas('orbit_users',[
             'id'=>$account->id,'status'=>'active',
         ]);
