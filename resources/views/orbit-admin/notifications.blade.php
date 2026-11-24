@@ -20,7 +20,7 @@
 </section>
 @if(!$ready)
 <section class="panel"><div class="admin-guidance">
-  Module 14 tables have not been migrated in this environment. This page is read-only until the additive migration is applied.
+  Notification tables have not been migrated in this environment. This page is read-only until the additive migration is applied.
   No notification records or provider responses are being simulated.
 </div></section>
 @else

@@ -173,7 +173,7 @@ final class OrbitM21AdminNavigationTest extends TestCase
             });
         foreach ([
             'ad_creative_revisions'=>['/admin/advertising','not been provisioned'],
-            'notification_attempts'=>['/admin/notifications','not provisioned'],
+            'notification_attempts'=>['/admin/notifications','have not been migrated'],
             'activity_projection_runs'=>['/admin/activity','has not run'],
             'plan_reminder_jobs'=>['/admin/plans','not been provisioned'],
             'sos_dispatch_attempts'=>['/admin/safety','not yet provisioned'],
