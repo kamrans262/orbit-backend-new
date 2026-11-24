@@ -130,6 +130,27 @@ final class OrbitM3ErasureTest extends TestCase
         $this->assertDatabaseCount('orbit_erasure_receipts',1);
     }
 
+    public function test_newer_module_rows_are_not_implicitly_approved_for_erasure(): void
+    {
+        config()->set('orbit_erasure.execution_enabled',true);
+        [$clean,$cleanId]=$this->request();
+        [$affected,$affectedId]=$this->request();
+        DB::table('dashboard_preferences')->insert(['user_id'=>$affected->id,'circle_order'=>'[]',
+            'created_at'=>now(),'updated_at'=>now()]);
+        $processor=app(M3ErasureProcessor::class);
+        $this->assertContains('dashboard_preferences',$processor->preview($affectedId)['unregistered_tables']);
+        $this->assertNotContains('dashboard_preferences',$processor->preview($cleanId)['unregistered_tables']);
+        $this->assertSame('completed',$processor->execute($cleanId,$this->operator(),'CHANGE-123456')['status']);
+        try {
+            $processor->execute($affectedId,$this->operator(),'CHANGE-123457');
+            $this->fail('Unreviewed later-module record was erased.');
+        } catch (DomainException $error) {
+            $this->assertStringContainsString('Unregistered',$error->getMessage());
+        }
+        $this->assertDatabaseHas('orbit_users',['id'=>$affected->id]);
+        $this->assertDatabaseHas('dashboard_preferences',['user_id'=>$affected->id]);
+    }
+
     public function test_cancelled_request_is_never_eligible_for_processing(): void
     {
         config()->set('orbit_erasure.execution_enabled',true);
