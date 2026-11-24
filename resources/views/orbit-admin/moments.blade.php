@@ -1,12 +1,15 @@
 @extends('orbit-admin.layout')
 @section('title','Moment operations')
-@section('crumb','ACCOUNTS / MOMENT MANAGEMENT')
+@section('crumb','MOMENTS / OPERATIONS')
 @section('content')
 <div class="page-heading">
  <div><p class="eyebrow">CONTENT OPERATIONS / MOMENT MANAGEMENT</p>
  <h1>Moment Management</h1>
  <p>Permission-restricted lifecycle and report review. Private photos, videos, captions, comments, keys and recipient lists are never shown here.</p></div>
 </div>
+@if(!$installed || !$enabled)
+  @include('orbit-admin.partials.module-readiness', ['installed'=>$installed,'enabled'=>$enabled])
+@else
 <div class="stat-grid">
  <article class="stat-card"><span class="stat-label">Published Moments</span><strong>{{ $metrics['published'] }}</strong></article>
  <article class="stat-card"><span class="stat-label">Expired Moments</span><strong>{{ $metrics['expired'] }}</strong></article>
@@ -87,4 +90,5 @@
  <strong>Security boundary:</strong> E2EE content cannot be decrypted by administrators. A report reason alone is not proof of the content.
  Any restriction is reversible only through a separate audited approval process, which is not enabled here.
 </div>
+@endif
 @endsection

@@ -1,6 +1,6 @@
 @extends('orbit-admin.layout')
 @section('title','Encrypted Media Operations')
-@section('crumb','ACCOUNTS / ENCRYPTED MEDIA OPERATIONS')
+@section('crumb','ENCRYPTED MEDIA / OPERATIONS')
 @section('content')
 <div class="page-heading">
   <div><p class="eyebrow">SECURE STORAGE / MEDIA OPERATIONS</p>
@@ -8,6 +8,9 @@
     <p>Encrypted-object lifecycle and health only. No owner identity, thumbnails, media contents, key envelopes or recipient lists are accessible here.</p>
   </div>
 </div>
+@if(!$installed || !$enabled)
+  @include('orbit-admin.partials.module-readiness', ['installed'=>$installed,'enabled'=>$enabled])
+@else
 <div class="stat-grid">
   <article class="stat-card"><span class="stat-label">Total media objects</span><strong>{{ $metrics['objects'] }}</strong></article>
   <article class="stat-card"><span class="stat-label">Ready ciphertext</span><strong>{{ $metrics['ready'] }}</strong></article>
@@ -91,5 +94,6 @@
     <button class="btn primary" type="submit">Schedule guarded retry</button>
   </form>
 </section>
+@endif
 @endif
 @endsection

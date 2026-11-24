@@ -1,12 +1,15 @@
 @extends('orbit-admin.layout')
 @section('title','Circle operations')
-@section('crumb','ACCOUNTS / CIRCLE MANAGEMENT')
+@section('crumb','CIRCLES / OPERATIONS')
 @section('content')
 <div class="page-heading">
   <div><p class="eyebrow">CIRCLE OPERATIONS / GROUP MANAGEMENT</p>
     <h1>Circle Management</h1>
     <p>Permission-restricted operational health. Circle names, participants, invitations, location, presence and content are not available in Admin.</p></div>
 </div>
+@if(!$installed || !$enabled)
+  @include('orbit-admin.partials.module-readiness', ['installed'=>$installed,'enabled'=>$enabled])
+@else
 <div class="stat-grid">
   <article class="stat-card"><span class="stat-label">Active Circles</span><strong>{{ $metrics['active'] }}</strong><p>Private groups currently active</p></article>
   <article class="stat-card"><span class="stat-label">Archived Circles</span><strong>{{ $metrics['archived'] }}</strong><p>Archived group records</p></article>
@@ -41,4 +44,5 @@
   <strong>Administrative access:</strong> This screen displays operational summaries only.
   Circle ownership, invitations, roles and archive options are available through authorized app workflows; this page does not override member permissions or expose private Circle content.
 </div>
+@endif
 @endsection

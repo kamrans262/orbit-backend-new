@@ -16,7 +16,14 @@ final class AdminCircleController extends Controller
 {
     public function index(Request $request): Response
     {
-        abort_unless(config('orbit_circle.enabled') === true, 404);
+        $installed = \Illuminate\Support\Facades\Schema::hasTable('circles')
+            && \Illuminate\Support\Facades\Schema::hasTable('circle_members')
+            && \Illuminate\Support\Facades\Schema::hasTable('circle_invites');
+        $enabled = config('orbit_circle.enabled') === true;
+        if (!$installed || !$enabled) {
+            return response()->view('orbit-admin.circles', compact('installed','enabled'))
+                ->header('Cache-Control','private, no-store');
+        }
         $filters = $request->validate(['circle_id'=>['nullable','uuid']]);
         $id = $filters['circle_id'] ?? null;
         $metrics = [
@@ -43,7 +50,7 @@ final class AdminCircleController extends Controller
                 ];
             }
         }
-        return response()->view('orbit-admin.circles',compact('metrics','summary'))
+        return response()->view('orbit-admin.circles',compact('metrics','summary','installed','enabled'))
             ->header('Cache-Control','private, no-store');
     }
 }

@@ -12,7 +12,15 @@ final class AdminMomentController extends Controller
 {
     public function index(Request $r):Response
     {
-        abort_unless(config('orbit_moments.enabled')===true,404);
+        $installed = \Illuminate\Support\Facades\Schema::hasTable('moments')
+            && \Illuminate\Support\Facades\Schema::hasTable('moment_reports')
+            && \Illuminate\Support\Facades\Schema::hasTable('moment_lifecycle_jobs')
+            && \Illuminate\Support\Facades\Schema::hasTable('moment_events_outbox');
+        $enabled = config('orbit_moments.enabled') === true;
+        if (!$installed || !$enabled) {
+            return response()->view('orbit-admin.moments', compact('installed','enabled'))
+                ->header('Cache-Control','private, no-store');
+        }
         $d=$r->validate(['moment_id'=>['nullable','uuid']]);
         $metrics=[
             'published'=>DB::table('moments')->where('state','published')->count(),
@@ -37,7 +45,7 @@ final class AdminMomentController extends Controller
             ->orderByDesc('attempts')->limit(10)
             ->get(['job_type','attempts','last_error_code','updated_at']);
         return response()->view('orbit-admin.moments',
-            compact('metrics','moment','reports','failures'))
+            compact('metrics','moment','reports','failures','installed','enabled'))
             ->header('Cache-Control','private, no-store');
     }
 

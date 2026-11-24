@@ -13,8 +13,14 @@ final class AdminMediaController extends Controller
 {
     public function index(Request $r): Response
     {
-        abort_unless(config('orbit_media.enabled')===true,404);
-        abort_unless(Schema::hasTable('media_objects'),503,'Media migration not installed.');
+        $installed = \Illuminate\Support\Facades\Schema::hasTable('media_objects')
+            && \Illuminate\Support\Facades\Schema::hasTable('media_delete_jobs')
+            && \Illuminate\Support\Facades\Schema::hasTable('media_upload_sessions');
+        $enabled = config('orbit_media.enabled') === true;
+        if (!$installed || !$enabled) {
+            return response()->view('orbit-admin.media', compact('installed','enabled'))
+                ->header('Cache-Control','private, no-store');
+        }
         $filters=$r->validate(['media_id'=>['nullable','uuid'],'owner_id'=>['nullable','uuid']]);
         $metrics=[
             'objects'=>DB::table('media_objects')->count(),
@@ -57,7 +63,7 @@ final class AdminMediaController extends Controller
                 ->orderBy('next_attempt_at')->limit(20)
                 ->get(['id','attempts','next_attempt_at'])
             : collect();
-        return response()->view('orbit-admin.media',compact('metrics','row','quota','failedJobs'))
+        return response()->view('orbit-admin.media',compact('metrics','row','quota','failedJobs','installed','enabled'))
             ->header('Cache-Control','private, no-store')
             ->header('X-Content-Type-Options','nosniff');
     }
