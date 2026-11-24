@@ -37,6 +37,17 @@ final class LocationRealtimePublisher
     public function invalidate(string $owner,bool $clear=true): void
     {
         if (!$this->firebase()&&!$this->tickets->enabled()) return;
+        // Legacy gateway remains a compatibility path, also strictly post-commit.
+        if(!$this->firebase()&&DB::transactionLevel()>0){
+            DB::afterCommit(fn()=>$this->publishLegacy($owner,$clear));
+            return;
+        }
+        $this->publishLegacy($owner,$clear);
+    }
+
+    private function publishLegacy(string $owner,bool $clear):void
+    {
+        if(!$this->firebase()&&!$this->tickets->enabled())return;
         try {
             $shares=DB::table('location_shares')->where('owner_id',$owner)
                 ->where(function($q): void {
