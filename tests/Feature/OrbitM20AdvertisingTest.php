@@ -357,6 +357,11 @@ final class OrbitM20AdvertisingTest extends TestCase
             'title'=>'Original Sponsor Artwork',
         ]);
         Storage::disk('local')->assertExists($creative->private_path);
+        // Stage 4: digest must represent sanitized stored bytes, never a
+        // pre-review original carrying EXIF/GPS or appended upload metadata.
+        $sanitized=Storage::disk('local')->get($creative->private_path);
+        $this->assertSame(hash('sha256',$sanitized),$creative->sha256);
+        $this->assertSame('image/png',getimagesizefromstring($sanitized)['mime']);
         $this->post('/admin/advertising/creatives/'.$creative->id.'/review',[
             'revision'=>1,'action'=>'approved',
             'reason'=>'Attempt creator self review','confirm'=>'1',
