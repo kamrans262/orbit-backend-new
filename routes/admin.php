@@ -43,27 +43,9 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
     Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
     Route::middleware([EnsureAdmin::class])->group(function (): void {
         Route::get('/start', function () {
-            $actor = auth()->guard('admin')->user();
-            foreach ([
-                'config.manage' => 'orbit.admin.dashboard',
-                'users.read' => 'orbit.admin.users.index',
-                'deletions.read' => 'orbit.admin.deletions.index',
-                'settings.audit.read' => 'orbit.admin.settings.activity',
-                'social.read' => 'orbit.admin.social.index',
-                'circles.read' => 'orbit.admin.circles.index',
-                'media.read' => 'orbit.admin.media.index',
-                'moments.read' => 'orbit.admin.moments.index',
-                'notifications.read' => 'orbit.admin.notifications.overview',
-                'plans.read' => 'orbit.admin.plans.overview',
-                'safety.read' => 'orbit.admin.safety.overview',
-                'activity.read' => 'orbit.admin.activity.overview',
-                'advertising.read' => 'orbit.admin.advertising.overview',
-                'moderation.read' => 'orbit.admin.moderation.overview',
-            ] as $permission => $route) {
-                if ($permission === 'circles.read' && config('orbit_circle.enabled') !== true) continue;
-                if ($actor?->canPerform($permission)) return redirect()->route($route);
-            }
-            abort(403);
+            $route = \App\Modules\Config\Services\AdminNavigation::firstRoute(auth()->guard('admin')->user());
+            abort_unless($route,403);
+            return redirect()->route($route);
         })->name('landing');
 
         // M20: independent sponsored-content operations, same MFA/CSRF/Blade RBAC.

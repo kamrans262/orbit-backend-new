@@ -58,12 +58,8 @@ final class AdminAuthController extends Controller
         $request->session()->forget(['orbit_pending_admin', 'orbit_pending_started']);
         $request->session()->put('orbit_admin_activity', time());
         $admin->update(['last_login_at' => now()]);
-        // Staff with read-only Users/Audit roles must never land on a 403
-        // Configurations page merely because they lack config.manage.
-        if ($admin->canPerform('config.manage')) {
-            return redirect()->route('orbit.admin.dashboard');
-        }
-        return redirect()->route('orbit.admin.landing');
+        $route = \App\Modules\Config\Services\AdminNavigation::firstRoute($admin);
+        return redirect()->route($route ?? 'orbit.admin.landing');
     }
 
     public function logout(Request $request)
