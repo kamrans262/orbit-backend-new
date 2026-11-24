@@ -3,8 +3,9 @@
 // M9 Presence remains OFF until policy, realtime gateway, Flutter and QA approval.
 return [
     'enabled' => (bool) env('ORBIT_M9_PRESENCE_ENABLED', false),
-    // Redis is the only supported production store. 'array' is for isolated tests.
-    'store' => env('ORBIT_M9_PRESENCE_STORE', 'redis'),
+    // Database cache provides atomic per-user locks on shared PHP hosting.
+    // Explicit legacy Redis deployments remain supported until M25 cutover.
+    'store' => env('ORBIT_M9_PRESENCE_STORE', 'database'),
     'lease_seconds' => 90,
     'max_devices' => 12,
     'max_circle_members' => 50,

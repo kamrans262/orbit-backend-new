@@ -19,7 +19,7 @@ return [
     'push_enabled'=>false, // Firebase credentials not provisioned
     'typing_http_enabled'=>true,
     'typing_cache_store'=>env('ORBIT_MESSAGING_TYPING_STORE',
-        env('APP_ENV')==='testing' ? 'array' : 'file'),
+        env('APP_ENV')==='testing' ? 'array' : 'database'),
     'max_envelope_bytes'=>32768,
     'max_header_bytes'=>4096,
     'max_message_devices'=>128,

@@ -9,14 +9,14 @@ use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 
 /**
  * Ephemeral 90-second per-device leases. No persistent last-seen history.
- * Redis cache locks preserve a user's concurrent multi-device heartbeats.
+ * Database cache locks preserve a user's concurrent multi-device heartbeats.
  */
 final class PresenceLeaseStore
 {
     private function store(): \Illuminate\Contracts\Cache\Repository
     {
-        $name = (string) config('orbit_presence.store', 'redis');
-        if ($name !== 'redis' && !app()->environment('testing')) {
+        $name = (string) config('orbit_presence.store', 'database');
+        if (!in_array($name, ['database','redis'], true) && !app()->environment('testing')) {
             throw new ServiceUnavailableHttpException(null, 'Presence transport unavailable.');
         }
         try {
@@ -38,7 +38,7 @@ final class PresenceLeaseStore
         } catch (ServiceUnavailableHttpException $e) {
             throw $e;
         } catch (\Throwable) {
-            // No silent MySQL/polling substitute for a failed Redis backend.
+            // No silent fallback to a different cache when the configured store fails.
             throw new ServiceUnavailableHttpException(null, 'Presence transport unavailable.');
         }
     }
@@ -105,7 +105,8 @@ final class PresenceLeaseStore
             $sessions = OrbitSession::query()->where('user_id',$user)
                 ->whereIn('device_id',$trusted)->whereNull('revoked_at')
                 ->where('expires_at','>',now())->distinct()->pluck('device_id')->all();
-            $valid = array_intersect_key($leases,array_flip($sessions));
+            $valid = array_intersect_key(array_filter($leases, static fn ($lease): bool =>
+                is_array($lease) && ($lease['until'] ?? 0) > $now),array_flip($sessions));
             if (!$valid) return null;
             $active = collect($valid)->contains(static fn ($lease): bool => $lease['state']==='active');
             $latest = max(array_column($valid,'at'));

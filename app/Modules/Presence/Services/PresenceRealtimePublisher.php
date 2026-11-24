@@ -24,9 +24,9 @@ final class PresenceRealtimePublisher
         if (!$this->enabled()) return;
         if (!$urgent) {
             // Source coalescing target: <=1 ordinary state broadcast / 5s.
-            // Redis add is atomic across Laravel workers and expires automatically.
+            // Database/Redis cache add is atomic across Laravel workers.
             $gate='orbit:m9:fanout:'.hash_hmac('sha256',$subject,(string)config('app.key'));
-            if (!Cache::store((string)config('orbit_presence.store','redis'))
+            if (!Cache::store((string)config('orbit_presence.store','database'))
                 ->add($gate,true,(int)config('orbit_presence.broadcast_throttle_seconds',5))) return;
         }
         $circleIds=DB::table('circle_members')->where('user_id',$subject)->whereNull('removed_at')
