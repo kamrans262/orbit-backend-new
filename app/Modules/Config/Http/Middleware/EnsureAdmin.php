@@ -27,7 +27,7 @@ final class EnsureAdmin
         // Prevent shared intermediaries and the browser back-cache from retaining
         // protected administrative response bodies after a session is revoked.
         $response = $next($request);
-        $response->headers->set('Cache-Control', 'private, no-store, max-age=0');
+        $response->headers->set('Cache-Control', 'private, no-store');
         $response->headers->set('Pragma', 'no-cache');
         return $response;
     }
