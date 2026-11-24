@@ -75,3 +75,26 @@ jobs:
       - name: Consumer API regression for identity and earlier modules
         run: |
           php artisan test --compact --display-warnings tests/Feature/OrbitIdentityTest.php tests/Feature/OrbitProfileSettingsTest.php tests/Feature/OrbitM8DashboardTest.php tests/Feature/OrbitM9PresenceTest.php tests/Feature/OrbitM10LocationTest.php tests/Feature/OrbitPingTest.php tests/Feature/OrbitCheckInTest.php
+
+      - name: Stage 4 remaining legacy and security regression coverage
+        run: |
+          php artisan test --compact --display-warnings tests/Feature/ExampleTest.php \
+            tests/Feature/OrbitAdminUserDeletionTest.php \
+            tests/Feature/OrbitM10AvatarGrantTest.php \
+            tests/Feature/OrbitM10GhostRevocationTest.php \
+            tests/Feature/OrbitM10RealtimeTicketTest.php \
+            tests/Feature/OrbitM3ErasureTest.php \
+            tests/Feature/OrbitM5CodesAndArchiveTest.php \
+            tests/Feature/OrbitM5ConsentDurationContractTest.php \
+            tests/Feature/OrbitM5FirebasePreparedTest.php \
+            tests/Feature/OrbitM5NativeLinksTest.php \
+            tests/Feature/OrbitM5OwnershipTest.php \
+            tests/Feature/OrbitM5PrimaryTest.php \
+            tests/Feature/OrbitM5QrRateLimitTest.php \
+            tests/Feature/OrbitM5RoleMatrixTest.php \
+            tests/Feature/OrbitM5RosterPrivacyTest.php \
+            tests/Feature/OrbitM5SocialInvalidationTest.php \
+            tests/Feature/OrbitPingCircleTest.php \
+            tests/Feature/OrbitPingConsentTest.php \
+            tests/Unit/ExampleTest.php \
+            tests/Unit/OrbitTotpTest.php
