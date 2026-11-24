@@ -288,4 +288,15 @@ final class OrbitM22RelayTest extends TestCase
         $this->withToken($tb)->postJson('/api/v1/relay/leases',$this->leasePayload($thread,$da))->assertOk();
         $this->assertDatabaseCount('relay_leases',2);
     }
+
+    public function test_general_config_editor_cannot_bypass_relay_controls():void{
+        $record=RemoteConfig::query()->where('key','relay.operations')->firstOrFail();
+        $this->be($this->admin(['config.manage']),'admin');
+        $this->get(route('orbit.admin.config.index'))->assertOk()->assertDontSee('relay.operations');
+        $this->get(route('orbit.admin.config.edit',$record))->assertForbidden();
+        $this->post(route('orbit.admin.config.update',$record),['key'=>'relay.operations'])->assertForbidden();
+        $this->post(route('orbit.admin.config.store'),['key'=>'relay.operations'])->assertForbidden();
+        $this->post(route('orbit.admin.relay.settings.save'),[])->assertForbidden();
+        $this->assertDatabaseHas('remote_configs',['id'=>$record->id,'version'=>1]);
+    }
 }

@@ -15,7 +15,7 @@ final class AdminConfigController extends Controller
     {
         return view('orbit-admin.dashboard', [
             'flags' => FeatureFlag::query()->orderBy('key')->get(),
-            'configs' => RemoteConfig::query()->orderBy('key')->get(),
+            'configs' => RemoteConfig::query()->where('key','!=','relay.operations')->orderBy('key')->get(),
             'audits' => \Illuminate\Support\Facades\DB::table('admin_audit_log')->orderByDesc('created_at')->limit(8)->get(),
         ]);
     }
@@ -30,7 +30,7 @@ final class AdminConfigController extends Controller
     public function configsIndex()
     {
         return response()->view('orbit-admin.configs-index', [
-            'configs' => RemoteConfig::query()->orderBy('key')->paginate(25),
+            'configs' => RemoteConfig::query()->where('key','!=','relay.operations')->orderBy('key')->paginate(25),
         ])->header('Cache-Control', 'private, no-store');
     }
 
@@ -44,6 +44,7 @@ final class AdminConfigController extends Controller
 
     public function configForm(?RemoteConfig $config = null)
     {
+        abort_if($config?->key === 'relay.operations',403,'Use the dedicated Relay controls.');
         return view('orbit-admin.remote', [
             'config' => $config,
             'revisions' => $config?->exists ? app(ConfigRegistry::class)->history('remote', $config->key) : collect(),
@@ -71,6 +72,7 @@ final class AdminConfigController extends Controller
 
     public function storeConfig(Request $request, ConfigRegistry $registry, ?RemoteConfig $config = null)
     {
+        abort_if($config?->key === 'relay.operations' || $request->input('key') === 'relay.operations',403,'Use the dedicated Relay controls.');
         $data = $request->validate([
             'key' => ['required', 'regex:/^[a-z][a-z0-9_.-]*$/D', 'max:120',
                 Rule::unique('remote_configs', 'key')->ignore($config?->id)],
@@ -89,6 +91,7 @@ final class AdminConfigController extends Controller
     public function rollback(Request $request, ConfigRegistry $registry, string $type, string $key)
     {
         abort_unless(in_array($type, ['flag', 'remote'], true), 404);
+        abort_if($type === 'remote' && $key === 'relay.operations',403,'Use the dedicated Relay controls.');
         $data = $request->validate([
             'revision' => ['required', 'uuid'],
             'reason' => ['required', 'string', 'min:5', 'max:500'],
