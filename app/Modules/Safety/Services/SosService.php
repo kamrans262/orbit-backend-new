@@ -103,11 +103,13 @@ final class SosService
 
     public function recipient(string $incident,string $user,string $source): void
     {
-        DB::table('sos_recipients')->insertOrIgnore([
+        $inserted=DB::table('sos_recipients')->insertOrIgnore([
             'id'=>(string)Str::uuid(),'incident_id'=>$incident,'user_id'=>$user,
             'source'=>$source,'state'=>'pending','in_app_available_at'=>now(),
             'created_at'=>now(),'updated_at'=>now(),
         ]);
+        // Supplemental only; M25 never makes a synchronous provider request from SOS.
+        if($inserted) app(\App\Modules\Realtime\Services\RealtimeAudience::class)->sos($incident,[$user]);
     }
 
     public function present(object $incident, string $actor): array
@@ -192,6 +194,7 @@ final class SosService
                     'state'=>'acknowledged','acknowledged_at'=>now(),'updated_at'=>now(),
                 ]);
                 $this->audit->incident($id,$actor,'sos.acknowledged');
+                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('sos',[$actor,$incident->initiator_id]);
             }
             return $this->present($incident,$actor);
         },3);
@@ -214,6 +217,7 @@ final class SosService
                 ->whereIn('state',['pending','retry','processing'])
                 ->update(['state'=>'suppressed','lease_until'=>null,'updated_at'=>now()]);
             $this->audit->incident($id,$actor,'sos.'.$state);
+            app(\App\Modules\Realtime\Services\RealtimeAudience::class)->sos($id);
             return $this->present(DB::table('sos_incidents')->where('id',$id)->first(),$actor);
         },3);
     }

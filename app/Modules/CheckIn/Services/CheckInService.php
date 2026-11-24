@@ -161,6 +161,7 @@ final class CheckInService
             ]) === 1;
             if ($created) {
                 $this->writeAudience($id, 1, $scopes, $recipients);
+                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('check_in',[$creator,...$recipients]);
                 app(\App\Modules\Notifications\Services\NotificationSourceOutbox::class)->record('check_in', $id);
             }
             return $created;
@@ -227,12 +228,14 @@ final class CheckInService
             $this->assertScope($owner, $scopes);
             $recipients = $this->snapshot($owner, $scopes);
             $revision = (int) $row->audience_revision + 1;
+            $previous=app(\App\Modules\Realtime\Services\RealtimeAudience::class)->checkInUsers($id);
             DB::table('checkin_recipients')->where('checkin_id', $id)
                 ->whereNull('revoked_at')->update(['revoked_at' => now()]);
             $this->writeAudience($id, $revision, $scopes, $recipients);
             DB::table('checkins')->where('id', $id)->update([
                 'audience_revision' => $revision, 'updated_at' => now(),
             ]);
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('check_in',array_unique([$owner,...$previous,...$recipients]));
             return $this->present($this->ownerRecord($id, $owner), $owner);
         });
     }
@@ -246,8 +249,10 @@ final class CheckInService
             abort_if($row->deleted_at !== null, 409, 'Check-In withdrawn.');
             abort_if($row->expires_at !== null && Carbon::parse($row->expires_at)->lte(now()),
                 409, 'Expired Check-In cannot be reopened.');
+            $previous=app(\App\Modules\Realtime\Services\RealtimeAudience::class)->checkInUsers($id);
             DB::table('checkins')->where('id', $id)->update(['expires_at' => $date,
                 'updated_at' => now()]);
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('check_in',$previous);
             return $this->present($this->ownerRecord($id, $owner), $owner);
         });
     }
@@ -258,11 +263,13 @@ final class CheckInService
         DB::transaction(function () use ($id, $owner): void {
             $row = $this->ownerRecord($id, $owner, true);
             if ($row->deleted_at !== null) return;
+            $previous=app(\App\Modules\Realtime\Services\RealtimeAudience::class)->checkInUsers($id);
             DB::table('checkins')->where('id', $id)->update([
                 'deleted_at' => now(), 'updated_at' => now(),
             ]);
             DB::table('checkin_recipients')->where('checkin_id', $id)
                 ->whereNull('revoked_at')->update(['revoked_at' => now()]);
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('check_in',$previous);
         });
     }
 

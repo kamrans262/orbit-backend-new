@@ -41,6 +41,8 @@ final class PlanService
             'event_type'=>$type,'plan_revision'=>$plan->revision,
             'created_at'=>now(),'updated_at'=>now(),
         ]);
+        if($user===$plan->organizer_id||$this->policy->canViewRecord($plan,$user))
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('plans',[$user,$plan->organizer_id]);
     }
 
     private function reminders(object $plan): void

@@ -82,6 +82,7 @@ final class SocialGraphService
             DB::table('social_graph_revisions')->where('user_id', $id)
                 ->increment('revision', 1, ['updated_at' => now()]);
         }
+        app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('social',[$a,$b]);
         app(TokenService::class)->event($a, $device, $event, 'social_graph');
         // Persist a minimal event in the same transaction as the graph change.
         // A later authorized delivery worker can revoke subscribers and

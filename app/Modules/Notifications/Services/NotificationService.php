@@ -53,7 +53,7 @@ final class NotificationService
                 if (!Str::isUuid($user)
                     || !$this->policy->targetAllowed($category, $targetId, $user, $context, $type))
                     continue;
-                $created += DB::table('notification_inbox')->insertOrIgnore([
+                $added = DB::table('notification_inbox')->insertOrIgnore([
                     'id'=>(string) Str::uuid(), 'event_id'=>$eventId,
                     'recipient_user_id'=>$user, 'category'=>$category, 'type'=>$type,
                     'target_id'=>$targetId, 'context_id'=>$context, 'template_key'=>$template,
@@ -63,6 +63,8 @@ final class NotificationService
                             ->where('recipient_user_id',$user)->value('read_at')
                         : null,
                 ]);
+                $created+=$added;
+                if($added)app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('notifications',[$user]);
             }
         }, 3);
         return $created;
@@ -138,9 +140,10 @@ final class NotificationService
             ->where('recipient_user_id',$user)->first();
         abort_unless($row && $this->policy->canView($row, $user), 404, 'Notification unavailable.');
         DB::transaction(function () use ($user,$notice,$row):void {
-            DB::table('notification_inbox')->where('id',$notice)
+            $changed=DB::table('notification_inbox')->where('id',$notice)
                 ->where('recipient_user_id',$user)->whereNull('read_at')
                 ->update(['read_at'=>now()]);
+            if($changed)app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('notifications',[$user]);
             if($row->category==='moments') {
                 $source=DB::table('notification_events')->where('id',$row->event_id)->first();
                 if($source && $source->source_type==='moment_notice')

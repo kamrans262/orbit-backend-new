@@ -63,6 +63,7 @@ final class PingService
                 'context_type' => $context, 'context_id' => $circle,
                 'created_at' => now(), 'updated_at' => now(),
             ]) === 1;
+            if ($inserted&&$this->policy->allows($sender,$recipient,$context,$circle)) app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('ping',[$sender,$recipient]);
             if ($inserted) app(\App\Modules\Notifications\Services\NotificationSourceOutbox::class)->record('ping', $eventId);
             return $inserted;
         });
@@ -124,6 +125,7 @@ final class PingService
             if ($changes) {
                 $changes['updated_at'] = now();
                 DB::table('pings')->where('id', $pingId)->update($changes);
+                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('ping',[$row->sender_id,$recipient]);
             }
             return $this->present(DB::table('pings')->where('id', $pingId)->first(), $recipient);
         });
@@ -155,6 +157,7 @@ final class PingService
             DB::table('pings')->where('id', $pingId)->update([
                 'responded_at' => now(), 'updated_at' => now(),
             ]);
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('ping',[$row->sender_id,$recipient]);
             return $this->replyRepresentation((object) $reply);
         });
     }

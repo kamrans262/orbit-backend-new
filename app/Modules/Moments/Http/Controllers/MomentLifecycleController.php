@@ -23,6 +23,7 @@ final class MomentLifecycleController extends Controller
         DB::table('moment_events_outbox')->insert(['id'=>(string)Str::uuid7(),
             'moment_id'=>$id,'event_type'=>$event,'audience_revision'=>$rev,
             'status'=>'pending','created_at'=>now()]);
+        app(\App\Modules\Realtime\Services\RealtimeAudience::class)->moment($id,true);
     }
     private function revokeGrants(array $ids):void{
         if(!$ids)return;

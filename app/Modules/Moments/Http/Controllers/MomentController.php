@@ -39,6 +39,7 @@ final class MomentController extends Controller
             'id'=>(string)Str::uuid7(),'moment_id'=>$id,'event_type'=>$event,
             'audience_revision'=>$rev,'payload_digest'=>$digest,'status'=>'pending','created_at'=>now(),
         ]);
+        app(\App\Modules\Realtime\Services\RealtimeAudience::class)->moment($id);
     }
     private function brief(object $m,string $context,string $viewer):array
     {

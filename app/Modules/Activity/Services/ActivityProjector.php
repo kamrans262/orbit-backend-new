@@ -48,7 +48,7 @@ final class ActivityProjector
                 ->limit($batch)->get(['s.id','s.'.$spec['actor'],
                     's.'.$spec['revision'],'s.'.$spec['occurred']]);
             foreach ($rows as $row) {
-                $stats[$spec['count']] += DB::table('activity_events')->insertOrIgnore([
+                $added=DB::table('activity_events')->insertOrIgnore([
                     'id' => (string) Str::uuid7(),
                     'source_type' => $type, 'source_id' => $row->id,
                     'actor_user_id' => $row->{$spec['actor']},
@@ -57,6 +57,8 @@ final class ActivityProjector
                     'occurred_at' => $row->{$spec['occurred']},
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
+                $stats[$spec['count']]+=$added;
+                if($added)app(\App\Modules\Realtime\Services\RealtimeAudience::class)->activity($type,$row->id);
             }
         }
         // Reconcile only a bounded older slice per run. ACL revocation is
