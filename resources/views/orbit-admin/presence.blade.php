@@ -1,6 +1,6 @@
 @extends('orbit-admin.layout')
 @section('title','Presence & Activity')
-@section('crumb','CONFIGURATIONS / PRESENCE')
+@section('crumb','PRESENCE')
 @section('content')
 <div class="page-heading">
   <div><p class="eyebrow">PRESENCE SERVICES / PRIVATE ACTIVITY</p>

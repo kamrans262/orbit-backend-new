@@ -1,6 +1,6 @@
 @extends('orbit-admin.layout')
 @section('title','Home Dashboard operations')
-@section('crumb','CONFIGURATIONS / HOME DASHBOARD')
+@section('crumb','HOME DASHBOARD')
 @section('content')
 <div class="page-heading">
   <div><p class="eyebrow">HOME DASHBOARD / SECURE SUMMARY</p>
@@ -25,13 +25,13 @@
 <section class="panel" style="margin-top:18px">
   <div class="panel-head"><div><p class="eyebrow">CAPABILITY READINESS</p>
   <h2>Section switches</h2>
-  <p>Only connected providers are listed as available. Planned integrations do not simulate private data or emergency actions.</p></div></div>
+  <p>This section reports the Home snapshot provider only, not the availability of independent app modules. Unconnected sections do not simulate private data or emergency actions.</p></div></div>
   <div class="admin-kv">
     @foreach($sections as $name => $enabled)
     <div class="kv"><small>{{ $name }}</small><strong>{{ $enabled ? 'Available with permission' : 'Provider not connected' }}</strong></div>
     @endforeach
   </div>
-  <p>These indicators describe configured integrations, not live performance. Additional capabilities appear when their actual service providers are connected.</p>
+  <p>These indicators describe configured Home integrations, not live connectivity. Independently implemented Plans, Presence, Ping, SOS and Activity Feed have their own operational areas.</p>
   <p><a href="{{ route('orbit.admin.flags.index') }}">Manage client-facing feature flags</a></p>
 </section>
 @endsection

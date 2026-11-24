@@ -42,7 +42,7 @@ final class OrbitM8M9AdminVisibilityTest extends TestCase
         $this->be($this->admin(['config.manage']),'admin');
         $this->get('/admin')->assertOk()
             ->assertSee('Home Dashboard')
-            ->assertSee('Presence &amp; Activity',false)
+            ->assertSee('Presence',false)
             ->assertSee('Location Sharing');
         $m8=$this->get('/admin/home-dashboard')->assertOk()
             ->assertSee('Dashboard API:')
@@ -80,7 +80,7 @@ final class OrbitM8M9AdminVisibilityTest extends TestCase
         $this->get('/admin/presence')->assertForbidden();
         $this->get('/admin/users')->assertOk()
             ->assertDontSee('Home Dashboard')
-            ->assertDontSee('Presence &amp; Activity',false)
+            ->assertDontSee('Presence',false)
             ->assertDontSee('Location Sharing');
     }
 

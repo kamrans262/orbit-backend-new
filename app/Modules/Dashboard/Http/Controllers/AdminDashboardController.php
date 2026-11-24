@@ -21,8 +21,9 @@ final class AdminDashboardController extends Controller
                 'Moment references'=>config('orbit_moments.enabled')===true
                     && config('orbit_media.enabled')===true,
                 // No authorized M10+/contextual provider; summary currently returns disabled.
-                'Smart cards'=>false,
-                'Plans / Presence / Ping / SOS'=>false,
+                'Smart cards (Home snapshot)'=>false,
+                'Plans / Presence / Ping / SOS (Home snapshot)'=>false,
+                'Location / Activity Feed (Home snapshot)'=>false,
             ],
         ])->header('Cache-Control','private, no-store');
     }

@@ -1,6 +1,6 @@
 @extends('orbit-admin.layout')
 @section('title','Location Sharing')
-@section('crumb','CONFIGURATIONS / LOCATION SHARING')
+@section('crumb','LOCATION SHARING')
 @section('content')
 <div class="page-heading">
   <div>

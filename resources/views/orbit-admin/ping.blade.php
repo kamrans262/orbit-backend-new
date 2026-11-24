@@ -1,6 +1,6 @@
 @extends('orbit-admin.layout')
 @section('title','Ping Operations')
-@section('crumb','CONFIGURATIONS / PING OPERATIONS')
+@section('crumb','PING OPERATIONS')
 @section('content')
 <div class="page-heading">
   <div>

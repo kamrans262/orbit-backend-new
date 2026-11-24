@@ -1,6 +1,6 @@
 @extends('orbit-admin.layout')
 @section('title','Check-In Operations')
-@section('crumb','CONFIGURATIONS / CHECK-IN OPERATIONS')
+@section('crumb','CHECK-IN OPERATIONS')
 @section('content')
 <div class="page-heading">
   <div>

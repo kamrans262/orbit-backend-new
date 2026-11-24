@@ -26,7 +26,7 @@ final class OrbitM5CirclesTest extends TestCase
         config()->set('orbit_circle.role_changes_enabled', true);
     }
 
-    public function test_unapproved_rollout_gate_rejects_public_usage_and_admin_access(): void
+    public function test_unapproved_rollout_gate_rejects_public_usage_but_allows_safe_admin_status(): void
     {
         [$a,$ta] = $this->person('alpha');
         config()->set('orbit_circle.enabled', false);
@@ -35,7 +35,7 @@ final class OrbitM5CirclesTest extends TestCase
         $this->assertDatabaseCount('circles',0);
         $admin = $this->admin(['circles.read']);
         $this->be($admin,'admin');
-        $this->get('/admin/circles')->assertNotFound();
+        $this->get('/admin/circles')->assertOk()->assertSee('Operational availability')->assertSee('Disabled')->assertDontSee('Exact Circle UUID lookup');
     }
 
     private function person(string $name): array

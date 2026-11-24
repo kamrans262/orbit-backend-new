@@ -1,0 +1,60 @@
+name: Orbit M21 Admin navigation and module regression
+on:
+  push:
+    branches: [feature/m21-admin-finalization-2026-11-24]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  admin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: rootpass
+          MARIADB_DATABASE: orbit_ci
+          MARIADB_USER: orbit_ci
+          MARIADB_PASSWORD: orbit_ci_pass
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: testing
+      APP_DEBUG: true
+      APP_KEY: base64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: orbit_ci
+      DB_USERNAME: orbit_ci
+      DB_PASSWORD: orbit_ci_pass
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, fileinfo, pdo_mysql, openssl, sodium, gd
+          tools: composer:v2
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Syntax and complete existing database schema
+        run: |
+          php -l app/Modules/Config/Services/AdminNavigation.php
+          php -l routes/admin.php
+          php artisan route:list --path=admin
+          php artisan migrate --force
+      - name: Admin navigation and privacy regression
+        run: |
+          php artisan test --compact tests/Feature/OrbitM21AdminNavigationTest.php tests/Feature/OrbitAdminM3Test.php tests/Feature/OrbitConfigTest.php tests/Feature/OrbitM8M9AdminVisibilityTest.php tests/Feature/OrbitM5CirclesTest.php tests/Feature/OrbitM6MediaTest.php tests/Feature/OrbitM7MomentsTest.php
+      - name: Preserve existing module operations
+        run: |
+          php artisan test --compact tests/Feature/OrbitM4SocialGraphTest.php tests/Feature/OrbitMessagingAdminTest.php tests/Feature/OrbitM14NotificationsTest.php tests/Feature/OrbitM15PlansTest.php tests/Feature/OrbitM16SosSafetyTest.php tests/Feature/OrbitM17ModerationTest.php tests/Feature/OrbitM18ActivityTest.php tests/Feature/OrbitM20AdvertisingTest.php

@@ -183,7 +183,7 @@ final class OrbitAdminM3Test extends TestCase
         ])->assertRedirect(route('orbit.admin.mfa'));
         $this->post('/admin/mfa', [
             'code' => (new Totp())->codeAt($admin->totp_secret, time()),
-        ])->assertRedirect(route('orbit.admin.landing'));
+        ])->assertRedirect(route('orbit.admin.users.index'));
         $this->get('/admin/start')->assertRedirect(route('orbit.admin.users.index'));
         $this->get('/admin')->assertForbidden();
     }
