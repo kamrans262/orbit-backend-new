@@ -2,6 +2,7 @@
 namespace App\Modules\Relay\Services;
 use App\Models\RemoteConfig;
 use Illuminate\Support\Facades\Schema;
+use App\Modules\Messaging\Services\MessagingConversationService;
 
 final class RelayPolicy
 {
@@ -9,7 +10,7 @@ final class RelayPolicy
         foreach(['relay_leases','relay_reconciliations','relay_receipts','relay_daily_metrics','remote_configs'] as $table) {
             if(!Schema::hasTable($table)) return false;
         }
-        return true;
+        return Schema::hasColumn('relay_leases','roster_hash') && Schema::hasColumn('relay_leases','session_id');
     }
     public function settings():array {
         $record=$this->provisioned()?RemoteConfig::query()->where('key','relay.operations')->where('published',true)->first():null;
@@ -30,6 +31,17 @@ final class RelayPolicy
         if($key===false || strlen($key)!==SODIUM_CRYPTO_SIGN_SECRETKEYBYTES || base64_encode($key)!==$value) return null;
         return $key;
     }
+    public const PROTOCOL='orbit-relay-direct-v1';
+    public const CONTENT='direct_message';
+    public const MESSAGE_PROTOCOL='orbit-m13-olm-megolm-v1';
+    public function publicKey():?string {
+        $secret=$this->signingKey();
+        return $secret===null?null:sodium_crypto_sign_publickey_from_secretkey($secret);
+    }
+    public function keyId():?string {
+        $key=$this->publicKey();
+        return $key===null?null:hash('sha256',$key);
+    }
     public function capabilities():array {
         $s=$this->settings();
         $reason=match(true){
@@ -38,12 +50,15 @@ final class RelayPolicy
             config('orbit_relay.security_reviewed')!==true=>'review_required',
             config('orbit_messaging.e2ee_client_verified')!==true=>'messaging_review_required',
             $this->signingKey()===null=>'signing_unavailable',
-            default=>'adapter_unavailable',
+            !in_array(self::MESSAGE_PROTOCOL,(array)config('orbit_messaging.approved_protocols',[]),true)
+                || !app(MessagingConversationService::class)->ready()=>'messaging_unavailable',
+            config('orbit_relay.peer_transport_reviewed')!==true=>'peer_review_required',
+            default=>'available',
         };
-        // No protocol or adapter may be advertised until actual reconciliation
-        // and peer interoperability are implemented and independently verified.
-        return ['enabled'=>false,'policy_revision'=>$s['revision'],'server_time'=>now()->utc()->toIso8601String(),
-            'protocol_versions'=>[],'content_types'=>[],'limits'=>[
+        $available=$reason==='available';
+        return ['enabled'=>$available,'policy_revision'=>$s['revision'],'server_time'=>now()->utc()->toIso8601String(),
+            'protocol_versions'=>$available?[self::PROTOCOL]:[],'content_types'=>$available?[self::CONTENT]:[],
+            'signing_key'=>$available?['id'=>$this->keyId(),'public_ed25519'=>base64_encode($this->publicKey())]:null,'limits'=>[
                 'lease_seconds'=>$s['lease_seconds'],'batch_limit'=>$s['batch_limit'],
                 'frame_bytes'=>$s['frame_bytes'],'session_seconds'=>60,'queue_bytes'=>5242880,
             ],'readiness'=>$reason];

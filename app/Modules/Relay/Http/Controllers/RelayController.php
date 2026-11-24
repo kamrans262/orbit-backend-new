@@ -2,6 +2,9 @@
 namespace App\Modules\Relay\Http\Controllers;
 
 use App\Modules\Relay\Services\RelayPolicy;
+use App\Modules\Relay\Services\RelayLeaseService;
+use App\Modules\Relay\Services\RelayReconciliationService;
+use App\Modules\Relay\Services\RelayMetrics;
 use App\Modules\Messaging\Services\MessagingAccessPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -26,10 +29,16 @@ final class RelayController
         return $this->result($this->policy->capabilities());
     }
     public function leases(Request $r):JsonResponse {
-        $this->session($r);
-        // Deliberately deny issuance until the source adapter and signer
-        // contract are complete; never issue unusable/offline authority.
-        return $this->result(['code'=>'relay_unavailable'],503);
+        $s=$this->session($r);
+        if(!$this->policy->capabilities()['enabled'])return $this->result(['code'=>'relay_unavailable'],503);
+        abort_if(array_diff(array_keys($r->all()),['scope_ref','content_type','peer_device_ref','device_key_id','protocol_version','client_nonce']),422);
+        $input=$r->validate([
+            'scope_ref'=>'required|uuid','content_type'=>'required|in:direct_message',
+            'peer_device_ref'=>'required|uuid','device_key_id'=>'required|integer|min:1',
+            'protocol_version'=>'required|in:orbit-relay-direct-v1',
+            'client_nonce'=>'required|string|regex:/^[a-f0-9]{64}$/D',
+        ]);
+        return $this->result(app(RelayLeaseService::class)->issue($s,$input));
     }
     public function revoke(Request $r,string $lease):JsonResponse {
         $s=$this->session($r);
@@ -39,16 +48,36 @@ final class RelayController
             $row=DB::table('relay_leases')->where('id',$lease)->where('device_id',$s->device_id)
                 ->where('user_id',$s->user_id)->lockForUpdate()->first();
             abort_unless($row,404,'Lease unavailable.');
-            if($row->revoked_at===null) DB::table('relay_leases')->where('id',$lease)->update([
-                'revoked_at'=>now(),'reason'=>$input['reason'],
-            ]);
+            if($row->revoked_at===null){
+                DB::table('relay_leases')->where('id',$lease)->update(['revoked_at'=>now(),'reason'=>$input['reason']]);
+                app(RelayMetrics::class)->record('lease_revoked');
+            }
         });
         return $this->result(['state'=>'revoked']);
     }
     public function reconcile(Request $r):JsonResponse {
-        $this->session($r);
-        // Never turn an unvalidated receipt into an accepted source event.
-        return $this->result(['code'=>'relay_unavailable'],503);
+        $s=$this->session($r);
+        $cap=$this->policy->capabilities();
+        if(!$cap['enabled'])return $this->result(['code'=>'relay_unavailable'],503);
+        abort_if(strlen($r->getContent())>5242880,413,'Relay batch too large.');
+        abort_if(array_diff(array_keys($r->all()),['batch_id','items']),422);
+        $p=$r->validate([
+            'batch_id'=>'required|uuid','items'=>'required|array|list|min:1|max:'.$cap['limits']['batch_limit'],
+            'items.*'=>'required|array:envelope_id,source_client_id,lease_id,digest,receipt,source_envelope',
+            'items.*.envelope_id'=>'required|uuid|distinct','items.*.source_client_id'=>'required|uuid|distinct',
+            'items.*.lease_id'=>'required|uuid','items.*.digest'=>'required|string|regex:/^[a-f0-9]{64}$/D',
+            'items.*.receipt'=>'sometimes|array:signature_b64','items.*.receipt.signature_b64'=>'required_with:items.*.receipt|string|size:88',
+            'items.*.source_envelope'=>'required|array:client_id,kind,protocol,group_epoch,envelopes',
+            'items.*.source_envelope.client_id'=>'required|uuid','items.*.source_envelope.kind'=>'required|in:text,emoji,sticker,reaction,reply',
+            'items.*.source_envelope.protocol'=>'required|in:orbit-m13-olm-megolm-v1',
+            'items.*.source_envelope.group_epoch'=>'required|integer|between:1,2147483647',
+            'items.*.source_envelope.envelopes'=>'required|array|list|min:1|max:12',
+            'items.*.source_envelope.envelopes.*'=>'required|array:device_id,ciphertext_b64,protocol_header_b64',
+            'items.*.source_envelope.envelopes.*.device_id'=>'required|uuid',
+            'items.*.source_envelope.envelopes.*.ciphertext_b64'=>'required|string|min:24|max:45000',
+            'items.*.source_envelope.envelopes.*.protocol_header_b64'=>'required|string|min:16|max:5600',
+        ]);
+        return $this->result(['results'=>app(RelayReconciliationService::class)->reconcile($s,$p['items'])]);
     }
     public function sync(Request $r):JsonResponse {
         $s=$this->session($r);

@@ -52,7 +52,13 @@ final class AdminRelayController
                 'schema_json'=>json_encode($schema,JSON_THROW_ON_ERROR),'published'=>true,'client_visible'=>false,
                 'reason'=>$p['reason']],$r->user('admin'),$record);
             // Any revision invalidates outstanding leases for online reconciliation.
-            DB::table('relay_leases')->whereNull('revoked_at')->update(['revoked_at'=>now(),'reason'=>'policy_changed']);
+            $revoked=DB::table('relay_leases')->whereNull('revoked_at')->where('expires_at','>',now())
+                ->update(['revoked_at'=>now(),'reason'=>'policy_changed']);
+            if($revoked>0){
+                $key=['day'=>now()->utc()->toDateString(),'outcome'=>'lease_revoked'];
+                DB::table('relay_daily_metrics')->insertOrIgnore($key+['total'=>0]);
+                DB::table('relay_daily_metrics')->where($key)->increment('total',$revoked);
+            }
         });
         return redirect()->route('orbit.admin.relay.settings')->with('status','Relay controls saved.');
     }

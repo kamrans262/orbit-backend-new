@@ -219,3 +219,10 @@ Artisan::command('orbit:activity:project', function () {
     $this->info('M18 private Activity pointers: '.json_encode($result));
 })->purpose('Idempotently index source-authorized Moments and Check-Ins for Activity');
 Schedule::command('orbit:activity:project')->everyFiveMinutes()->withoutOverlapping();
+
+
+// Only short-lived Relay metadata. Does not delete source messages.
+Artisan::command('orbit:relay:prune',function(){
+    $this->info('Relay metadata retention: '.json_encode(app(\App\Modules\Relay\Services\RelayMetrics::class)->prune()));
+})->purpose('Prune bounded expired Relay metadata and old aggregate counters');
+Schedule::command('orbit:relay:prune')->hourly()->withoutOverlapping();
