@@ -78,6 +78,14 @@ return [
             ],
         ],
 
+        'orbit_ephemeral' => [
+            'driver' => 'database',
+            'connection' => null,
+            'table' => 'orbit_ephemeral_cache',
+            'lock_connection' => null,
+            'lock_table' => 'orbit_ephemeral_locks',
+        ],
+
         'redis' => [
             'driver' => 'redis',
             'connection' => env('REDIS_CACHE_CONNECTION', 'cache'),

@@ -35,12 +35,13 @@ final class RealtimeSessions
                 $live=$this->live($id);abort_unless($live,403);
                 $client=$this->provider->client($live->platform);
                 $current=DB::table('orbit_realtime_sessions')->where('session_id',$id)->lockForUpdate()->first();
-                $generation=$current?->generation??(string)Str::uuid();
+                $fresh=$current===null||(int)$current->lease_until_ms<=$this->nowMs();
+                $generation=$fresh?(string)Str::uuid():$current->generation;
                 $until=min($this->nowMs()+60000,\Illuminate\Support\Carbon::parse($live->expires_at)->getTimestampMs());
-                $revision=(int)($current?->revision??0)+1;
+                $revision=(int)($current?->revision??0)+($fresh?1:0);
                 DB::table('orbit_realtime_sessions')->updateOrInsert(['session_id'=>$id],[
                     'device_id'=>$live->device_id,'generation'=>$generation,'lease_until_ms'=>$until,
-                    'revision'=>$revision,'available_at'=>now(),'attempts'=>0,'updated_at'=>now(),
+                    'revision'=>$revision,'dirty'=>true,'available_at'=>now(),'attempts'=>0,'updated_at'=>now(),
                     ...(!$current?['created_at'=>now()]:[]),
                 ]);
                 return ['firebase'=>$client,'generation'=>$generation,'device'=>$live->device_id,'lease_until_ms'=>$until];
@@ -68,7 +69,7 @@ final class RealtimeSessions
                 ->orderBy('r.session_id')->chunkById(50,function($rows){
                     $ids=$rows->pluck('session_id')->all();
                     DB::table('orbit_realtime_sessions')->whereIn('session_id',$ids)
-                        ->increment('revision',1,['updated_at'=>now()]);
+                        ->increment('revision',1,['dirty'=>true,'updated_at'=>now()]);
                     // Bounded immediate sends; the durable dirty revision remains for cron.
                     DB::afterCommit(function()use($ids){
                         foreach(array_slice($ids,0,2) as $id)$this->publish($id);
@@ -90,13 +91,13 @@ final class RealtimeSessions
                     DB::table('orbit_realtime_sessions')->where('session_id',$id)->delete();
                     return false;
                 }
-                if((int)$r->published_revision===(int)$r->revision)return true;
+                if(!$r->dirty)return true;
                 $this->provider->replace($id,[
                     'lease'=>['device'=>$r->device_id,'generation'=>$r->generation,'until_ms'=>(int)$r->lease_until_ms],
                     'signal'=>['schema_version'=>1,'revision'=>(int)$r->revision],
                 ]);
                 DB::table('orbit_realtime_sessions')->where('session_id',$id)->update([
-                    'published_revision'=>$r->revision,'attempts'=>0,'available_at'=>now(),'last_success_at'=>now(),
+                    'published_revision'=>$r->revision,'dirty'=>false,'attempts'=>0,'available_at'=>now(),'last_success_at'=>now(),
                 ]);
                 return true;
             },1);
@@ -116,12 +117,41 @@ final class RealtimeSessions
             return false;
         }
     }
+    /** Mark revoked/removed access for cleanup; never renew from this path. */
+    public function revokeInvalidUser(string $user):void
+    {
+        if(!\Illuminate\Support\Facades\Schema::hasTable('orbit_realtime_sessions'))return;
+        $ids=DB::table('orbit_realtime_sessions as r')->join('orbit_sessions as s','s.id','=','r.session_id')
+            ->where('s.user_id',$user)->pluck('r.session_id')->all();
+        foreach($ids as $id){
+            if($this->live($id))continue;
+            DB::table('orbit_realtime_sessions')->where('session_id',$id)->update([
+                'lease_until_ms'=>0,'dirty'=>true,'available_at'=>now(),
+            ]);
+            DB::afterCommit(fn()=>$this->publish($id));
+        }
+    }
+    public function markErasedSessions(array $ids):void
+    {
+        if(!$ids||!\Illuminate\Support\Facades\Schema::hasTable('orbit_realtime_sessions'))return;
+        DB::table('orbit_realtime_sessions')->whereIn('session_id',$ids)->update([
+            'lease_until_ms'=>0,'dirty'=>true,'available_at'=>now(),
+        ]);
+        DB::afterCommit(function()use($ids){foreach(array_slice($ids,0,2) as $id)$this->publish($id);});
+    }
+    public function pruneEphemeral():void
+    {
+        foreach(['orbit_ephemeral_cache','orbit_ephemeral_locks'] as $table){
+            $keys=DB::table($table)->where('expiration','<=',time())->orderBy('expiration')->limit(1000)->pluck('key');
+            DB::table($table)->whereIn('key',$keys)->where('expiration','<=',time())->delete();
+        }
+    }
     public function process():int
     {
         if(!$this->enabled())return 0;
         $ids=DB::table('orbit_realtime_sessions as r')->leftJoin('orbit_sessions as s','s.id','=','r.session_id')
             ->where('r.available_at','<=',now())->where(function($q){
-                $q->whereColumn('r.revision','>','r.published_revision')->orWhere('r.lease_until_ms','<=',$this->nowMs())
+                $q->where('r.dirty',true)->orWhere('r.lease_until_ms','<=',$this->nowMs())
                     ->orWhereNull('s.id')->orWhereNotNull('s.revoked_at')->orWhere('s.expires_at','<=',now());
             })->orderBy('r.available_at')->limit(20)->pluck('r.session_id');
         foreach($ids as $id)$this->publish($id);

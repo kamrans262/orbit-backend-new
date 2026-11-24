@@ -239,3 +239,7 @@ Artisan::command('orbit:realtime:publish', function () {
     $this->info('Realtime jobs attempted: '.app(\App\Modules\Realtime\Services\RealtimeSessions::class)->process());
 });
 Schedule::command('orbit:realtime:publish')->everyMinute()->withoutOverlapping();
+Artisan::command('orbit:realtime:prune', function () {
+    app(\App\Modules\Realtime\Services\RealtimeSessions::class)->pruneEphemeral();
+});
+Schedule::command('orbit:realtime:prune')->everyMinute()->withoutOverlapping();

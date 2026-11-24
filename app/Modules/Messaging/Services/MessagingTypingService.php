@@ -11,8 +11,8 @@ final class MessagingTypingService
 
     private function cache(): \Illuminate\Contracts\Cache\Repository
     {
-        // File storage on one Hostinger node; array in disposable CI. Not WSS.
-        return Cache::store((string)config('orbit_messaging.typing_cache_store','file'));
+        // Indexed database TTL cache; no always-running process or Redis required.
+        return Cache::store(config('orbit_realtime.enabled')===true?'orbit_ephemeral':(string)config('orbit_messaging.typing_cache_store','orbit_ephemeral'));
     }
     private function key(string $conversation,string $user): string
     {

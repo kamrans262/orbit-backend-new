@@ -5,7 +5,7 @@ return [
     'enabled' => (bool) env('ORBIT_M9_PRESENCE_ENABLED', false),
     // Database cache provides atomic per-user locks on shared PHP hosting.
     // Explicit legacy Redis deployments remain supported until M25 cutover.
-    'store' => env('ORBIT_M9_PRESENCE_STORE', 'database'),
+    'store' => env('ORBIT_M9_PRESENCE_STORE', 'orbit_ephemeral'),
     'lease_seconds' => 90,
     'max_devices' => 12,
     'max_circle_members' => 50,

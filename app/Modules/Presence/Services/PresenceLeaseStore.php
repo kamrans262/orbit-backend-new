@@ -15,8 +15,8 @@ final class PresenceLeaseStore
 {
     private function store(): \Illuminate\Contracts\Cache\Repository
     {
-        $name = (string) config('orbit_presence.store', 'database');
-        if (!in_array($name, ['database','redis'], true) && !app()->environment('testing')) {
+        $name = config('orbit_realtime.enabled')===true ? 'orbit_ephemeral' : (string) config('orbit_presence.store', 'orbit_ephemeral');
+        if (!in_array($name, ['orbit_ephemeral','database','redis'], true) && !app()->environment('testing')) {
             throw new ServiceUnavailableHttpException(null, 'Presence transport unavailable.');
         }
         try {
@@ -86,6 +86,13 @@ final class PresenceLeaseStore
                 else $cache->forget($key);
             });
         });
+    }
+
+    /** Called only after the existing user-erasure guards authorize removal. */
+    public function forgetUser(string $user): void
+    {
+        $cache=$this->store();$key=$this->key($user);
+        $cache->lock($key.':lock',4)->block(2,fn()=>$cache->forget($key));
     }
 
     public function snapshot(string $user): ?array
