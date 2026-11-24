@@ -162,4 +162,25 @@ final class OrbitM19BillingTest extends TestCase{
         $this->getJson('/api/v1/billing/entitlement')->assertOk()->assertJsonPath('data.effective_until',$original);
         $this->travel(35)->days();$this->getJson('/api/v1/billing/entitlement')->assertOk()->assertJsonPath('data.tier','free');
     }
+
+    public function test_management_providers_and_unique_eligible_accounts():void{
+        [$u,$token]=$this->principal();$this->mapping();$this->mapping('plus','apple');
+        $this->evidence($u,'google-token');$this->evidence($u,'apple-original','plus','apple');
+        $this->verify($token,'google-token')->assertOk()->assertJsonPath('data.entitlement.management_providers',['google']);
+        $this->verify($token,'apple-original',['provider'=>'apple'])->assertOk()->assertJsonPath('data.entitlement.management_providers',['apple','google']);
+        $this->assertSame(['lite'=>0,'plus'=>1],app(BillingService::class)->subscriberCounts());
+        $this->evidence($u,'apple-original','plus','apple',['state'=>'revoked']);
+        $this->verify($token,'apple-original',['provider'=>'apple'])->assertOk()->assertJsonPath('data.entitlement.management_providers',['google']);
+        $this->assertSame(['lite'=>1,'plus'=>0],app(BillingService::class)->subscriberCounts());
+        $this->travel(35)->days();
+        $this->getJson('/api/v1/billing/entitlement')->assertOk()->assertJsonPath('data.management_providers',[]);
+        $this->assertSame(['lite'=>0,'plus'=>0],app(BillingService::class)->subscriberCounts());
+    }
+    public function test_unresolved_subscription_remains_visible_when_another_record_expires():void{
+        [$u,$token]=$this->principal();$this->mapping();$this->mapping('plus','apple');
+        $this->evidence($u,'pending-token','lite','google',['state'=>'pending','starts'=>null,'ends'=>null]);
+        $this->verify($token,'pending-token')->assertOk();
+        $this->evidence($u,'expired-apple','plus','apple',['state'=>'expired']);
+        $this->verify($token,'expired-apple',['provider'=>'apple'])->assertOk()->assertJsonPath('data.entitlement.state','pending')->assertJsonPath('data.entitlement.management_providers',['google']);
+    }
 }

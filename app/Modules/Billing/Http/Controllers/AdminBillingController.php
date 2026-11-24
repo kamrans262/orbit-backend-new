@@ -27,6 +27,7 @@ final class AdminBillingController{
         return $this->page('operations',['events'=>$this->policy->installed()?DB::table('billing_events')->where('environment',BillingPolicy::ENV)
             ->select('id','provider','state','attempts','error_code','next_attempt_at','created_at')->orderByDesc('created_at')->paginate(25):null,
             'counts'=>$this->policy->installed()?DB::table('billing_subscriptions')->where('environment',BillingPolicy::ENV)->select('state',DB::raw('count(*) as total'))->groupBy('state')->pluck('total','state'):collect(),
+            'subscriberCounts'=>$this->billing->subscriberCounts(),
             'audits'=>$audit?DB::table('admin_audit_log')->where('target','like','billing:%')->select('actor_id','action','target','reason','created_at')->orderByDesc('created_at')->limit(30)->get():collect()]);
     }
     private function audit(Request $r,string $action,string $target,string $reason,?array $before,array $after):void{

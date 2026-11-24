@@ -37,6 +37,7 @@
 @empty<tr><td colspan="8">No verified records.</td></tr>@endforelse</tbody></table></div>{{ $subscriptions->links() }}</section>
 @else
 <section class="panel"><div class="panel-head"><h2>Provider event processing</h2></div>
+<div class="admin-kv">@foreach($subscriberCounts as $tier=>$count)<div class="kv"><small>Verified eligible {{ ucfirst($tier) }} accounts</small><strong>{{ $count }}</strong></div>@endforeach</div>
 <div class="admin-kv">@foreach($counts as $state=>$count)<div class="kv"><small>{{ ucfirst($state) }} records</small><strong>{{ $count }}</strong></div>@endforeach</div>
 <div class="table-scroll"><table><thead><tr><th>EVENT</th><th>PROVIDER</th><th>STATE</th><th>ATTEMPTS</th><th>ERROR</th><th>NEXT ATTEMPT</th></tr></thead><tbody>
 @forelse($events as $event)<tr><td>{{ $event->id }}</td><td>{{ $event->provider }}</td><td>{{ $event->state }}</td><td>{{ $event->attempts }}</td><td>{{ $event->error_code??'—' }}</td><td>{{ $event->next_attempt_at }}</td></tr>

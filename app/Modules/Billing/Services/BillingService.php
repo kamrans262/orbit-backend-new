@@ -39,7 +39,7 @@ final class BillingService{
     }
     private function unknown():array{
         return ['environment'=>BillingPolicy::ENV,'tier'=>null,'state'=>'unknown','effective_until'=>null,'auto_renew'=>null,
-            'revision'=>0,'verified_at'=>null,'capabilities'=>BillingPolicy::BENEFITS];
+            'revision'=>0,'verified_at'=>null,'management_providers'=>[],'capabilities'=>BillingPolicy::BENEFITS];
     }
     private function recompute(string $owner):array{
         $rows=$this->query('billing_subscriptions')->where('user_id',$owner)->join('billing_products as p','p.id','=','billing_subscriptions.product_id')
@@ -47,12 +47,16 @@ final class BillingService{
         $eligible=$rows->filter(fn($r)=>$this->eligible($r))->sortByDesc(fn($r)=>($r->tier==='plus'?2:1))->values();
         // Stable tie-break within the same tier.
         $winner=$eligible->isEmpty()?null:$eligible->where('tier',$eligible[0]->tier)->sortByDesc('ends_at')->first();
+        // Unresolved subscriptions block fresh checkout even if a later
+        // terminal record exists. Keep the management route consistent.
+        $unresolved=$rows->filter(fn($r)=>in_array($r->state,['pending','hold','paused','unknown'],true)&&!$r->replaced_by);
         $latest=$rows->sortByDesc('verified_at')->first();
-        $selected=$winner??$latest;
-        $state=$winner?->state??($latest?->state??($this->policy->enabled()?'free':'unknown'));
+        $selected=$winner??$unresolved->sortByDesc('verified_at')->first()??$latest;
+        $management=$eligible->concat($unresolved)->pluck('provider')->unique()->sort()->values()->all();
+        $state=$winner?->state??($selected?->state??($this->policy->enabled()?'free':'unknown'));
         if(!$winner&&in_array($state,['active','grace'],true))$state='expired';
         $tier=$winner?->tier??($state==='unknown'?null:'free');
-        if(!$this->policy->enabled()){$tier=null;$state='unknown';$winner=null;}
+        if(!$this->policy->enabled()){$tier=null;$state='unknown';$winner=null;$management=[];}
         $old=$this->query('billing_entitlements')->where('user_id',$owner)->first();
         $values=['tier'=>$tier,'state'=>$state,'effective_until'=>$winner?->ends_at,'auto_renew'=>$selected?->auto_renew,
             'verified_at'=>$selected?->verified_at];
@@ -63,7 +67,7 @@ final class BillingService{
             $values+['id'=>$old?->id??$this->uuid(),'revision'=>$rev,'created_at'=>$old?->created_at??now(),'updated_at'=>now()]);
         return ['environment'=>BillingPolicy::ENV,'tier'=>$tier,'state'=>$state,'effective_until'=>$winner?CarbonImmutable::parse($winner->ends_at,'UTC')->toIso8601String():null,
             'auto_renew'=>$selected?->auto_renew===null?null:(bool)$selected->auto_renew,'revision'=>$rev,
-            'verified_at'=>$selected?CarbonImmutable::parse($selected->verified_at,'UTC')->toIso8601String():null,'capabilities'=>BillingPolicy::BENEFITS];
+            'verified_at'=>$selected?CarbonImmutable::parse($selected->verified_at,'UTC')->toIso8601String():null,'management_providers'=>$management,'capabilities'=>BillingPolicy::BENEFITS];
     }
     public function context(string $owner,array $input):array{
         abort_unless($this->policy->enabled()&&$this->provider()->ready($input['provider']),503,'Billing unavailable.');
@@ -183,6 +187,16 @@ final class BillingService{
             }catch(\Throwable){/* durable pending acknowledgement, worker retries */}
         }
         return ['status'=>$row->state==='pending'?'pending':'verified','entitlement'=>$ent,'finish_permitted'=>$finish];
+    }
+    public function subscriberCounts():array{
+        if(!$this->policy->installed())return [];
+        $rank=DB::table('billing_subscriptions as s')->join('billing_products as p','p.id','=','s.product_id')
+            ->join('orbit_users as u','u.id','=','s.user_id')
+            ->where('s.environment',BillingPolicy::ENV)->where('u.status','active')->whereNull('u.deletion_requested_at')
+            ->whereNull('s.replaced_by')->whereIn('s.state',['active','grace'])->where('s.starts_at','<=',now('UTC'))->where('s.ends_at','>',now('UTC'))
+            ->groupBy('s.user_id')->select('s.user_id',DB::raw("MAX(CASE WHEN p.tier = 'plus' THEN 2 ELSE 1 END) AS tier_rank"));
+        $counts=DB::query()->fromSub($rank,'eligible_accounts')->select('tier_rank',DB::raw('COUNT(*) AS total'))->groupBy('tier_rank')->pluck('total','tier_rank');
+        return ['lite'=>(int)($counts[1]??0),'plus'=>(int)($counts[2]??0)];
     }
     public function work(int $limit=20):array{
         $stats=['processed'=>0,'retry'=>0,'review'=>0,'reconciled'=>0];
