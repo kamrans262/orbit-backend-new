@@ -10,7 +10,7 @@ final class LocationRealtimeTicketService
 {
     public function enabled(): bool
     {
-        return config('orbit_location.enabled') === true
+        return config('orbit_realtime.enabled')!==true && config('orbit_location.enabled') === true
             && config('orbit_location.realtime_enabled') === true
             && config('orbit_location.realtime_verified') === true
             && strlen((string)config('orbit_location.gateway_secret','')) >= 32

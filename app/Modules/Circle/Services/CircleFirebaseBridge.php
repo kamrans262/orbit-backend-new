@@ -22,7 +22,7 @@ final class CircleFirebaseBridge
 {
     public function enabled(): bool
     {
-        return config('orbit_circle.enabled') === true
+        return config('orbit_realtime.enabled')!==true && config('orbit_circle.enabled') === true
             && config('orbit_circle.firebase.enabled') === true;
     }
 
@@ -174,12 +174,16 @@ final class CircleFirebaseBridge
     {
         // Independent M9 revocation path: M5's Firebase setting may be OFF.
         // Empty Circle cache events disclose no subjects or individual status.
-        if (config('orbit_presence.enabled') === true
-            && config('orbit_presence.realtime_enabled') === true) {
+        if (app(\App\Modules\Presence\Services\PresenceRealtimePublisher::class)->enabled()) {
             DB::afterCommit(static function () use ($circleId): void {
                 app(\App\Modules\Presence\Services\PresenceRealtimePublisher::class)
                     ->safelyClearCircle($circleId);
             });
+        }
+        if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('circles')){
+            // Removed members receive only a generic cache-clear hint at mutation time.
+            $users=DB::table('circle_members')->where('circle_id',$circleId)->limit(1000)->pluck('user_id')->all();
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('circles',$users);
         }
         if (!$this->enabled()) return;
         DB::afterCommit(function () use ($circleId): void {

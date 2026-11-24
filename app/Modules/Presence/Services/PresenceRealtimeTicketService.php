@@ -15,12 +15,12 @@ final class PresenceRealtimeTicketService
     }
     private function repository(): \Illuminate\Contracts\Cache\Repository
     {
-        try { return Cache::store((string)config('orbit_presence.store','redis')); }
+        try { return Cache::store((string)config('orbit_presence.store','orbit_ephemeral')); }
         catch (\Throwable) { throw new ServiceUnavailableHttpException(null,'Realtime ticket store unavailable.'); }
     }
     private function enabled(): void
     {
-        abort_unless($this->policy->enabled() && config('orbit_presence.realtime_enabled') === true
+        abort_unless(config('orbit_realtime.enabled')!==true && $this->policy->enabled() && config('orbit_presence.realtime_enabled') === true
             && strlen((string)config('orbit_presence.gateway_secret','')) >= 32,404);
     }
     public function issue(OrbitSession $session): array

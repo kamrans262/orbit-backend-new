@@ -11,8 +11,17 @@ final class LocationRealtimePublisher
     public function __construct(private readonly LocationRealtimeTicketService $tickets,
         private readonly LocationPolicy $policy) {}
 
+    private function firebase():bool
+    {
+        return $this->policy->enabled()&&app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('location');
+    }
+
     public function invalidateViewer(string $viewer): void
     {
+        if($this->firebase()){
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('location',[$viewer]);
+            return;
+        }
         if (!$this->tickets->enabled()) return;
         try {
             // Opaque, viewer-only notification; never add subject IDs or GPS.
@@ -25,7 +34,7 @@ final class LocationRealtimePublisher
         }
     }
 
-    public function invalidate(string $owner): void
+    public function invalidate(string $owner,bool $clear=true): void
     {
         if (!$this->tickets->enabled()) return;
         try {
@@ -40,13 +49,18 @@ final class LocationRealtimePublisher
                 ->limit((int)config('orbit_location.max_map_candidates',200)+1)->get();
             $viewers=[];
             foreach($shares as $share) {
+                if($this->firebase()&&!$clear&&!$this->policy->active($share))continue;
                 if($share->audience_type==='person'){
-                    $viewers[]=(string)$share->audience_id;
+                    if(!$this->firebase()||$clear||$this->policy->visibleTo($share,(string)$share->audience_id))$viewers[]=(string)$share->audience_id;
                 } elseif($share->audience_type==='circle') {
                     $members=DB::table('circle_members')->where('circle_id',$share->audience_id)
                         ->whereNull('removed_at')->limit(201)->pluck('user_id');
-                    foreach($members as $member) $viewers[]=(string)$member;
+                    foreach($members as $member) if(!$this->firebase()||$clear||$this->policy->visibleTo($share,(string)$member))$viewers[]=(string)$member;
                 }
+            }
+            if($this->firebase()){
+                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('location',array_values(array_diff(array_unique($viewers),[$owner])));
+                return;
             }
             foreach(array_unique($viewers) as $viewer) {
                 if($viewer===$owner)continue;

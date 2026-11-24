@@ -56,7 +56,7 @@ final class LocationController extends Controller
             'reviewed'=>['required','accepted'],
         ]);
         $value=$location->create($user,$d);
-        $realtime->invalidate($user);
+        $realtime->invalidate($user,false);
         return $this->result($value,201);
     }
 
@@ -100,7 +100,7 @@ final class LocationController extends Controller
             'speed_mps'=>['sometimes','nullable','numeric','between:0,100'],
         ]);
         $value=$location->ingest($user,$device,$d);
-        $realtime->invalidate($user);
+        $realtime->invalidate($user,false);
         return $this->result($value,202);
     }
 

@@ -8,13 +8,22 @@ use Illuminate\Support\Facades\Log;
 final class PresenceRealtimePublisher
 {
     public function __construct(private readonly PresenceAccessPolicy $policy, private readonly PresenceLeaseStore $leases) {}
+    private function firebase(): bool
+    {
+        return $this->policy->enabled() && app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('presence');
+    }
     public function enabled(): bool
     {
+        if(config('orbit_realtime.enabled')===true)return $this->firebase();
         return $this->policy->enabled() && config('orbit_presence.realtime_enabled') === true
             && strlen((string)config('orbit_presence.gateway_secret','')) >= 32;
     }
     private function emit(string $viewer, array $event): void
     {
+        if($this->firebase()){
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('presence',[$viewer]);
+            return;
+        }
         $channel='orbit:m9:viewer:'.hash_hmac('sha256',$viewer,(string)config('app.key'));
         Redis::connection((string)config('orbit_presence.redis_connection','default'))
             ->publish($channel,json_encode(['v'=>1,'event'=>$event,'issued_at'=>now()->toIso8601String()],JSON_THROW_ON_ERROR));
@@ -26,7 +35,7 @@ final class PresenceRealtimePublisher
             // Source coalescing target: <=1 ordinary state broadcast / 5s.
             // Database/Redis cache add is atomic across Laravel workers.
             $gate='orbit:m9:fanout:'.hash_hmac('sha256',$subject,(string)config('app.key'));
-            if (!Cache::store((string)config('orbit_presence.store','database'))
+            if (!Cache::store($this->firebase()?'orbit_ephemeral':(string)config('orbit_presence.store','orbit_ephemeral'))
                 ->add($gate,true,(int)config('orbit_presence.broadcast_throttle_seconds',5))) return;
         }
         $circleIds=DB::table('circle_members')->where('user_id',$subject)->whereNull('removed_at')
