@@ -298,4 +298,26 @@ final class OrbitM18ActivityTest extends TestCase
         $this->withToken($token)->getJson('/api/v1/activity/feed')
             ->assertStatus(401);
     }
+    public function test_m21_admin_source_control_reaches_existing_consumer_pointers(): void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $this->checkIn($owner->id);
+        app(ActivityProjector::class)->run(20);
+        $pointer=$this->withToken($token)->getJson('/api/v1/activity/feed')
+            ->assertOk()->assertJsonCount(1,'data.items')->json('data.items.0.id');
+        $this->be($this->admin(['activity.read','activity.manage']),'admin');
+        $this->post('/admin/activity/control',['key'=>'source.check_in','enabled'=>'0',
+            'reason'=>'Reviewed source pause for integration','confirm'=>'1'])->assertRedirect();
+        $this->withToken($token)->getJson('/api/v1/activity/capabilities')
+            ->assertOk()->assertJsonPath('data.sources.check_in',false);
+        $this->withToken($token)->getJson('/api/v1/activity/feed')
+            ->assertOk()->assertJsonCount(0,'data.items');
+        $this->withToken($token)->getJson('/api/v1/activity/items/'.$pointer)->assertNotFound();
+        $this->assertDatabaseHas('activity_admin_audits',['action'=>'source.changed','subject_key'=>'source.check_in']);
+        $this->post('/admin/activity/control',['key'=>'source.check_in','enabled'=>'1',
+            'reason'=>'Restore approved source configuration','confirm'=>'1'])->assertRedirect();
+        $this->withToken($token)->getJson('/api/v1/activity/feed')
+            ->assertOk()->assertJsonCount(1,'data.items');
+    }
+
 }

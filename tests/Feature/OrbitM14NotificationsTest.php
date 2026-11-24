@@ -508,4 +508,26 @@ final class OrbitM14NotificationsTest extends TestCase
         $this->assertDatabaseCount('notification_events',0);
         $this->assertDatabaseCount('notification_inbox',0);
     }
+    public function test_m21_admin_category_pause_reaches_inbox_and_unread_count(): void
+    {
+        [$sender,$sd,$senderToken]=$this->principal();
+        [$recipient,$rd,$token]=$this->principal();
+        DB::table('friend_requests')->insert(['id'=>(string)Str::uuid(),'sender_id'=>$sender->id,
+            'recipient_id'=>$recipient->id,'status'=>'pending','created_at'=>now(),'updated_at'=>now()]);
+        app(NotificationProjector::class)->run(20);
+        $notice=$this->withToken($token)->getJson('/api/v1/me/notifications')->assertOk()
+            ->assertJsonCount(1,'data.items')->json('data.items.0.id');
+        $this->withToken($token)->getJson('/api/v1/me/notifications/unread')->assertJsonPath('data.count',1);
+        $this->be($this->admin(['notifications.read','notifications.manage']),'admin');
+        $this->post('/admin/notifications/settings',['key'=>'category.friends','enabled'=>'0',
+            'reason'=>'Review notification category delivery','confirm'=>'1'])->assertRedirect();
+        $this->withToken($token)->getJson('/api/v1/me/notifications')->assertOk()->assertJsonCount(0,'data.items');
+        $this->withToken($token)->getJson('/api/v1/me/notifications/unread')->assertJsonPath('data.count',0);
+        $this->withToken($token)->postJson('/api/v1/me/notifications/'.$notice.'/read')->assertNotFound();
+        $this->post('/admin/notifications/settings',['key'=>'category.friends','enabled'=>'1',
+            'reason'=>'Restore approved notification category','confirm'=>'1'])->assertRedirect();
+        $this->withToken($token)->getJson('/api/v1/me/notifications')->assertOk()
+            ->assertJsonPath('data.items.0.id',$notice);
+    }
+
 }

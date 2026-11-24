@@ -58,3 +58,6 @@ jobs:
       - name: Preserve existing module operations
         run: |
           php artisan test --compact tests/Feature/OrbitM4SocialGraphTest.php tests/Feature/OrbitMessagingAdminTest.php tests/Feature/OrbitM14NotificationsTest.php tests/Feature/OrbitM15PlansTest.php tests/Feature/OrbitM16SosSafetyTest.php tests/Feature/OrbitM17ModerationTest.php tests/Feature/OrbitM18ActivityTest.php tests/Feature/OrbitM20AdvertisingTest.php
+      - name: Consumer API regression for identity and earlier modules
+        run: |
+          php artisan test --compact tests/Feature/OrbitIdentityTest.php tests/Feature/OrbitProfileSettingsTest.php tests/Feature/OrbitM8DashboardTest.php tests/Feature/OrbitM9PresenceTest.php tests/Feature/OrbitM10LocationTest.php tests/Feature/OrbitPingTest.php tests/Feature/OrbitCheckInTest.php

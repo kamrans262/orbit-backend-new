@@ -296,4 +296,34 @@ final class OrbitM15PlansTest extends TestCase
         // their deletion and encrypted-media retention contracts are audited.
     }
 
+    public function test_m21_admin_cancellation_and_creation_pause_reach_member_apis(): void
+    {
+        [$owner,$device,$token]=$this->principal();
+        [$guest,$guestDevice,$guestToken]=$this->principal();
+        $this->friend($owner->id,$guest->id);
+        $body=$this->sample([$guest->id]);
+        $id=$this->withToken($token)->postJson('/api/v1/plans',$body)
+            ->assertCreated()->json('data.id');
+        $this->withToken($guestToken)->getJson('/api/v1/plans?tab=upcoming')
+            ->assertOk()->assertJsonPath('data.0.id',$id);
+        $this->be($this->admin(['plans.read','plans.manage']),'admin');
+        $this->post('/admin/plans/cancel',[
+            'plan_id'=>$id,'reason'=>'Reviewed cancellation for safety','confirm'=>'1',
+        ])->assertRedirect();
+        $this->withToken($token)->getJson('/api/v1/plans/'.$id)
+            ->assertOk()->assertJsonPath('data.status','cancelled')
+            ->assertJsonPath('data.revision',2)->assertJsonPath('data.can_edit',false);
+        $this->withToken($guestToken)->getJson('/api/v1/plans?tab=upcoming')
+            ->assertOk()->assertJsonCount(0,'data');
+        $this->withToken($guestToken)->getJson('/api/v1/plans?tab=past')
+            ->assertOk()->assertJsonPath('data.0.status','cancelled');
+        $this->withToken($guestToken)->postJson('/api/v1/plans/'.$id.'/rsvp',['state'=>'joined'])->assertStatus(409);
+        $this->assertDatabaseMissing('plan_reminder_jobs',['plan_id'=>$id,'state'=>'pending']);
+        $this->assertDatabaseHas('plan_admin_audits',['action'=>'plan.cancelled']);
+        $this->post('/admin/plans/settings',['key'=>'creation_enabled','enabled'=>'0',
+            'reason'=>'Temporarily pause new plans','confirm'=>'1'])->assertRedirect();
+        $this->withToken($token)->postJson('/api/v1/plans',$this->sample())->assertForbidden();
+        $this->withToken($token)->getJson('/api/v1/plans/'.$id)->assertOk();
+    }
+
 }
