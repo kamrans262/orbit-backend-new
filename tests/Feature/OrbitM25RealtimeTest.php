@@ -159,6 +159,74 @@ final class OrbitM25RealtimeTest extends TestCase
         $this->withToken($vt)->getJson('/api/v1/location/map')->assertOk()->assertJsonCount(0,'data.markers');
     }
 
+    public function test_delayed_location_signal_is_suppressed_after_ghost_mode():void
+    {
+        $this->enableTransport();
+        config(['orbit_realtime.modules.location'=>true,'orbit_location.enabled'=>true]);
+        [$owner,$ot]=$this->person();[$viewer,$vt]=$this->person();
+        $sid=$this->withToken($vt)->postJson('/api/v1/realtime/bootstrap')->assertOk()->json('data.uid');
+        $pair=[$owner->id,$viewer->id];sort($pair,SORT_STRING);
+        DB::table('friendships')->insert(['user_low_id'=>$pair[0],'user_high_id'=>$pair[1],'created_at'=>now()]);
+        DB::table('orbit_user_preferences')->insert(['user_id'=>$owner->id,'privacy'=>json_encode([
+            'location_visibility'=>'Friends','location_activity'=>'Active','location_sharing_enabled'=>true,
+            'ghost_mode_enabled'=>false]),'created_at'=>now(),'updated_at'=>now()]);
+        $this->withToken($ot)->postJson('/api/v1/me/location/shares',[
+            'audience_type'=>'person','audience_id'=>$viewer->id,'precision'=>'approximate',
+            'duration'=>'one_hour','reviewed'=>true])->assertCreated();
+        $this->assertDatabaseHas('orbit_realtime_sessions',['session_id'=>$sid,'revision'=>2,'visible_revision'=>1]);
+        DB::table('orbit_user_preferences')->where('user_id',$owner->id)->update(['privacy'=>json_encode([
+            'location_visibility'=>'Friends','location_activity'=>'Active','location_sharing_enabled'=>true,
+            'ghost_mode_enabled'=>true])]);
+        $this->assertTrue(app(RealtimeSessions::class)->publish($sid));
+        $this->assertSame(1,end($this->writes)['body']['signal']['revision']);
+        $this->assertDatabaseHas('orbit_realtime_sessions',['session_id'=>$sid,'dirty'=>false,'visible_revision'=>1,'pending_scopes'=>null]);
+    }
+
+    public function test_disconnect_and_admin_pause_remove_lease_without_disabling_rest():void
+    {
+        $this->enableTransport();
+        [$u,$token]=$this->person();
+        $sid=$this->withToken($token)->postJson('/api/v1/realtime/bootstrap')->assertOk()->json('data.uid');
+        $this->postJson('/api/v1/realtime/disconnect')->assertOk();
+        $this->assertDatabaseMissing('orbit_realtime_sessions',['session_id'=>$sid]);
+        $this->assertNull(end($this->writes)['body']);
+        $this->withToken($token)->postJson('/api/v1/realtime/bootstrap')->assertOk();
+        config(['orbit_realtime.admin_allow'=>0]);
+        $this->withToken($token)->postJson('/api/v1/realtime/bootstrap')->assertOk()->assertJsonPath('data.enabled',false);
+        app(RealtimeSessions::class)->process();
+        $this->assertDatabaseMissing('orbit_realtime_sessions',['session_id'=>$sid]);
+        $this->assertNull(end($this->writes)['body']);
+    }
+
+    private function operator(array $permissions):\App\Models\AdminUser
+    {
+        $role=\App\Models\AdminRole::create(['name'=>'M25 '.Str::uuid(),'permissions'=>$permissions]);
+        $admin=\App\Models\AdminUser::create(['name'=>'Synthetic operator','email'=>Str::uuid().'@example.test',
+            'password'=>'StrongTestPassword123!','totp_secret'=>app(\App\Modules\Config\Services\Totp::class)->generateSecret(),'status'=>'active']);
+        $admin->roles()->attach($role->id);return $admin;
+    }
+    public function test_admin_recovery_is_confirmed_permissioned_idempotent_and_bounded():void
+    {
+        $this->enableTransport();
+        [$u,$token]=$this->person();
+        $sid=$this->withToken($token)->postJson('/api/v1/realtime/bootstrap')->assertOk()->json('data.uid');
+        DB::table('orbit_realtime_sessions')->where('session_id',$sid)->update(['attempts'=>3,'available_at'=>now()->addMinutes(5)]);
+        $url=route('orbit.admin.operations.realtime.recovery');
+        $payload=['request_id'=>(string)Str::uuid(),'operation'=>'retry','reason'=>'Reviewed synthetic retry','confirm'=>1];
+        $this->be($this->operator(['users.read']),'admin');
+        $this->postJson($url,$payload)->assertForbidden();
+        $this->be($this->operator(['config.manage']),'admin');
+        $this->postJson($url,array_diff_key($payload,['confirm'=>true]))->assertUnprocessable();
+        $before=count($this->writes);
+        $this->post($url,$payload)->assertRedirect(route('orbit.admin.operations.realtime'));
+        $this->post($url,$payload)->assertRedirect(route('orbit.admin.operations.realtime'));
+        $this->assertSame($before,count($this->writes));
+        $this->assertDatabaseHas('orbit_realtime_recovery',['id'=>$payload['request_id'],'operation'=>'retry','affected'=>1]);
+        $this->assertSame(1,DB::table('admin_audit_log')->where('action','realtime.recovery')->where('request_id',$payload['request_id'])->count());
+        config(['orbit_realtime.verified'=>false]);
+        $this->postJson($url,[...$payload,'request_id'=>(string)Str::uuid()])->assertStatus(409);
+    }
+
     public function test_redis_free_presence_and_legacy_gateway_exclusion():void
     {
         config(['orbit_realtime.enabled'=>true,'orbit_realtime.verified'=>false,
