@@ -504,6 +504,7 @@ final class AdminAdvertisingController extends Controller
 
     public function campaignTransition(Request $r,string $campaign)
     {
+        abort_unless($this->admin()->canPerform('advertising.review') || $this->admin()->canPerform('advertising.manage'),403);
         $data=$this->gate($r,[
             'revision'=>['required','integer','min:1'],
             'status'=>['required',Rule::in(['draft','pending','approved','scheduled',

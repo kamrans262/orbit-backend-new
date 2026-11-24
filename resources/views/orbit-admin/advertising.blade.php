@@ -83,7 +83,7 @@
           <form method="post" action="{{ route('orbit.admin.advertising.sponsors.status',['sponsor'=>$sponsor->id]) }}">@csrf
             <label>Action<select name="status" required>
               @foreach(['verified'=>'Verify independently','suspended'=>'Suspend','archived'=>'Archive'] as $code=>$label)
-                @if($sponsor->status!==$code)<option value="{{ $code }}">{{ $label }}</option>@endif
+                @if($sponsor->status!==$code && ($code!=='verified' || $sponsor->created_by!==auth()->guard('admin')->id()))<option value="{{ $code }}">{{ $label }}</option>@endif
               @endforeach
             </select></label>
             <label>Reason<input type="text" name="reason" minlength="10" maxlength="500" required></label>
@@ -127,7 +127,7 @@
           @endif
         </td>
         <td>
-          @if($creative->status==='pending' && auth()->guard('admin')->user()?->canPerform('advertising.review'))
+          @if($creative->status==='pending' && $creative->submitted_by!==auth()->guard('admin')->id() && auth()->guard('admin')->user()?->canPerform('advertising.review'))
           <form method="post" action="{{ route('orbit.admin.advertising.creatives.review',['creative'=>$creative->id]) }}">@csrf
             <input type="hidden" name="revision" value="{{ $creative->revision }}">
             <label>Decision<select name="action"><option value="approved">Approve</option><option value="rejected">Reject</option></select></label>
@@ -191,7 +191,7 @@
             'active'=>['paused','completed'],'paused'=>['scheduled','active','completed','archived'],
             'rejected'=>['draft','archived'],'completed'=>['archived'],'archived'=>[]];
           $allowed=array_filter($states[$campaign->status]??[],
-            fn($next)=>auth()->guard('admin')->user()?->canPerform(in_array($next,['approved','rejected'],true)?'advertising.review':'advertising.manage'));
+            fn($next)=>($next!=='approved' || $campaign->created_by!==auth()->guard('admin')->id()) && auth()->guard('admin')->user()?->canPerform(in_array($next,['approved','rejected'],true)?'advertising.review':'advertising.manage'));
         @endphp
         @if($allowed)
         <form method="post" action="{{ route('orbit.admin.advertising.campaigns.transition',['campaign'=>$campaign->id]) }}">@csrf

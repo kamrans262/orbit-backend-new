@@ -21,7 +21,7 @@ final class AdminMomentController extends Controller
             return response()->view('orbit-admin.moments', compact('installed','enabled'))
                 ->header('Cache-Control','private, no-store');
         }
-        $d=$r->validate(['moment_id'=>['nullable','uuid']]);
+        $d=$r->validate(['moment_id'=>['nullable','uuid'],'report_id'=>['nullable','uuid']]);
         $metrics=[
             'published'=>DB::table('moments')->where('state','published')->count(),
             'expired'=>DB::table('moments')->where('state','expired')->count(),
@@ -37,8 +37,9 @@ final class AdminMomentController extends Controller
         if(!empty($d['moment_id']))$moment=DB::table('moments')->where('id',$d['moment_id'])
             ->first(['id','state','audience_kind','published_at','rail_expires_at','view_expires_at','purge_due_at','audience_revision']);
         // No reporter identity, plaintext, encrypted bytes, key, filename, viewer or audience roster.
-        $reports=DB::table('moment_reports')->where('status','pending')
-            ->orderBy('created_at')->orderBy('id')->paginate(25,['id','reason','status','created_at','evidence_consent','consent_evidence_ciphertext'],'reports_page')->withQueryString();
+        $reports=DB::table('moment_reports')
+            ->when($d['report_id']??null,fn($q,$id)=>$q->where('id',$id),fn($q)=>$q->where('status','pending'))
+            ->orderBy('created_at')->orderBy('id')->paginate(25,['id','reason','status','created_at','evidence_consent',DB::raw('CASE WHEN consent_evidence_ciphertext IS NOT NULL THEN 1 ELSE 0 END AS evidence_available')],'reports_page')->withQueryString();
         // Metadata only: debugging without identities or E2EE ciphertext.
         $failures=DB::table('moment_lifecycle_jobs')
             ->where('state','pending')->where('attempts','>',0)

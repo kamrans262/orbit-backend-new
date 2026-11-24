@@ -167,7 +167,13 @@
   @endif
   <section class="panel"><div class="panel-head"><div><h2>Case source links</h2><p>References to original report records, never duplicated private evidence.</p></div></div>
   <div class="table-scroll"><table><thead><tr><th>TYPE</th><th>REFERENCE</th><th>LINKED AT</th></tr></thead><tbody>
-    @foreach($sources as $source)<tr><td>{{ ucfirst($source->source_kind) }}</td><td><code>{{ substr($source->source_report_id,0,8) }}…</code></td><td>{{ $source->linked_at }}</td></tr>@endforeach
+    @foreach($sources as $source)<tr><td>{{ ucfirst($source->source_kind) }}</td><td>
+      @if($source->source_kind==='messaging' && auth()->guard('admin')->user()?->canPerform('messages.moderate'))
+        <a href="{{ route('orbit.admin.messaging.reports.show',$source->source_report_id) }}"><code>{{ substr($source->source_report_id,0,8) }}…</code></a>
+      @elseif($source->source_kind==='moment' && config('orbit_moments.enabled') && auth()->guard('admin')->user()?->canPerform('moments.read') && auth()->guard('admin')->user()?->canPerform('moments.moderate'))
+        <a href="{{ route('orbit.admin.moments.index',['report_id'=>$source->source_report_id]) }}"><code>{{ substr($source->source_report_id,0,8) }}…</code></a>
+      @else <code>{{ substr($source->source_report_id,0,8) }}…</code> @endif
+    </td><td>{{ $source->linked_at }}</td></tr>@endforeach
   </tbody></table></div></section>
   <section class="panel"><div class="panel-head"><div><h2>Actions on this case</h2><p>Subject details and reporter identities remain scoped; no account-wide suspension is inferred.</p></div></div>
   <div class="table-scroll"><table><thead><tr><th>ACTION</th><th>SCOPE</th><th>STATUS</th><th>ENDS AT</th></tr></thead><tbody>

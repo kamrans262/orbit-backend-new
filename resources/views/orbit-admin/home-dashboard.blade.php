@@ -33,5 +33,12 @@
   </div>
   <p>These indicators describe configured Home integrations, not live connectivity. Independently implemented Plans, Presence, Ping, SOS and Activity Feed have their own operational areas.</p>
   <p><a href="{{ route('orbit.admin.flags.index') }}">Manage client-facing feature flags</a></p>
+  <div class="heading-actions">
+    @foreach(\App\Modules\Config\Services\AdminNavigation::groups(auth()->guard('admin')->user()) as $group)
+      @if(in_array($group['title'],['Presence','Location Sharing','Ping','Check-In','Plans','SOS & Safety','Activity Feed'],true))
+      <a class="btn secondary" href="{{ route($group['children'][0]['route']) }}">{{ $group['title'] }}</a>
+      @endif
+    @endforeach
+  </div>
 </section>
 @endsection

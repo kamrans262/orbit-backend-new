@@ -83,13 +83,11 @@ final class AdminMediaController extends Controller
         ]);
         $admin=auth()->guard('admin')->user();
         abort_unless($admin?->canPerform('media.jobs.retry'),403);
-        $job=DB::table('media_delete_jobs')
-            ->where('id',$data['job_id'])->first();
-        abort_unless($job && $job->status === 'pending'
-            && (int)$job->attempts > 0, 404, 'Retry not available.');
-        DB::transaction(function () use ($job,$admin,$data): void {
-            DB::table('media_delete_jobs')
-                ->where('id',$job->id)->where('status','pending')
+        abort_unless(Schema::hasTable('media_delete_jobs') && Schema::hasTable('media_admin_audits'),503,'Media cleanup schema unavailable.');
+        DB::transaction(function () use ($admin,$data): void {
+            $job=DB::table('media_delete_jobs')->where('id',$data['job_id'])->lockForUpdate()->first();
+            abort_unless($job && $job->status==='pending' && (int)$job->attempts>0,404,'Retry not available.');
+            DB::table('media_delete_jobs')->where('id',$job->id)
                 ->update(['next_attempt_at'=>now(),'updated_at'=>now()]);
             DB::table('media_admin_audits')->insert([
                 'id'=>(string)Str::uuid7(),

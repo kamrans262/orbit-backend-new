@@ -55,15 +55,23 @@
  </div>@endif
 </section>
 <section class="panel" style="margin-top:18px">
- <div class="panel-head"><div><p class="eyebrow">RESTRICTED MODERATION</p><h2>Pending reports</h2>
+ <div class="panel-head"><div><p class="eyebrow">RESTRICTED MODERATION</p><h2>Report review</h2>
  <p>Only metadata required for decision-making. Reports do not grant the operator any media decryption keys or the contents of user submissions.</p></div></div>
+ <form class="admin-filters" action="{{ route('orbit.admin.moments.index') }}" method="get">
+   <label>Report UUID<input name="report_id" maxlength="36" value="{{ request('report_id') }}" placeholder="Exact report UUID"></label>
+   <button class="btn primary">Filter</button><a class="btn secondary" href="{{ route('orbit.admin.moments.index') }}">Reset</a>
+ </form>
+ @if(auth()->guard('admin')->user()?->canPerform('moderation.read'))
+   <p><a href="{{ route('orbit.admin.moderation.queue',['source'=>'moment']) }}">Open linked moderation queue</a></p>
+ @endif
  @forelse($reports as $report)
  <div class="admin-kv" style="margin-bottom:12px" role="group" aria-label="Pending Moment report">
  <div class="kv"><small>Report UUID</small><strong style="overflow-wrap:anywhere">{{ $report->id }}</strong></div>
  <div class="kv"><small>Reason</small><strong>{{ $report->reason }}</strong></div>
+ <div class="kv"><small>Status</small><strong>{{ ucfirst($report->status) }}</strong></div>
  <div class="kv"><small>Received UTC</small><strong>{{ $report->created_at }}</strong></div>
  </div>
- @if(config('orbit_moments.moderation_evidence_enabled') && $report->evidence_consent && $report->consent_evidence_ciphertext
+ @if($report->status==='pending' && config('orbit_moments.moderation_evidence_enabled') && $report->evidence_consent && $report->evidence_available
      && auth()->guard('admin')->user()?->canPerform('moments.moderate'))
  <form class="admin-filters" action="{{ route('orbit.admin.moments.reports.evidence',['report'=>$report->id]) }}"
    method="post" target="_blank" style="margin-bottom:12px">
@@ -73,17 +81,17 @@
   <button class="btn secondary" type="submit">Review consented evidence</button>
  </form>
  @endif
- @if(auth()->guard('admin')->user()?->canPerform('moments.moderate'))
+ @if($report->status==='pending' && auth()->guard('admin')->user()?->canPerform('moments.moderate'))
  <form class="admin-filters" action="{{ route('orbit.admin.moments.reports.action',['report'=>$report->id]) }}" method="post" style="margin-bottom:20px">
  @csrf
- <label>Action <select name="action" required><option value="dismiss">Dismiss report</option><option value="restrict">Restrict Moment</option></select></label>
+ <label>Action <select name="action" required><option value="dismiss">Dismiss report</option>@if(config('orbit_moments.moderation_restrict_enabled') && config('orbit_moments.moderation_evidence_enabled'))<option value="restrict">Restrict Moment (requires audited evidence)</option>@endif</select></label>
  <label>Reason code <select name="reason_code" required><option value="reviewed_safe">Reviewed safe</option><option value="privacy_violation">Privacy violation</option><option value="abusive_content">Abusive content</option><option value="spam">Spam</option><option value="other">Other</option></select></label>
  <label>Audit ticket <input name="ticket" type="text" minlength="10" maxlength="80" required placeholder="Review ticket"></label>
  <label>Confirm <input name="confirm" type="text" pattern="REVIEWED" required placeholder="REVIEWED"></label>
  <button class="btn primary" type="submit">Record reviewed action</button>
  </form>
  @endif
- @empty<div class="admin-guidance" role="status">No pending reports.</div>
+ @empty<div class="admin-guidance" role="status">No matching reports.</div>
  @endforelse
  {{ $reports->links() }}
 </section>
