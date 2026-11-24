@@ -254,6 +254,8 @@ final class OrbitM9PresenceTest extends TestCase
 
     public function test_typing_cannot_bypass_message_gate_or_consent(): void
     {
+        // M13 now configures messaging independently. Explicitly exercise the disabled gate first.
+        config()->set('orbit_circle.consumer_enabled.message',false);
         config()->set('orbit_presence.realtime_enabled',true);
         config()->set('orbit_presence.gateway_secret',str_repeat('x',48));
         [$alice,$token]=$this->person('alice');
