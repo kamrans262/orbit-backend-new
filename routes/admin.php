@@ -42,6 +42,12 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
     Route::post('/mfa', [AdminAuthController::class, 'verifyMfa'])->middleware('throttle:8,1')->name('mfa.verify');
     Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
     Route::middleware([EnsureAdmin::class])->group(function (): void {
+        $relay=\App\Modules\Relay\Http\Controllers\AdminRelayController::class;
+        Route::get('/relay',[$relay,'overview'])->middleware(RequireAdminPermission::class.':relay.read')->name('relay.overview');
+        Route::get('/relay/settings',[$relay,'settings'])->middleware(RequireAdminPermission::class.':relay.read')->name('relay.settings');
+        Route::post('/relay/settings',[$relay,'save'])->middleware([RequireAdminPermission::class.':relay.manage','throttle:6,1'])->name('relay.settings.save');
+        Route::get('/relay/audits',[$relay,'audits'])->middleware(RequireAdminPermission::class.':relay.audit')->name('relay.audits');
+
         Route::get('/start', function () {
             $route = \App\Modules\Config\Services\AdminNavigation::firstRoute(auth()->guard('admin')->user());
             abort_unless($route,403);

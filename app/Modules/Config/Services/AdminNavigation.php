@@ -133,6 +133,11 @@ final class AdminNavigation
                 ['Projection Operations', 'activity.operations', 'activity.read', ['activity.operations', 'activity.project']],
                 ['Audit Trail', 'activity.audits', 'activity.audit', ['activity.audits']],
             ]],
+            ['Orbit Relay', 'messages', [
+                ['Overview', 'relay.overview', 'relay.read', ['relay.overview']],
+                ['Settings & Controls', 'relay.settings', 'relay.read', ['relay.settings*']],
+                ['Audit Trail', 'relay.audits', 'relay.audit', ['relay.audits']],
+            ]],
             ['Advertisements & Sponsorships', 'notifications', [
                 ['Overview', 'advertising.overview', 'advertising.read', ['advertising.overview']],
                 ['Sponsors', 'advertising.sponsors', 'advertising.read', ['advertising.sponsors*']],

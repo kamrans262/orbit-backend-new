@@ -57,6 +57,15 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:120,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        Route::prefix('relay')->group(function (): void {
+            $controller=\App\Modules\Relay\Http\Controllers\RelayController::class;
+            Route::get('/capabilities',[$controller,'capabilities'])->middleware('throttle:40,1');
+            Route::post('/leases',[$controller,'leases'])->middleware('throttle:10,1');
+            Route::post('/leases/{lease}/revoke',[$controller,'revoke'])->whereUuid('lease')->middleware('throttle:20,1');
+            Route::post('/reconcile',[$controller,'reconcile'])->middleware('throttle:20,1');
+            Route::get('/sync',[$controller,'sync'])->middleware('throttle:40,1');
+        });
+
         // M20: first-party sponsored placements. Always disabled without
         // explicit content, privacy and frequency approvals.
         Route::get('/ads/capabilities',[AdvertisingController::class,'capabilities'])
