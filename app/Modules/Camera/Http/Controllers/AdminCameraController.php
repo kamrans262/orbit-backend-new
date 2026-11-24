@@ -13,11 +13,20 @@ final class AdminCameraController
         $settings=$policy->settings();
         return response()->view('orbit-admin.camera',[
             'settings'=>$settings,'ranges'=>CameraPolicy::RANGES,
+            'tools'=>app(\App\Modules\Camera\Services\CameraToolCatalog::class)->snapshot(),
             'ready'=>$settings['revision']>0,
             'audits'=>$settings['revision']>0?$registry->history('remote',CameraPolicy::KEY):collect(),
             'mediaAvailable'=>config('orbit_media.enabled')===true,
             'momentsAvailable'=>config('orbit_moments.enabled')===true,
         ])->header('Cache-Control','private, no-store');
+    }
+    public function saveTools(Request $request,\App\Modules\Camera\Services\CameraToolCatalog $catalog)
+    {
+        $d=$request->validate(['revision'=>'required|integer|min:0','reason'=>'required|string|min:10|max:500','confirm'=>'accepted',
+            'filters'=>'required|array|min:1|max:9','filters.*'=>'required|string|distinct',
+            'stickers'=>'nullable|array|max:12','stickers.*'=>'required|string|distinct']);
+        $catalog->save($request->user('admin'),$d['filters'],$d['stickers']??[],(int)$d['revision'],$d['reason']);
+        return redirect()->route('orbit.admin.camera.index')->with('status','Camera catalog saved. Compatible mobile integration is required.');
     }
     public function save(Request $request,CameraPolicy $policy,ConfigRegistry $registry)
     {

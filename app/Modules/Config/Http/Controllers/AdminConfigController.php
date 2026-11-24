@@ -15,7 +15,7 @@ final class AdminConfigController extends Controller
     {
         return view('orbit-admin.dashboard', [
             'flags' => FeatureFlag::query()->orderBy('key')->get(),
-            'configs' => RemoteConfig::query()->whereNotIn('key',['relay.operations','camera.operations','m24.operational_limits'])->where('key','not like','m24.operations.%')->orderBy('key')->get(),
+            'configs' => RemoteConfig::query()->whereNotIn('key',['relay.operations','camera.operations','m24.operational_limits','m24.camera_tools'])->where('key','not like','m24.operations.%')->orderBy('key')->get(),
             'audits' => \Illuminate\Support\Facades\DB::table('admin_audit_log')->orderByDesc('created_at')->limit(8)->get(),
         ]);
     }
@@ -30,7 +30,7 @@ final class AdminConfigController extends Controller
     public function configsIndex()
     {
         return response()->view('orbit-admin.configs-index', [
-            'configs' => RemoteConfig::query()->whereNotIn('key',['relay.operations','camera.operations','m24.operational_limits'])->where('key','not like','m24.operations.%')->orderBy('key')->paginate(25),
+            'configs' => RemoteConfig::query()->whereNotIn('key',['relay.operations','camera.operations','m24.operational_limits','m24.camera_tools'])->where('key','not like','m24.operations.%')->orderBy('key')->paginate(25),
         ])->header('Cache-Control', 'private, no-store');
     }
 

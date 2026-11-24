@@ -127,4 +127,18 @@ final class OrbitM24OperationalControlsTest extends TestCase{
         $this->getJson('/api/v1/dashboard/summary')->assertOk()->assertJsonPath('data.sections.people.state','disabled');
         $this->assertEquals(3,DB::table('remote_configs')->where('key','m24.operations.dashboard')->value('version'));
     }
+
+    public function test_camera_catalog_uses_only_approved_tools_and_sanitized_bootstrap():void{
+        $this->be($this->admin(['camera.read','camera.manage']),'admin');
+        $d=['filters'=>['natural','warm'],'stickers'=>['⭐'],'revision'=>0,'reason'=>'Reviewed local camera tool availability','confirm'=>1];
+        $this->post('/admin/camera/tools',$d)->assertRedirect();
+        $this->postJson('/admin/camera/tools',array_replace($d,['revision'=>1,'filters'=>['natural','ar_new']]))->assertUnprocessable();
+        $this->postJson('/admin/camera/tools',$d)->assertStatus(409);
+        $h=$this->getJson('/api/v1/config/bootstrap?platform=android&app_version=1.0.0')->assertOk()->json('data.config');
+        $this->assertSame(['natural','warm'],$h['m24.camera_tools']['filters']);
+        $this->assertSame(['⭐'],$h['m24.camera_tools']['stickers']);
+        $this->be($this->admin(['*']),'admin');
+        $this->postJson('/admin/config',['key'=>'m24.camera_tools'])->assertForbidden();
+        $this->get('/admin/administrators/audits')->assertOk()->assertSee('Administrative audit');
+    }
 }

@@ -45,4 +45,19 @@ $labels=[
 @empty<tr><td colspan="4">No administrative changes recorded.</td></tr>@endforelse
 </tbody></table></div></section>
 @endif
+<section class="panel"><div class="panel-head"><div><h2>Approved editing tools</h2><p>Catalog revision {{ $tools['revision'] }} · Existing local filters and stickers only. Requires compatible app integration; no access to captured content.</p></div></div>
+@if(auth()->guard('admin')->user()?->canPerform('camera.manage'))
+<form method="post" action="{{ route('orbit.admin.camera.tools.save') }}">@csrf
+<input type="hidden" name="revision" value="{{ $tools['revision'] }}"><input type="hidden" name="filters[]" value="natural">
+<div class="form-grid"><div><h3>Photo filters</h3><label>Natural (always available)</label>
+@foreach(\App\Modules\Camera\Services\CameraToolCatalog::FILTERS as $filter)@if($filter!=='natural')
+<label><input type="checkbox" name="filters[]" value="{{ $filter }}" @checked(in_array($filter,$tools['filters'],true))>{{ $filter==='blackAndWhite'?'Black & white':ucfirst($filter) }}</label>
+@endif @endforeach</div><div><h3>Sticker collection</h3>
+@foreach(\App\Modules\Camera\Services\CameraToolCatalog::STICKERS as $sticker)<label><input type="checkbox" name="stickers[]" value="{{ $sticker }}" @checked(in_array($sticker,$tools['stickers'],true))>{{ $sticker }}</label>@endforeach
+</div><label>Reason<input name="reason" minlength="10" maxlength="500" required></label><label><input type="checkbox" name="confirm" value="1" required> Confirm supported catalog</label></div><button class="btn primary">Save editing tools</button></form>
+@else
+<div class="admin-kv"><div class="kv"><small>Filters</small><strong>{{ implode(', ',$tools['filters']) }}</strong></div><div class="kv"><small>Stickers</small><strong>{{ implode(' ',$tools['stickers']) ?: 'None' }}</strong></div></div>
+@endif
+<div class="admin-guidance">This catalog is a presentation policy. Laravel cannot inspect private encrypted captures or determine whether an on-device filter was applied. No AR, sponsorship or paid activation.</div>
+</section>
 @endsection

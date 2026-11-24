@@ -56,7 +56,7 @@ jobs:
           php artisan migrate --force
       - name: Admin access migration rollback and reapply
         run: |
-          php artisan migrate:rollback --step=1 --force
+          php artisan migrate:rollback --step=2 --force
           php artisan migrate --force
       - name: M24 operational settings, runtime and access reviews
         run: php artisan test --compact --display-warnings tests/Feature/OrbitM24OperationalControlsTest.php

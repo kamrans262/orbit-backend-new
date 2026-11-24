@@ -34,11 +34,13 @@ final class ConfigRegistry
             $flags[$flag->key] = $this->flagEnabled($flag, $context);
         }
         $configs = RemoteConfig::query()->where('published', true)->where('client_visible', true)
-            ->whereNotIn('key',['camera.operations','relay.operations','m24.operational_limits'])->where('key','not like','m24.operations.%')->orderBy('key')->pluck('value', 'key')->all();
+            ->whereNotIn('key',['camera.operations','relay.operations','m24.operational_limits','m24.camera_tools'])->where('key','not like','m24.operations.%')->orderBy('key')->pluck('value', 'key')->all();
         $camera=app(\App\Modules\Camera\Services\CameraPolicy::class)->publicHints();
         if($camera!==null)$configs['camera.operations']=$camera;
         $operations=app(OperationalControls::class)->publicHints();
         if($operations!==null)$configs['m24.operational_limits']=$operations;
+        $tools=app(\App\Modules\Camera\Services\CameraToolCatalog::class)->publicHints();
+        if($tools!==null)$configs['m24.camera_tools']=$tools;
         return ['version' => 'v1', 'flags' => $flags, 'config' => $configs, 'generated_at' => now()->toIso8601String()];
     }
 

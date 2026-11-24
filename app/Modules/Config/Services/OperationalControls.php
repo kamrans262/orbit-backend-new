@@ -93,7 +93,7 @@ final class OperationalControls
     ];
     public static function reserved(?string $key):bool
     {
-        return $key!==null&&(str_starts_with(strtolower($key),self::PREFIX)||strtolower($key)==='m24.operational_limits');
+        return $key!==null&&(str_starts_with(strtolower($key),self::PREFIX)||in_array(strtolower($key),['m24.operational_limits','m24.camera_tools'],true));
     }
     public static function keys():array{return array_map(fn($name)=>self::PREFIX.$name,array_keys(self::MODULES));}
     public function installed():bool{return Schema::hasTable('remote_configs');}

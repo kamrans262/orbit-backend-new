@@ -3,6 +3,7 @@
 @section('crumb','ADMINISTRATORS / ACCESS')
 @section('content')
 <div class="page-heading"><div><p class="eyebrow">ADMINISTRATIVE SECURITY</p><h1>Administrators &amp; Access</h1><p>Review existing administrator accounts and least-privilege roles. Access changes require two independent super administrators and fresh MFA.</p></div></div>
+<p><a class="btn secondary" href="{{ route('orbit.admin.administrators.audits') }}">Search administrative audit</a></p>
 @if(!$ready)<div class="admin-guidance">Access review schema has not been provisioned.</div>@endif
 <section class="panel"><div class="panel-head"><h2>Administrator directory</h2></div><div class="table-scroll"><table><thead><tr><th>NAME</th><th>EMAIL</th><th>STATUS</th><th>ROLES</th><th>LAST LOGIN</th></tr></thead><tbody>
 @forelse($admins as $admin)<tr><td>{{ $admin->name }}</td><td>{{ $admin->email }}</td><td>{{ $admin->status }}</td><td>{{ $admin->roles->pluck('name')->join(', ') }}</td><td>{{ $admin->last_login_at??'—' }}</td></tr>@empty<tr><td colspan="5">No administrators found.</td></tr>@endforelse

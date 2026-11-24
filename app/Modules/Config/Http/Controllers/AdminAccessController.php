@@ -52,6 +52,18 @@ final class AdminAccessController{
         $reviews=$ready?DB::table('admin_access_reviews')->select('id','target_id','requested_by','decided_by','operation','role_id','state','reason','expires_at','created_at')->orderByDesc('created_at')->limit(50)->get():collect();
         return response()->view('orbit-admin.administrator-access',compact('admins','roles','delegable','reviews','ready')+['permissions'=>self::DELEGABLE])->header('Cache-Control','private, no-store');
     }
+    public function audits(Request $r){
+        $this->operator($r);
+        $filters=$r->validate(['actor'=>'nullable|uuid','action'=>'nullable|string|max:120|regex:/^[a-zA-Z0-9_.-]+$/D',
+            'from'=>'nullable|date_format:Y-m-d','to'=>'nullable|date_format:Y-m-d|after_or_equal:from']);
+        $from=\Illuminate\Support\Carbon::parse($filters['from']??now()->subDays(7)->toDateString())->startOfDay();
+        $to=\Illuminate\Support\Carbon::parse($filters['to']??now()->toDateString())->endOfDay();
+        abort_unless($from->lte($to)&&$from->diffInDays($to)<=31,422,'Choose a range of at most 31 days.');
+        $events=DB::table('admin_audit_log')->select('id','actor_id','action','target','created_at')
+            ->whereBetween('created_at',[$from,$to])->when($filters['actor']??null,fn($q,$v)=>$q->where('actor_id',$v))
+            ->when($filters['action']??null,fn($q,$v)=>$q->where('action',$v))->orderByDesc('created_at')->orderByDesc('id')->paginate(25)->withQueryString();
+        return response()->view('orbit-admin.administrator-audits',compact('events','filters'))->header('Cache-Control','private, no-store');
+    }
     public function createRole(Request $r,OperationalAudit $audit){
         $actor=$this->operator($r,true);abort_unless($this->ready(),503);
         $d=$r->validate(['name'=>'required|string|min:3|max:80|unique:admin_roles,name','permissions'=>'required|array|min:1|max:40','permissions.*'=>'required|distinct|in:'.implode(',',self::DELEGABLE),'reason'=>'required|string|min:10|max:500','confirm'=>'accepted']);

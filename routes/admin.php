@@ -73,6 +73,7 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
         Route::post('/check-in/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'save'])->defaults('module','check-in')->middleware('throttle:6,1')->name('operations.check-in.save');
         Route::post('/check-in/controls/restore',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'rollback'])->defaults('module','check-in')->middleware('throttle:6,1')->name('operations.check-in.rollback');
         $access=\App\Modules\Config\Http\Controllers\AdminAccessController::class;
+        Route::get('/administrators/audits',[$access,'audits'])->middleware(RequireAdminPermission::class.':*')->name('administrators.audits');
         Route::get('/administrators',[$access,'index'])->middleware(RequireAdminPermission::class.':*')->name('administrators.index');
         Route::post('/administrators/roles',[$access,'createRole'])->middleware([RequireAdminPermission::class.':*','throttle:5,1'])->name('administrators.roles.create');
         Route::post('/administrators/reviews',[$access,'propose'])->middleware([RequireAdminPermission::class.':*','throttle:5,1'])->name('administrators.propose');
@@ -101,6 +102,7 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
         Route::post('/billing/events/{event}/retry',[$billing,'retry'])->whereUuid('event')->middleware([RequireAdminPermission::class.':billing.read',RequireAdminPermission::class.':billing.reconcile','throttle:6,1'])->name('billing.events.retry');
         $camera=\App\Modules\Camera\Http\Controllers\AdminCameraController::class;
         Route::get('/camera',[$camera,'index'])->middleware(RequireAdminPermission::class.':camera.read')->name('camera.index');
+        Route::post('/camera/tools',[$camera,'saveTools'])->middleware([RequireAdminPermission::class.':camera.read',RequireAdminPermission::class.':camera.manage','throttle:6,1'])->name('camera.tools.save');
         Route::post('/camera/settings',[$camera,'save'])->middleware([RequireAdminPermission::class.':camera.read',RequireAdminPermission::class.':camera.manage','throttle:6,1'])->name('camera.settings.save');
         $relay=\App\Modules\Relay\Http\Controllers\AdminRelayController::class;
         Route::get('/relay',[$relay,'overview'])->middleware(RequireAdminPermission::class.':relay.read')->name('relay.overview');
