@@ -90,8 +90,9 @@ final class OrbitM21AdminNavigationTest extends TestCase
         $this->be($this->admin(['users.read','circles.read','media.read','moments.read',
             'notifications.read','plans.read','safety.read','moderation.read','activity.read','advertising.read']),'admin');
         $id=(string)Str::uuid();
+        $member=\App\Models\OrbitUser::create(['username'=>'m21_read_'.Str::random(8),'display_name'=>'Fixture member','status'=>'active']);
         foreach ([
-            '/admin/users/'.$id.'/status',
+            '/admin/users/'.$member->id.'/status',
             '/admin/media/jobs/retry',
             '/admin/moments/reports/'.$id.'/action',
             '/admin/notifications/jobs/'.$id.'/retry',
@@ -100,8 +101,11 @@ final class OrbitM21AdminNavigationTest extends TestCase
             '/admin/moderation/cases/'.$id.'/enforce',
             '/admin/activity/control',
             '/admin/advertising/sponsors',
-        ] as $path) $this->post($path,[])->assertForbidden();
-        $this->delete('/admin/users/'.$id)->assertForbidden();
+        ] as $path) {
+            $response=$this->post($path,[]);
+            $this->assertSame(403,$response->getStatusCode(),'Expected permission denial for '.$path);
+        }
+        $this->delete('/admin/users/'.$member->id)->assertForbidden();
     }
 
     public function test_admin_session_and_no_permission_boundaries(): void
