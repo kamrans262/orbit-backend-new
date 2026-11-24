@@ -19,6 +19,7 @@ final class RealtimeHealth
         if(Schema::hasTable('orbit_realtime_auth_receipts')){
             $out['Pending remote cleanup']=DB::table('orbit_realtime_auth_receipts')->whereNotNull('tombstone_after')->orWhereNotNull('auth_after')->count();
         }
+        $out+=app(RealtimeMetrics::class)->summary();
         return $out+[
             'Storage'=>'Provisioned',
             'Active leases'=>(clone $table)->where('lease_until_ms','>',now()->getTimestampMs())->count(),

@@ -46,9 +46,9 @@ final class RealtimeAudience
     public function momentClear(object $moment):void
     {
         if(!$this->sessions->enabled('moments'))return;
-        $users=DB::table('moment_recipients')->where('moment_id',$moment->id)
-            ->where('version',$moment->audience_revision)->whereNull('revoked_at')->limit(1000)->pluck('viewer_id')->all();
-        $this->sessions->signalUsers('moments',[$moment->creator_id,...$users],['kind'=>'clear']);
+        $users=$this->momentUsers($moment->id);
+        // Natural expiry is already enforced by the domain clock; after expiry only the owner is signaled.
+        $this->sessions->signalUsers('moments',$users,['kind'=>'clear']);
     }
 
     public function activity(string $type,string $id):void

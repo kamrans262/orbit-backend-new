@@ -136,8 +136,9 @@ final class RealtimeSessions
     public function publish(string $id):bool
     {
         if(!$this->cleanupEnabled())return false;
+        $started=hrtime(true);
         try{
-            return DB::transaction(function()use($id):bool{
+            return DB::transaction(function()use($id,$started):bool{
                 DB::table('orbit_sessions')->where('id',$id)->lockForUpdate()->first();
                 $r=DB::table('orbit_realtime_sessions')->where('session_id',$id)->lockForUpdate()->first();
                 if(!$r)return false;
@@ -145,7 +146,8 @@ final class RealtimeSessions
                 if(!$this->enabled()||!$live||$live->device_id!==$r->device_id||(int)$r->lease_until_ms<=$this->nowMs()){
                     // Fence stale conditional PUTs with a nonempty, deny-only tombstone.
                     app(RealtimeAuthCleanup::class)->register($id);
-                    $this->provider->replace($id,['revoked'=>(string)Str::uuid()]);
+                    $tombstone=['revoked'=>(string)Str::uuid()];
+                    $this->provider->replace($id,$tombstone);
                     app(RealtimeAuthCleanup::class)->markTombstone($id);
                     DB::table('orbit_realtime_sessions')->where('session_id',$id)->delete();
                     return false;
@@ -158,10 +160,12 @@ final class RealtimeSessions
                     if(app(RealtimeSignalPolicy::class)->allows($scope,(string)$live->user_id,(string)$live->device_id))
                         $visible+=max(1,min(100,(int)($scope['count']??1)));
                 }
-                $this->provider->replace($id,[
+                $payload=[
                     'lease'=>['device'=>$r->device_id,'generation'=>$r->generation,'until_ms'=>(int)$r->lease_until_ms],
                     'signal'=>['schema_version'=>1,'revision'=>$visible],
-                ]);
+                ];
+                $this->provider->replace($id,$payload);
+                app(RealtimeMetrics::class)->record('published',strlen(json_encode($payload,JSON_THROW_ON_ERROR)),(int)((hrtime(true)-$started)/1000000));
                 DB::table('orbit_realtime_sessions')->where('session_id',$id)->update([
                     'published_revision'=>$r->revision,'visible_revision'=>$visible,'pending_scopes'=>null,'dirty'=>false,'attempts'=>0,'available_at'=>now(),'last_success_at'=>now(),
                 ]);
@@ -179,6 +183,7 @@ final class RealtimeSessions
                     ]);
                 });
             }catch(\Throwable){}
+            app(RealtimeMetrics::class)->record('failed',0,(int)((hrtime(true)-$started)/1000000));
             Log::warning('M25 realtime publication deferred.');
             return false;
         }
@@ -207,6 +212,7 @@ final class RealtimeSessions
     }
     public function pruneEphemeral():void
     {
+        app(RealtimeMetrics::class)->prune();
         // Pending authorization descriptors cannot survive expired access, even during provider outage.
         DB::table('orbit_realtime_sessions')->where('lease_until_ms','<=',$this->nowMs())->whereNotNull('pending_scopes')->update(['pending_scopes'=>null]);
         foreach(['orbit_ephemeral_cache','orbit_ephemeral_locks'] as $table){
@@ -235,8 +241,13 @@ final class RealtimeSessions
         $ids=DB::table('orbit_realtime_sessions')->where('attempts','>',0)
             ->orderBy('available_at')->orderBy('session_id')->limit($this->limit('worker_batch'))
             ->lockForUpdate()->pluck('session_id');
-        return DB::table('orbit_realtime_sessions')->whereIn('session_id',$ids)
-            ->update(['available_at'=>now()]);
+        $count=DB::table('orbit_realtime_sessions')->whereIn('session_id',$ids)->update(['available_at'=>now()]);
+        $remaining=max(0,$this->limit('worker_batch')-$count);
+        if($remaining){
+            $cleanup=DB::table('orbit_realtime_auth_receipts')->where('attempts','>',0)->orderBy('available_at')->limit($remaining)->lockForUpdate()->pluck('session_id');
+            $count+=DB::table('orbit_realtime_auth_receipts')->whereIn('session_id',$cleanup)->update(['available_at'=>now()]);
+        }
+        return $count;
     }
 
     public function process():int
