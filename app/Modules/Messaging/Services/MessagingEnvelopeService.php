@@ -221,7 +221,7 @@ final class MessagingEnvelopeService
     {
         $this->access->assertConversation($conversation,$user);
         $ids=$input['delivered_envelope_ids'] ?? [];
-        if($ids){
+        if($ids)DB::transaction(function()use($conversation,$user,$device,$ids){
             $senders=app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging')?DB::table('messaging_envelopes as e')->join('messaging_messages as m','m.id','=','e.message_id')->where('m.conversation_id',$conversation->id)->where('e.recipient_device_id',$device)->whereIn('e.id',$ids)->whereNull('e.delivered_at')->distinct()->pluck('m.sender_id')->all():[];
             DB::table('messaging_envelopes as e')
                 ->join('messaging_messages as m','m.id','=','e.message_id')
@@ -230,7 +230,7 @@ final class MessagingEnvelopeService
                 ->whereIn('e.id',$ids)->whereNull('e.delivered_at')
                 ->update(['e.delivered_at'=>now()]);
             if($senders)app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',array_values(array_intersect($senders,$this->access->recipients($conversation,$user))),['kind'=>'conversation','id'=>$conversation->id,'subject'=>$user]);
-        }
+        },3);
         return $this->page($conversation,$user,$device,
             (int)($input['limit']??(int)config('orbit_messaging.sync_max',200)),
             $input['cursor']??null);
@@ -255,9 +255,11 @@ final class MessagingEnvelopeService
         }
         $updates=['delivered_at'=>$env->delivered_at??now()];
         if($read)$updates['read_at']=$env->read_at??now();
+        DB::transaction(function()use($envelopeId,$updates,$env,$read,$conversation,$user){
         DB::table('messaging_envelopes')->where('id',$envelopeId)->update($updates);
         if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging')&&($env->delivered_at===null||($read&&$env->read_at===null))&&in_array($env->sender_id,$this->access->recipients($conversation,$user),true))
             app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',[$env->sender_id,$user],['kind'=>'conversation','id'=>$conversation->id,'subject'=>$user]);
+        },3);
         return ['envelope_id'=>$envelopeId,'delivered'=>true,
             'read'=>$read||$env->read_at!==null];
     }

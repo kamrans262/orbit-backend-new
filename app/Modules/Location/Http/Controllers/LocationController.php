@@ -55,8 +55,11 @@ final class LocationController extends Controller
             'exit_radius_m'=>['required_if:duration,until_leaving','nullable','integer','between:150,1000'],
             'reviewed'=>['required','accepted'],
         ]);
-        $value=$location->create($user,$d);
-        $realtime->invalidate($user,false);
+        $value=\Illuminate\Support\Facades\DB::transaction(function()use($location,$realtime,$user, $d){
+            $value=$location->create($user,$d);
+            $realtime->invalidate($user,false);
+            return $value;
+        },3);
         return $this->result($value,201);
     }
 
@@ -75,16 +78,22 @@ final class LocationController extends Controller
     public function revokeShare(Request $r,LocationService $location,LocationRealtimePublisher $realtime,string $share): JsonResponse
     {
         [$user]=$this->who($r);
-        $value=$location->revoke($user,$share);
-        $realtime->invalidate($user);
+        $value=\Illuminate\Support\Facades\DB::transaction(function()use($location,$realtime,$user, $share){
+            $value=$location->revoke($user,$share);
+            $realtime->invalidate($user);
+            return $value;
+        },3);
         return $this->result($value);
     }
 
     public function stopAll(Request $r,LocationService $location,LocationRealtimePublisher $realtime): JsonResponse
     {
         [$user]=$this->who($r);
-        $value=$location->revoke($user);
-        $realtime->invalidate($user);
+        $value=\Illuminate\Support\Facades\DB::transaction(function()use($location,$realtime,$user){
+            $value=$location->revoke($user);
+            $realtime->invalidate($user);
+            return $value;
+        },3);
         return $this->result($value);
     }
 
@@ -99,8 +108,11 @@ final class LocationController extends Controller
             'heading'=>['sometimes','nullable','numeric','between:0,360'],
             'speed_mps'=>['sometimes','nullable','numeric','between:0,100'],
         ]);
-        $value=$location->ingest($user,$device,$d);
-        $realtime->invalidate($user,false);
+        $value=\Illuminate\Support\Facades\DB::transaction(function()use($location,$realtime,$user, $d, $device){
+            $value=$location->ingest($user,$device,$d);
+            $realtime->invalidate($user,false);
+            return $value;
+        },3);
         return $this->result($value,202);
     }
 

@@ -48,6 +48,7 @@ final class ActivityProjector
                 ->limit($batch)->get(['s.id','s.'.$spec['actor'],
                     's.'.$spec['revision'],'s.'.$spec['occurred']]);
             foreach ($rows as $row) {
+                $added=DB::transaction(function()use($type,$spec,$row){
                 $added=DB::table('activity_events')->insertOrIgnore([
                     'id' => (string) Str::uuid7(),
                     'source_type' => $type, 'source_id' => $row->id,
@@ -57,8 +58,10 @@ final class ActivityProjector
                     'occurred_at' => $row->{$spec['occurred']},
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
-                $stats[$spec['count']]+=$added;
                 if($added)app(\App\Modules\Realtime\Services\RealtimeAudience::class)->activity($type,$row->id);
+                return $added;
+                },3);
+                $stats[$spec['count']]+=$added;
             }
         }
         // Reconcile only a bounded older slice per run. ACL revocation is
@@ -75,10 +78,12 @@ final class ActivityProjector
                     ->orWhere('expires_at', '>', now()));
             }
             if (!$q->exists()) {
-                app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('activity',[$row->actor_user_id],['kind'=>'self','id'=>$row->actor_user_id]);
-                $stats['invalidated'] += DB::table('activity_events')
-                    ->where('id', $row->id)->whereNull('invalidated_at')
-                    ->update(['invalidated_at' => now(), 'updated_at' => now()]);
+                $stats['invalidated'] += DB::transaction(function()use($row){
+                    $changed=DB::table('activity_events')->where('id',$row->id)->whereNull('invalidated_at')
+                        ->update(['invalidated_at'=>now(),'updated_at'=>now()]);
+                    if($changed)app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('activity',[$row->actor_user_id],['kind'=>'self','id'=>$row->actor_user_id]);
+                    return $changed;
+                },3);
             } else {
                 // Rotate verified rows so later rows cannot starve behind the
                 // same first batch during repeated scheduled reconciliations.

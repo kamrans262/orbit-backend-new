@@ -16,7 +16,12 @@ final class RealtimeRecovery
         abort_unless(app(RealtimeSessions::class)->cleanupEnabled(),409,'Provider deployment is disabled or unverified.');
         Cache::store('orbit_ephemeral')->lock('orbit:m25:recovery',15)->block(2,function()use($actor,$id,$operation,$reason){
             DB::transaction(function()use($actor,$id,$operation,$reason){
-                if(DB::table('orbit_realtime_recovery')->where('id',$id)->exists())return;
+                $existing=DB::table('orbit_realtime_recovery')->where('id',$id)->first();
+                if($existing){
+                    $audit=DB::table('admin_audit_log')->where('action','realtime.recovery')->where('request_id',$id)->first();
+                    abort_unless($existing->operation===$operation&&$audit&&$audit->actor_id===$actor->id&&$audit->reason===$reason,409,'Recovery request identity conflict.');
+                    return;
+                }
                 abort_if(DB::table('orbit_realtime_recovery')->where('created_at','>',now()->subMinute())->exists(),429,'Recovery is rate limited.');
                 $affected=$operation==='retry'?app(RealtimeSessions::class)->requestRetry():0;
                 DB::table('orbit_realtime_recovery')->insert(['id'=>$id,'operation'=>$operation,'affected'=>$affected,
