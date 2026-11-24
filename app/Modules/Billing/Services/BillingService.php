@@ -94,12 +94,13 @@ final class BillingService{
     }
     private function recordEvent(string $p,string $event,string $body,?string $ref,?string $owner):object{
         $digest=$this->policy->digest('event:'.$p,$event);
-        return DB::transaction(function()use($p,$digest,$body,$ref,$owner){
+        $client=str_starts_with($event,'client:');
+        return DB::transaction(function()use($p,$digest,$body,$ref,$owner,$client){
             DB::table('billing_events')->insertOrIgnore(['id'=>$this->uuid(),'provider'=>$p,'environment'=>BillingPolicy::ENV,'event_hash'=>$digest,
-                'body_hash'=>$body,'reference_cipher'=>$ref===null?null:Crypt::encryptString($ref),'user_id'=>$owner,'state'=>$owner!==null?'client_pending':($ref===null?'processed':'queued'),
+                'body_hash'=>$body,'reference_hash'=>$ref===null?null:$this->policy->digest('lineage:'.$p,$ref),'reference_cipher'=>$ref===null?null:Crypt::encryptString($ref),'user_id'=>$owner,'state'=>$client?'client_pending':($ref===null?'processed':'queued'),
                 'next_attempt_at'=>now(),'created_at'=>now(),'updated_at'=>now()]);
             $row=$this->query('billing_events')->where('provider',$p)->where('event_hash',$digest)->lockForUpdate()->first();
-            abort_unless($row&&hash_equals($row->body_hash,$body)&&$row->user_id===$owner,409,'Billing event conflict.');
+            abort_unless($row&&hash_equals($row->body_hash,$body)&&(!$client||$row->user_id===$owner),409,'Billing event conflict.');
             return $row;
         },3);
     }
@@ -127,7 +128,8 @@ final class BillingService{
         abort_unless($this->policy->enabled()&&$this->provider()->ready($p),503,'Billing unavailable.');
         $notice=$this->provider()->notice($p,$body,$bearer);
         // Only canonical reference + authenticated event ID retained, not full notification.
-        $this->recordEvent($p,'provider:'.$notice['event'],$this->policy->digest('notice-body',(string)($notice['reference']??'')),$notice['reference'],null);
+        $owner=$notice['reference']===null?null:$this->query('billing_subscriptions')->where('provider',$p)->where('lineage_hash',$this->policy->digest('lineage:'.$p,$notice['reference']))->value('user_id');
+        $this->recordEvent($p,'provider:'.$notice['event'],$this->policy->digest('notice-body',(string)($notice['reference']??'')),$notice['reference'],$owner);
     }
     private function apply(string $p,string $ref,array $e,?string $owner):array{
         $lineage=$this->policy->digest('lineage:'.$p,$ref);
@@ -184,6 +186,10 @@ final class BillingService{
     }
     public function work(int $limit=20):array{
         $stats=['processed'=>0,'retry'=>0,'review'=>0,'reconciled'=>0];
+        if(!$this->policy->installed())return $stats;
+        // Sandbox proof retention only; no financial record preservation promise.
+        $old=$this->query('billing_events')->where('created_at','<',now()->subDays(7))->orderBy('created_at')->limit(100)->pluck('id');
+        if($old->isNotEmpty())$this->query('billing_events')->whereIn('id',$old)->delete();
         if(!$this->policy->enabled())return $stats;
         $limit=max(1,min(20,$limit));
         // Claim using CAS with a bounded lease; crashed processing is retried.
@@ -195,7 +201,8 @@ final class BillingService{
             try{
                 $ref=Crypt::decryptString($event->reference_cipher);
                 $this->apply($event->provider,$ref,$this->provider()->lookup($event->provider,$ref),$event->user_id);
-                $this->query('billing_events')->where('id',$event->id)->where('attempts',$event->attempts+1)->update(['state'=>'processed','reference_cipher'=>null,'error_code'=>null,'updated_at'=>now()]);
+                $owner=$this->query('billing_subscriptions')->where('provider',$event->provider)->where('lineage_hash',$this->policy->digest('lineage:'.$event->provider,$ref))->value('user_id');
+                $this->query('billing_events')->where('id',$event->id)->where('attempts',$event->attempts+1)->update(['state'=>'processed','user_id'=>$owner,'reference_cipher'=>null,'error_code'=>null,'updated_at'=>now()]);
                 $stats['processed']++;
             }catch(\Throwable $error){
                 $code=$error instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface?$error->getStatusCode():503;

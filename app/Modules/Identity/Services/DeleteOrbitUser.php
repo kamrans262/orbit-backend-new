@@ -98,6 +98,17 @@ final class DeleteOrbitUser
             // Erase their bound receipts/frequency before the user row leaves.
             $advertisingSummary=app(\App\Modules\Advertising\Services\AdvertisingErasureService::class)
                 ->eraseViewer($userId);
+            // Sandbox records only. Production financial retention must receive
+            // its own approved legal contract before any live billing release.
+            $billingRemoved=0;
+            if(Schema::hasTable('billing_subscriptions')){
+                $lineages=DB::table('billing_subscriptions')->where('user_id',$userId)->where('environment','sandbox')->pluck('lineage_hash');
+                $billingRemoved+=DB::table('billing_events')->where('environment','sandbox')->where(function($q)use($userId,$lineages){
+                    $q->where('user_id',$userId);if($lineages->isNotEmpty())$q->orWhereIn('reference_hash',$lineages);
+                })->delete();
+                foreach(['billing_entitlements','billing_subscriptions'] as $table)$billingRemoved+=DB::table($table)->where('user_id',$userId)->where('environment','sandbox')->delete();
+                $billingRemoved+=DB::table('billing_purchase_contexts')->where('user_id',$userId)->delete();
+            }
             $user->delete();
 
             // Preserve the immutable audit chain without retaining the deleted
@@ -114,6 +125,7 @@ final class DeleteOrbitUser
                 'social_event_outbox' => $socialEvents,
                 'location_recipient_shares' => $locationRecipientShares,
                 'advertising_m20' => $advertisingSummary,
+                'billing_sandbox_records'=>$billingRemoved,
             ];
             $last = DB::table('admin_audit_log')->orderByDesc('created_at')->lockForUpdate()->first();
             $prev = $last?->event_hash;

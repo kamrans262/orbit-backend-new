@@ -54,7 +54,7 @@ final class StoreBillingProvider implements BillingProvider{
         $certs=[];foreach($chain as $entry){
             if(!is_string($entry)||strlen($entry)>12000||base64_decode($entry,true)===false)$this->invalid();
             $pem="-----BEGIN CERTIFICATE-----\n".chunk_split($entry,64,"\n")."-----END CERTIFICATE-----\n";
-            if(!openssl_x509_read($pem))$this->invalid();$certs[]=$pem;
+            if(!@openssl_x509_read($pem))$this->invalid();$certs[]=$pem;
         }
         $leaf=openssl_x509_parse($certs[0]);$inter=openssl_x509_parse($certs[1]);
         // Apple's signing and intermediate certificate extension OIDs.
@@ -67,13 +67,13 @@ final class StoreBillingProvider implements BillingProvider{
         if($tmp===false)abort(503,'Provider unavailable.');
         try{
             file_put_contents($tmp,$certs[1]);
-            if(openssl_x509_checkpurpose($certs[0],X509_PURPOSE_ANY,[$rootPath],$tmp)!==true &&
-                openssl_x509_checkpurpose($certs[0],X509_PURPOSE_ANY,[$rootPath],$tmp)!==1)$this->invalid();
+            $purpose=openssl_x509_checkpurpose($certs[0],X509_PURPOSE_ANY,[$rootPath],$tmp);
+            if($purpose!==true&&$purpose!==1)$this->invalid();
             $key=openssl_pkey_get_public($certs[0]);$details=$key?openssl_pkey_get_details($key):false;
             if(!$details||$details['type']!==OPENSSL_KEYTYPE_EC||($details['ec']['curve_name']??'')!=='prime256v1'||
                 openssl_verify($input,$this->der($sig),$key,OPENSSL_ALGO_SHA256)!==1)$this->invalid();
         }finally{@unlink($tmp);}
-        if(!is_int($p['signedDate']??null)||$p['signedDate']>now()->timestamp*1000+300000)$this->invalid();
+        if(!is_int($p['signedDate']??null)||$p['signedDate']<1||$p['signedDate']>now()->timestamp*1000+300000)$this->invalid();
         return $p;
     }
     private function appleIdentity(array $p):void{

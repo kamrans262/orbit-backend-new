@@ -38,6 +38,8 @@ final class M3ErasureProcessor
         // M16 user FKs are registered, but incident-bearing accounts are
         // independently blocked by SosErasurePolicy until retention is reviewed.
         'sos_trusted_contacts','sos_incidents','sos_recipients',
+        // M19 is sandbox-only; verified billing erasure is wired into DeleteOrbitUser.
+        'billing_purchase_contexts','billing_subscriptions','billing_events','billing_entitlements',
     ];
 
     public function preview(string $requestId): array

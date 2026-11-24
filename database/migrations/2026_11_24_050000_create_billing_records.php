@@ -31,7 +31,7 @@ return new class extends Migration{
         Schema::create('billing_events',function(Blueprint $t){
             $t->uuid('id')->primary();$t->foreignUuid('user_id')->nullable()->constrained('orbit_users')->cascadeOnDelete();
             $t->string('provider',8);$t->string('environment',12);$t->string('event_hash',64);
-            $t->string('body_hash',64);$t->text('reference_cipher')->nullable();$t->string('state',16)->default('queued');
+            $t->string('body_hash',64);$t->string('reference_hash',64)->nullable()->index();$t->text('reference_cipher')->nullable();$t->string('state',16)->default('queued');
             $t->unsignedInteger('attempts')->default(0);$t->timestamp('next_attempt_at')->index();
             $t->string('error_code',40)->nullable();$t->timestamps();
             $t->unique(['provider','environment','event_hash'],'bill_event_unique');

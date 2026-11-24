@@ -32,7 +32,7 @@ final class OrbitM21AdminNavigationTest extends TestCase
         $groups=AdminNavigation::groups($admin);
         $this->assertCount(21,$groups);
         $this->assertSame(62,array_sum(array_map(fn($g)=>count($g['children']),$groups)));
-        $this->assertNotContains('Subscriptions & Billing',array_column($groups,'title'));
+        $this->assertContains('Subscriptions & Billing',array_column($groups,'title'));
         $this->assertNotContains('Admin Finalization',array_column($groups,'title'));
         $this->get('/admin/start')->assertRedirect(route('orbit.admin.dashboard'));
         foreach($groups as $group)foreach($group['children'] as $link){

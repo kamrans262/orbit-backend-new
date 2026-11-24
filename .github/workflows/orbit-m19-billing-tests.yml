@@ -59,7 +59,7 @@ jobs:
           php artisan migrate:rollback --step=1 --force
           php artisan migrate --force
       - name: Billing verification and regression
-        run: php artisan test --compact --display-warnings tests/Feature/OrbitM19BillingTest.php
+        run: php artisan test --compact --display-warnings tests/Feature/OrbitM19BillingTest.php tests/Feature/OrbitM19ProviderAdapterTest.php
       - name: Camera settings, declarations and encrypted publication regression
         run: php artisan test --compact --display-warnings tests/Feature/OrbitM23CameraTest.php tests/Feature/OrbitM6HostingerMediaTest.php
       - name: Relay lease and receipt tests
