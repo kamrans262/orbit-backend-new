@@ -87,6 +87,8 @@ final class OrbitM21AdminNavigationTest extends TestCase
 
     public function test_read_roles_cannot_execute_existing_mutation_endpoints(): void
     {
+        // Isolate RBAC from the independent production rate limits.
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
         $this->be($this->admin(['users.read','circles.read','media.read','moments.read',
             'notifications.read','plans.read','safety.read','moderation.read','activity.read','advertising.read']),'admin');
         $id=(string)Str::uuid();
