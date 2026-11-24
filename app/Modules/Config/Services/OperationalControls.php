@@ -9,7 +9,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Validation\ValidationException;
 
 /**
- * M24 allowlist of existing HTTP policy consumers. No infrastructure,
+ * M24 allowlist of existing HTTP and bounded worker policy consumers. No infrastructure,
  * provider credentials, release switches, user preferences or retention
  * deletion settings are writable here. Numeric caps cannot exceed the
  * deployment's original configured bounds or the reviewed absolute bounds.
@@ -74,13 +74,17 @@ final class OperationalControls
         ]],
         'notifications'=>['Notifications','notifications.read','notifications.manage',[
             'page_size'=>['orbit_notifications.max_page','Maximum inbox page size',1,30],
+            'project_batch'=>['orbit_notifications.project_batch','Maximum notification projection batch',1,75],
+            'dispatch_batch'=>['orbit_notifications.dispatch_batch','Maximum notification dispatch batch',1,40],
         ]],
         'plans'=>['Plans & Reminders','plans.read','plans.manage',[
             'invitees'=>['orbit_plans.max_invitees','Maximum invitees for new or updated plans',1,100],
             'page_size'=>['orbit_plans.page_limit','Maximum plan page size',1,30],
+            'worker_batch'=>['orbit_plans.worker_batch','Maximum reminder worker batch',1,40],
         ]],
         'activity'=>['Activity Feed','activity.read','activity.manage',[
             'page_size'=>['orbit_activity.feed_page_max','Maximum feed page size',1,30],
+            'project_batch'=>['orbit_activity.project_batch','Maximum activity projection batch',1,60],
         ]],
         'advertising'=>['Advertisements & Sponsorships','advertising.read','advertising.manage',[
             'asset_bytes'=>['orbit_advertising.asset_max_bytes','Maximum newly uploaded creative size (bytes)',65536,4194304],
@@ -95,7 +99,13 @@ final class OperationalControls
     ];
     // Stage 2 rows did not have these fields. Missing newly introduced fields
     // preserve deployment defaults, not arbitrary or elevated values.
-    private const LEGACY_OPTIONAL=['location'=>['latest_ttl','fresh_seconds']];
+    private const LEGACY_OPTIONAL=[
+        'location'=>['latest_ttl','fresh_seconds'],
+        'notifications'=>['project_batch','dispatch_batch'],
+        'plans'=>['worker_batch'],
+        'activity'=>['project_batch'],
+    ];
+    private const WORKER_FIELDS=['notifications'=>['project_batch','dispatch_batch'],'plans'=>['worker_batch'],'activity'=>['project_batch']];
     public static function reserved(?string $key):bool
     {
         return $key!==null&&(str_starts_with(strtolower($key),self::PREFIX)||in_array(strtolower($key),['m24.operational_limits','m24.camera_tools'],true));
@@ -139,7 +149,18 @@ final class OperationalControls
         }
         return $out===[]?null:['schema_version'=>1,'modules'=>$out];
     }
-    /** Applied only for HTTP; no worker-only policy is included in this registry. */
+    /** Resolve a named worker cap directly at execution, including Artisan and queue processes.
+     * No global config mutation, no worker activation, no increase over caller or deployment limits.
+     */
+    public function workerLimit(string $module,string $key,int $requested):int{
+        if(!in_array($key,self::WORKER_FIELDS[$module]??[],true))throw new \InvalidArgumentException('Unsupported operational worker control.');
+        $field=$this->definition($module)[3][$key];
+        $ceiling=min($field[3],max(1,(int)config($field[0],$field[3])));
+        $row=$this->installed()?RemoteConfig::where('key',self::PREFIX.$module)->first():null;
+        $values=$row?$this->decode($module,$row):[];
+        return max(1,min($requested,$ceiling,$values[$key]??$ceiling));
+    }
+    /** Request-scoped overlay for existing HTTP consumers. */
     public function overrides():array{
         if(!$this->installed())return [];
         $out=[];

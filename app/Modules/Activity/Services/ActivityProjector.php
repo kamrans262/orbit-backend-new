@@ -19,7 +19,7 @@ final class ActivityProjector
         if (!$this->policy->installed() || config('orbit_activity.enabled') !== true) {
             return $stats;
         }
-        $batch = max(1, min(100, $batch));
+        $batch=app(\App\Modules\Config\Services\OperationalControls::class)->workerLimit('activity','project_batch',$batch);
         $sources = [
             'moment' => ['table' => 'moments', 'actor' => 'creator_id',
                 'occurred' => 'published_at', 'revision' => 'audience_revision',

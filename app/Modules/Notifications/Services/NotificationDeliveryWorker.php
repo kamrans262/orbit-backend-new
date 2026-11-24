@@ -16,7 +16,7 @@ final class NotificationDeliveryWorker
         $stats=['created'=>0,'accepted'=>0,'retry'=>0,'terminal'=>0,'suppressed'=>0];
         if(!$this->policy->installed() || !$this->transport->enabled()
             || !$this->policy->enabled('channel.push'))return $stats;
-        $limit=max(1,min(100,$limit));
+        $limit=app(\App\Modules\Config\Services\OperationalControls::class)->workerLimit('notifications','dispatch_batch',$limit);
         // Bridge previously authorized legacy Moment tokens only while the
         // shared provider is independently enabled. Existing M7 records stay.
         app(NotificationDeviceBridge::class)->bridge(min(50,$limit));

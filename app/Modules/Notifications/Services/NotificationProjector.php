@@ -14,7 +14,7 @@ final class NotificationProjector
     {
         $stats=['moments'=>0,'pings'=>0,'check_ins'=>0,'messages'=>0,'friends'=>0,'circles'=>0,'security'=>0,'errors'=>0];
         if(config('orbit_notifications.enabled')!==true || !$this->policy->installed())return $stats;
-        $limit=max(1,min(100,$limit));$since=now()->subDays(7);
+        $limit=app(\App\Modules\Config\Services\OperationalControls::class)->workerLimit('notifications','project_batch',$limit);$since=now()->subDays(7);
         // Stage 2 bridges existing durable source records; no fake events and
         // no changes to M7's independently maintained Moment inbox.
         if(Schema::hasTable('moment_notification_inbox')){

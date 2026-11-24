@@ -24,7 +24,7 @@ final class PlanReminderWorker
     {
         $stats=['events'=>0,'reminders'=>0,'suppressed'=>0,'retry'=>0];
         if(!$this->ready())return $stats;
-        $limit=max(1,min(100,$limit));
+        $limit=app(\App\Modules\Config\Services\OperationalControls::class)->workerLimit('plans','worker_batch',$limit);
         // Claim outbox records with short leases; recover after worker crash.
         $events=DB::table('plan_change_events')->whereNull('projected_at')
             ->where(fn($q)=>$q->whereNull('lease_until')->orWhere('lease_until','<=',now()))

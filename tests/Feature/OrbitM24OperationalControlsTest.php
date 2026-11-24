@@ -94,6 +94,51 @@ final class OrbitM24OperationalControlsTest extends TestCase{
         $this->get($url)->assertOk();
     }
 
+    public function test_worker_caps_reach_real_projector_without_http_overlay_and_preserve_privacy():void{
+        config(['orbit_activity.enabled'=>true,'orbit_activity.project_batch'=>60,
+            'orbit_moments.enabled'=>true,'orbit_media.enabled'=>true,'orbit_check_in.enabled'=>true]);
+        [$owner]=$this->person();[$outsider,,$otherToken]=$this->person();
+        foreach(range(1,3) as $i){
+            $id=(string)Str::uuid();
+            DB::table('checkins')->insert(['id'=>$id,'creator_id'=>$owner->id,
+                'client_id'=>(string)Str::uuid(),'payload_hash'=>str_repeat('c',64),
+                'type'=>'custom','text'=>'Private test only','audience_revision'=>1,
+                'created_at'=>now(),'updated_at'=>now()]);
+            DB::table('checkin_audience')->insert(['checkin_id'=>$id,'audience_revision'=>1,
+                'audience_type'=>'only_me','audience_id'=>'']);
+        }
+        $this->be($this->admin(['activity.read','activity.manage']),'admin');
+        $url=route('orbit.admin.operations.activity');
+        $this->post($url,$this->controls('activity',['project_batch'=>1]))->assertRedirect();
+        $worker=app(\App\Modules\Activity\Services\ActivityProjector::class);
+        $this->assertSame(1,$worker->run(60)['check_ins_added']);
+        $this->assertDatabaseCount('activity_events',1);
+        $this->assertSame(1,$worker->run(60)['check_ins_added']);
+        $this->assertSame(1,$worker->run(60)['check_ins_added']);
+        $this->assertSame(0,$worker->run(60)['check_ins_added']);
+        $this->assertDatabaseCount('activity_events',3);
+        $this->withToken($otherToken)->getJson('/api/v1/activity/feed')->assertOk()->assertJsonCount(0,'data.items');
+        $this->assertSame(60,config('orbit_activity.project_batch'));
+        $row=\App\Models\RemoteConfig::where('key','m24.operations.activity')->firstOrFail();
+        $row->update(['value'=>['page_size'=>30]]);
+        $this->assertSame(40,app(OperationalControls::class)->workerLimit('activity','project_batch',40));
+    }
+    public function test_worker_caps_are_private_revisioned_and_never_raise_requested_limits():void{
+        $this->be($this->admin(['*']),'admin');
+        $this->post(route('orbit.admin.operations.notifications'),$this->controls('notifications',['project_batch'=>4,'dispatch_batch'=>3]))->assertRedirect();
+        $this->post(route('orbit.admin.operations.plans'),$this->controls('plans',['worker_batch'=>2]))->assertRedirect();
+        $service=app(OperationalControls::class);
+        $this->assertSame(4,$service->workerLimit('notifications','project_batch',75));
+        $this->assertSame(3,$service->workerLimit('notifications','dispatch_batch',40));
+        $this->assertSame(2,$service->workerLimit('plans','worker_batch',40));
+        $this->assertSame(1,$service->workerLimit('plans','worker_batch',1));
+        config(['orbit_notifications.project_batch'=>2]);
+        $this->assertSame(2,$service->workerLimit('notifications','project_batch',75));
+        $data=$this->getJson('/api/v1/config/bootstrap?platform=android&app_version=1.0.0')->assertOk()->json('data.config');
+        $this->assertArrayNotHasKey('m24.operations.notifications',$data);
+        $this->assertArrayNotHasKey('m24.operations.plans',$data);
+        $this->assertArrayNotHasKey('notifications',$data['m24.operational_limits']['modules']??[]);
+    }
     public function test_owner_scoped_revocation_invalidates_actual_bearer():void{
         [$a,$d,$token]=$this->person();[$b,$other,$otherToken]=$this->person();
         $this->be($this->admin(['users.read','users.manage']),'admin');
