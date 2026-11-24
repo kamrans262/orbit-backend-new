@@ -80,7 +80,7 @@ final class OrbitM22RelayTest extends TestCase
             'signed_prekey_x25519'=>base64_encode($prekey),'signed_prekey_id'=>$id,
             'signed_prekey_signature'=>base64_encode(sodium_crypto_sign_detached(
                 'orbit-m13-signed-prekey-v1|'.$device->id.'|'.$id.'|'.$prekey,$secret)),
-            'one_time_prekeys'=>[],
+            'one_time_prekeys'=>[],'confirm_key_rotation'=>$id!==7,
         ];
         $registered=app(\App\Modules\Messaging\Services\MessagingKeyService::class)
             ->register((string)$device->user_id,(string)$device->id,$payload);
