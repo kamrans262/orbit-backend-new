@@ -30,7 +30,7 @@ final class OrbitM24OperationalControlsTest extends TestCase{
         return ['revision'=>$revision,'reason'=>'Approved operational policy test','confirm'=>1,
             'values'=>array_replace(array_map(fn($f)=>min((int)config($f[0]),$f[3]),$fields),$values)];
     }
-    public function test_all_ten_settings_pages_have_real_revisioned_controls():void{
+    public function test_all_operational_settings_pages_have_real_revisioned_controls():void{
         $this->be($this->admin(['*']),'admin');
         foreach(OperationalControls::MODULES as $module=>$def){
             $url=route('orbit.admin.operations.'.$module);
@@ -38,8 +38,8 @@ final class OrbitM24OperationalControlsTest extends TestCase{
             $this->post($url,$this->controls($module))->assertRedirect($url);
             $this->get($url)->assertOk()->assertSee('Policy revision 1');
         }
-        $this->assertSame(10,DB::table('remote_configs')->where('key','like','m24.operations.%')->count());
-        $this->assertSame(10,DB::table('config_revisions')->where('resource_key','like','m24.operations.%')->count());
+        $this->assertSame(count(OperationalControls::MODULES),DB::table('remote_configs')->where('key','like','m24.operations.%')->count());
+        $this->assertSame(count(OperationalControls::MODULES),DB::table('config_revisions')->where('resource_key','like','m24.operations.%')->count());
     }
     public function test_stale_unknown_range_and_generic_bypass_are_rejected():void{
         $this->be($this->admin(['*']),'admin');
@@ -110,5 +110,21 @@ final class OrbitM24OperationalControlsTest extends TestCase{
         $this->postJson('/admin/administrators/reviews/'.$review,$decision)->assertStatus(409);
         $this->be($target->fresh(),'admin');
         $this->withSession(['orbit_admin_session_revision'=>0])->get('/admin/social-graph')->assertRedirect(route('orbit.admin.login'));
+    }
+
+    public function test_dashboard_visibility_and_rollback_change_real_summary():void{
+        config(['orbit_dashboard.enabled'=>true,'orbit_circle.enabled'=>true,'orbit_moments.enabled'=>true,'orbit_media.enabled'=>true]);
+        [$u,,$token]=$this->person();
+        $this->be($this->admin(['config.manage']),'admin');
+        $url=route('orbit.admin.operations.dashboard');
+        $this->post($url,$this->controls('dashboard',['show_people'=>0]))->assertRedirect();
+        $first=DB::table('config_revisions')->where('resource_key','m24.operations.dashboard')->where('version',1)->value('id');
+        $hidden=$this->withToken($token)->getJson('/api/v1/dashboard/summary')->assertOk()->assertJsonPath('data.sections.people.state','disabled')->assertJsonPath('data.capabilities.people',false)->json('data.viewer_policy_revision');
+        $this->post($url,$this->controls('dashboard',['show_people'=>1],1))->assertRedirect();
+        $visible=$this->getJson('/api/v1/dashboard/summary')->assertOk()->assertJsonPath('data.capabilities.people',true)->json('data.viewer_policy_revision');
+        $this->assertNotSame($hidden,$visible);
+        $this->post(route('orbit.admin.operations.dashboard.rollback'),['snapshot'=>$first,'revision'=>2,'reason'=>'Restore reviewed visibility setting','confirm'=>1])->assertRedirect();
+        $this->getJson('/api/v1/dashboard/summary')->assertOk()->assertJsonPath('data.sections.people.state','disabled');
+        $this->assertEquals(3,DB::table('remote_configs')->where('key','m24.operations.dashboard')->value('version'));
     }
 }

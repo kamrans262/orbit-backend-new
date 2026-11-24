@@ -17,6 +17,13 @@ final class AdminOperationalControlsController{
             'history'=>$controls->installed()?$registry->history('remote',OperationalControls::PREFIX.$module):collect(),
         ])->header('Cache-Control','private, no-store');
     }
+    public function rollback(Request $request,string $module,OperationalControls $controls){
+        $def=$this->guard($module,$controls);
+        abort_unless($request->user('admin')?->canPerform($def[2]),403);
+        $d=$request->validate(['snapshot'=>'required|uuid','revision'=>'required|integer|min:1','reason'=>'required|string|min:10|max:450','confirm'=>'accepted']);
+        $controls->rollback($module,$d['snapshot'],(int)$d['revision'],$d['reason'],$request->user('admin'));
+        return redirect()->route('orbit.admin.operations.'.$module)->with('status','Validated historical settings restored as a new revision.');
+    }
     public function save(Request $request,string $module,OperationalControls $controls){
         $def=$this->guard($module,$controls);
         abort_unless($request->user('admin')?->canPerform($def[2]),403);

@@ -146,11 +146,14 @@ final class DashboardSummaryService
     public function summary(string $viewer): array
     {
         $user=OrbitUser::query()->whereKey($viewer)->firstOrFail(['id','display_name']);
+        $showCircles=(int)config('orbit_dashboard.sections.circles',1)===1&&config('orbit_circle.enabled')===true;
+        $showPeople=(int)config('orbit_dashboard.sections.people',1)===1;
+        $showMoments=(int)config('orbit_dashboard.sections.moments',1)===1&&config('orbit_moments.enabled')===true&&config('orbit_media.enabled')===true;
         $sections=[
-            'circles' => config('orbit_circle.enabled') === true
+            'circles' => $showCircles
                 ? $this->safely(fn()=> $this->circleItems($viewer)) : $this->section('disabled'),
-            'people' => $this->safely(fn()=> $this->peopleItems($viewer)),
-            'moments' => config('orbit_moments.enabled') === true && config('orbit_media.enabled') === true
+            'people' => $showPeople?$this->safely(fn()=> $this->peopleItems($viewer)):$this->section('disabled'),
+            'moments' => $showMoments
                 ? $this->safely(fn()=> $this->momentsItems($viewer)) : $this->section('disabled'),
             'plans' => $this->section('disabled'),
             'activity' => $this->section('disabled'),
@@ -167,15 +170,15 @@ final class DashboardSummaryService
             $graphRevision,$circleRevisions,$momentRevisions,
             $preferenceRevision,$dismissVersion,
             (bool)config('orbit_circle.enabled'),(bool)config('orbit_moments.enabled'),
-            (bool)config('orbit_media.enabled'),
+            (bool)config('orbit_media.enabled'),$showCircles,$showPeople,$showMoments,
         ],JSON_THROW_ON_ERROR),(string)config('app.key'));
         return [
             'schema_version'=>1, 'generated_at'=>now()->toIso8601String(),
             'viewer_policy_revision'=>$revision,
             'capabilities'=>[
-                'circles'=>config('orbit_circle.enabled')===true,
-                'people'=>true,
-                'moments'=>config('orbit_moments.enabled')===true && config('orbit_media.enabled')===true,
+                'circles'=>$showCircles,
+                'people'=>$showPeople,
+                'moments'=>$showMoments,
                 'plans'=>false, 'presence'=>false, 'ping'=>false, 'sos'=>false,
                 'location'=>false, 'activity'=>false,
                 'smart_cards'=>false,

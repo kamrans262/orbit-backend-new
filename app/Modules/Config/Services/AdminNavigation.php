@@ -107,6 +107,7 @@ final class AdminNavigation
             ['Messaging', 'messages', [
                 ['Messaging Overview', 'messaging.index', 'config.manage', ['messaging.index']],
                 ['Operations & Settings', 'messaging.settings', 'config.manage', ['messaging.settings', 'messaging.settings.save', 'messaging.maintenance.*']],
+                ['Operational Limits', 'operations.messaging', 'config.manage', ['operations.messaging*']],
                 ['User Reports', 'messaging.reports', 'messages.moderate', ['messaging.reports*']],
                 ['Account Messaging Access', 'messaging.restrictions', 'messages.moderate', ['messaging.restrictions*']],
             ]],
@@ -116,6 +117,7 @@ final class AdminNavigation
                 ['Push Devices', 'notifications.devices', 'notifications.read', ['notifications.devices*']],
                 ['Templates', 'notifications.templates', 'notifications.read', ['notifications.templates*']],
                 ['Settings & Controls', 'notifications.settings', 'notifications.read', ['notifications.settings*']],
+                ['Operational Limits', 'operations.notifications', 'notifications.read', ['operations.notifications*']],
                 ['Audit Trail', 'notifications.audits', 'notifications.read', ['notifications.audits']],
             ]],
             ['Plans', 'plans', [
@@ -124,6 +126,7 @@ final class AdminNavigation
                 ['Invitation & Attendance', 'plans.attendance', 'plans.read', ['plans.attendance']],
                 ['Reminder Operations', 'plans.reminders', 'plans.read', ['plans.reminders', 'plans.retry', 'plans.process']],
                 ['Settings', 'plans.settings', 'plans.read', ['plans.settings*']],
+                ['Operational Limits', 'operations.plans', 'plans.read', ['operations.plans*']],
                 ['Audit Trail', 'plans.audits', 'plans.audit', ['plans.audits']],
             ]],
             ['SOS & Safety', 'sos', [
@@ -146,6 +149,7 @@ final class AdminNavigation
             ['Activity Feed', 'notifications', [
                 ['Overview', 'activity.overview', 'activity.read', ['activity.overview']],
                 ['Source Controls', 'activity.sources', 'activity.read', ['activity.sources', 'activity.control']],
+                ['Operational Limits', 'operations.activity', 'activity.read', ['operations.activity*']],
                 ['Projection Operations', 'activity.operations', 'activity.read', ['activity.operations', 'activity.project']],
                 ['Audit Trail', 'activity.audits', 'activity.audit', ['activity.audits']],
             ]],
@@ -165,6 +169,7 @@ final class AdminNavigation
                 ['Creatives & Review', 'advertising.creatives', 'advertising.read', ['advertising.creatives*']],
                 ['Campaigns', 'advertising.campaigns', 'advertising.read', ['advertising.campaigns*']],
                 ['Placements & Frequency', 'advertising.placements', 'advertising.read', ['advertising.placements*']],
+                ['Operational Limits', 'operations.advertising', 'advertising.read', ['operations.advertising*']],
                 ['Analytics', 'advertising.analytics', 'advertising.analytics', ['advertising.analytics']],
                 ['Audit Trail', 'advertising.audits', 'advertising.audit', ['advertising.audits']],
             ]],

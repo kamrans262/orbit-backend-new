@@ -4,6 +4,7 @@
 // Not-yet-implemented providers remain truthful unavailable states.
 return [
     'enabled' => (bool) env('ORBIT_M8_DASHBOARD_ENABLED', true),
+    'sections'=>['circles'=>1,'people'=>1,'moments'=>1],
     'circle_limit' => 8,
     'people_limit' => 12,
     'moment_limit' => 3,

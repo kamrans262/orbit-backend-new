@@ -49,6 +49,9 @@ final class OperationalControls
             'people_limit'=>['orbit_dashboard.people_limit','Maximum people in summary',1,12],
             'moment_limit'=>['orbit_dashboard.moment_limit','Maximum moments in summary',1,3],
             'dismiss_hours'=>['orbit_dashboard.dismiss_hours','Smart-card dismissal (hours)',1,24],
+            'show_circles'=>['orbit_dashboard.sections.circles','Show circle summary',0,1],
+            'show_people'=>['orbit_dashboard.sections.people','Show people summary',0,1],
+            'show_moments'=>['orbit_dashboard.sections.moments','Show Moments summary',0,1],
         ]],
         'presence'=>['Presence','config.manage','config.manage',[
             'circle_members'=>['orbit_presence.max_circle_members','Maximum circle snapshot members',1,50],
@@ -63,6 +66,22 @@ final class OperationalControls
             'sender_minute'=>['orbit_ping.sender_per_minute','Requests per sender per minute',1,12],
             'pair_hour'=>['orbit_ping.pair_per_hour','Requests per sender/recipient per hour',1,6],
             'page_size'=>['orbit_ping.page_size_max','Maximum inbox page size',1,30],
+        ]],
+        'messaging'=>['Messaging','config.manage','config.manage',[
+            'sync_limit'=>['orbit_messaging.sync_max','Maximum ciphertext sync batch',1,200],
+        ]],
+        'notifications'=>['Notifications','notifications.read','notifications.manage',[
+            'page_size'=>['orbit_notifications.max_page','Maximum inbox page size',1,30],
+        ]],
+        'plans'=>['Plans & Reminders','plans.read','plans.manage',[
+            'invitees'=>['orbit_plans.max_invitees','Maximum invitees for new or updated plans',1,100],
+            'page_size'=>['orbit_plans.page_limit','Maximum plan page size',1,30],
+        ]],
+        'activity'=>['Activity Feed','activity.read','activity.manage',[
+            'page_size'=>['orbit_activity.feed_page_max','Maximum feed page size',1,30],
+        ]],
+        'advertising'=>['Advertisements & Sponsorships','advertising.read','advertising.manage',[
+            'asset_bytes'=>['orbit_advertising.asset_max_bytes','Maximum newly uploaded creative size (bytes)',65536,4194304],
         ]],
         'check-in'=>['Check-In','config.manage','config.manage',[
             'sender_minute'=>['orbit_check_in.sender_per_minute','Publications per sender per minute',1,10],
@@ -125,6 +144,15 @@ final class OperationalControls
             }
         }
         return $out;
+    }
+    public function rollback(string $module,string $snapshot,int $expected,string $reason,AdminUser $actor):void{
+        $row=DB::table('config_revisions')->where('id',$snapshot)->where('resource_type','remote')->where('resource_key',self::PREFIX.$module)->first();
+        abort_unless($row,404);
+        $saved=json_decode($row->snapshot,true,32,JSON_THROW_ON_ERROR);
+        $values=$saved['value']??null;
+        abort_unless(is_array($values),422,'Historical settings unavailable.');
+        // Save is the same validation/ownership/revision path as a new edit.
+        $this->save($module,$values,$expected,substr('Restore revision '.$row->version.': '.$reason,0,500),$actor);
     }
     public function save(string $module,array $values,int $revision,string $reason,AdminUser $actor):void{
         $def=$this->definition($module);
