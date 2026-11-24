@@ -62,6 +62,19 @@
 </section>
 @endif
 @if(auth()->guard('admin')->user()->canPerform('users.manage'))
+<section class="panel"><div class="panel-head"><div><h2>Device and session security</h2><p>Revoke compromised devices or all existing sessions. No trust approval or account impersonation.</p></div></div>
+<form method="post" action="{{ route('orbit.admin.users.revoke',$orbitUser) }}">@csrf
+<input type="hidden" name="scope" value="sessions"><label>Reason<input name="reason" minlength="10" maxlength="500" required></label>
+<label><input type="checkbox" name="confirm" value="1" required> Confirm sign-out of all sessions</label><button class="btn primary">Revoke sessions</button></form>
+@foreach($orbitUser->devices as $device)@if(!$device->revoked_at)
+<form method="post" action="{{ route('orbit.admin.users.revoke',$orbitUser) }}">@csrf
+<input type="hidden" name="scope" value="device"><input type="hidden" name="device_id" value="{{ $device->id }}">
+<label>Device: {{ $device->name }} ({{ $device->platform }}) — reason<input name="reason" minlength="10" maxlength="500" required></label>
+<label><input type="checkbox" name="confirm" value="1" required> Confirm device revocation</label><button class="btn secondary">Revoke device</button></form>
+@endif @endforeach
+</section>
+@endif
+@if(auth()->guard('admin')->user()->canPerform('users.manage'))
 <section class="panel" style="margin-top:20px;padding:22px">
   <h2>Account access controls</h2>
   <p class="subtle">Suspension revokes all sessions. This action is permission-restricted and recorded in the audit log.</p>

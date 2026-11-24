@@ -62,6 +62,12 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
         Route::post('/ping/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'save'])->defaults('module','ping')->middleware('throttle:6,1')->name('operations.ping.save');
         Route::get('/check-in/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'show'])->defaults('module','check-in')->name('operations.check-in');
         Route::post('/check-in/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'save'])->defaults('module','check-in')->middleware('throttle:6,1')->name('operations.check-in.save');
+        $access=\App\Modules\Config\Http\Controllers\AdminAccessController::class;
+        Route::get('/administrators',[$access,'index'])->middleware(RequireAdminPermission::class.':*')->name('administrators.index');
+        Route::post('/administrators/roles',[$access,'createRole'])->middleware([RequireAdminPermission::class.':*','throttle:5,1'])->name('administrators.roles.create');
+        Route::post('/administrators/reviews',[$access,'propose'])->middleware([RequireAdminPermission::class.':*','throttle:5,1'])->name('administrators.propose');
+        Route::post('/administrators/reviews/{review}',[$access,'decide'])->whereUuid('review')->middleware([RequireAdminPermission::class.':*','throttle:5,1'])->name('administrators.decide');
+        Route::post('/users/{user}/revoke-access',[\App\Modules\Identity\Http\Controllers\AdminAccountAccessController::class,'revoke'])->middleware([RequireAdminPermission::class.':users.read',RequireAdminPermission::class.':users.manage','throttle:6,1'])->name('users.revoke');
         $billing=\App\Modules\Billing\Http\Controllers\AdminBillingController::class;
         Route::get('/billing/products',[$billing,'products'])->middleware(RequireAdminPermission::class.':billing.read')->name('billing.products');
         Route::get('/billing/subscriptions',[$billing,'subscriptions'])->middleware(RequireAdminPermission::class.':billing.read')->name('billing.subscriptions');

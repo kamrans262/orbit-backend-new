@@ -15,6 +15,10 @@ final class EnsureAdmin
             $guard->logout();
             return redirect()->route('orbit.admin.login');
         }
+        if((int)$request->session()->get('orbit_admin_session_revision',0)!==(int)$guard->user()->session_revision){
+            $guard->logout();$request->session()->invalidate();$request->session()->regenerateToken();
+            return redirect()->route('orbit.admin.login')->withErrors(['email'=>'Administrator access changed. Sign in again.']);
+        }
         // A separate, short-lived admin web session; MFA is required before login().
         $last = (int) $request->session()->get('orbit_admin_activity', 0);
         if ($last && time() - $last > 900) {

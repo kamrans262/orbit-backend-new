@@ -57,6 +57,7 @@ final class AdminAuthController extends Controller
         $request->session()->regenerate();
         $request->session()->forget(['orbit_pending_admin', 'orbit_pending_started']);
         $request->session()->put('orbit_admin_activity', time());
+        $request->session()->put('orbit_admin_session_revision',(int)$admin->session_revision);
         $admin->update(['last_login_at' => now()]);
         $route = \App\Modules\Config\Services\AdminNavigation::firstRoute($admin);
         return redirect()->route($route ?? 'orbit.admin.landing');

@@ -56,6 +56,9 @@ final class AdminNavigation
                 ['Feature Flags', 'flags.index', 'config.manage', ['flags.*']],
                 ['Remote Config', 'config.index', 'config.manage', ['config.*', 'rollback']],
             ]],
+            ['Administrators & Access', 'users', [
+                ['Administrators & Roles', 'administrators.index', '*', ['administrators.*']],
+            ]],
             ['Accounts', 'users', [
                 ['Users & Devices', 'users.index', 'users.read', ['users.*']],
                 ['Settings & Controls', 'operations.identity', 'users.read', ['operations.identity*']],
