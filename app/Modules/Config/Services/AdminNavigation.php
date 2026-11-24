@@ -58,38 +58,48 @@ final class AdminNavigation
             ]],
             ['Accounts', 'users', [
                 ['Users & Devices', 'users.index', 'users.read', ['users.*']],
+                ['Settings & Controls', 'operations.identity', 'users.read', ['operations.identity*']],
                 ['Deletion Requests', 'deletions.index', 'deletions.read', ['deletions.*']],
                 ['Settings Audit', 'settings.activity', 'settings.audit.read', ['settings.*']],
             ]],
             ['Friends & Blocking', 'users', [
                 ['Operations', 'social.index', 'social.read', ['social.*']],
+                ['Settings & Controls', 'operations.social', 'social.read', ['operations.social*']],
             ]],
             ['Circles', 'circles', [
                 ['Circle Management', 'circles.index', 'circles.read', ['circles.*']],
+                ['Settings & Controls', 'operations.circles', 'circles.read', ['operations.circles*']],
             ]],
             ['Encrypted Media', 'health', [
                 ['Media Operations', 'media.index', 'media.read', ['media.*']],
+                ['Settings & Controls', 'operations.media', 'media.read', ['operations.media*']],
             ]],
             ['Moments', 'circles', [
                 ['Moment Management', 'moments.index', 'moments.read', ['moments.*']],
+                ['Settings & Controls', 'operations.moments', 'moments.read', ['operations.moments*']],
             ]],
             ['Camera & Editing', 'settings', [
                 ['Settings & Controls', 'camera.index', 'camera.read', ['camera.*']],
             ]],
             ['Home Dashboard', 'settings', [
                 ['Home Dashboard', 'home-dashboard.index', 'config.manage', ['home-dashboard.*']],
+                ['Settings & Controls', 'operations.dashboard', 'config.manage', ['operations.dashboard*']],
             ]],
             ['Presence', 'health', [
                 ['Presence', 'presence.index', 'config.manage', ['presence.*']],
+                ['Settings & Controls', 'operations.presence', 'config.manage', ['operations.presence*']],
             ]],
             ['Location Sharing', 'circles', [
                 ['Location Sharing', 'location.index', 'config.manage', ['location.*']],
+                ['Settings & Controls', 'operations.location', 'config.manage', ['operations.location*']],
             ]],
             ['Ping', 'notifications', [
                 ['Ping Operations', 'ping.index', 'config.manage', ['ping.*']],
+                ['Settings & Controls', 'operations.ping', 'config.manage', ['operations.ping*']],
             ]],
             ['Check-In', 'plans', [
                 ['Check-In Operations', 'check-in.index', 'config.manage', ['check-in.*']],
+                ['Settings & Controls', 'operations.check-in', 'config.manage', ['operations.check-in*']],
             ]],
             ['Messaging', 'messages', [
                 ['Messaging Overview', 'messaging.index', 'config.manage', ['messaging.index']],

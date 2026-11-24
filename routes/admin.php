@@ -42,6 +42,26 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
     Route::post('/mfa', [AdminAuthController::class, 'verifyMfa'])->middleware('throttle:8,1')->name('mfa.verify');
     Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
     Route::middleware([EnsureAdmin::class])->group(function (): void {
+        Route::get('/users/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'show'])->defaults('module','identity')->name('operations.identity');
+        Route::post('/users/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'save'])->defaults('module','identity')->middleware('throttle:6,1')->name('operations.identity.save');
+        Route::get('/social-graph/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'show'])->defaults('module','social')->name('operations.social');
+        Route::post('/social-graph/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'save'])->defaults('module','social')->middleware('throttle:6,1')->name('operations.social.save');
+        Route::get('/circles/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'show'])->defaults('module','circles')->name('operations.circles');
+        Route::post('/circles/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'save'])->defaults('module','circles')->middleware('throttle:6,1')->name('operations.circles.save');
+        Route::get('/media/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'show'])->defaults('module','media')->name('operations.media');
+        Route::post('/media/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'save'])->defaults('module','media')->middleware('throttle:6,1')->name('operations.media.save');
+        Route::get('/moments/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'show'])->defaults('module','moments')->name('operations.moments');
+        Route::post('/moments/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'save'])->defaults('module','moments')->middleware('throttle:6,1')->name('operations.moments.save');
+        Route::get('/home-dashboard/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'show'])->defaults('module','dashboard')->name('operations.dashboard');
+        Route::post('/home-dashboard/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'save'])->defaults('module','dashboard')->middleware('throttle:6,1')->name('operations.dashboard.save');
+        Route::get('/presence/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'show'])->defaults('module','presence')->name('operations.presence');
+        Route::post('/presence/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'save'])->defaults('module','presence')->middleware('throttle:6,1')->name('operations.presence.save');
+        Route::get('/location/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'show'])->defaults('module','location')->name('operations.location');
+        Route::post('/location/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'save'])->defaults('module','location')->middleware('throttle:6,1')->name('operations.location.save');
+        Route::get('/ping/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'show'])->defaults('module','ping')->name('operations.ping');
+        Route::post('/ping/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'save'])->defaults('module','ping')->middleware('throttle:6,1')->name('operations.ping.save');
+        Route::get('/check-in/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'show'])->defaults('module','check-in')->name('operations.check-in');
+        Route::post('/check-in/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'save'])->defaults('module','check-in')->middleware('throttle:6,1')->name('operations.check-in.save');
         $billing=\App\Modules\Billing\Http\Controllers\AdminBillingController::class;
         Route::get('/billing/products',[$billing,'products'])->middleware(RequireAdminPermission::class.':billing.read')->name('billing.products');
         Route::get('/billing/subscriptions',[$billing,'subscriptions'])->middleware(RequireAdminPermission::class.':billing.read')->name('billing.subscriptions');

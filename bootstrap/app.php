@@ -13,7 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->append(\App\Modules\Config\Http\Middleware\ApplyOperationalControls::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Stable machine-readable error contract for M14 owner APIs only.
