@@ -60,6 +60,8 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:120,1');
 
     Route::middleware([AuthenticateOrbitToken::class, 'throttle:600,1'])->group(function (): void {
+        Route::post('/realtime/bootstrap',\App\Modules\Realtime\Http\Controllers\RealtimeBootstrapController::class)->middleware('throttle:12,1');
+
         $billing=\App\Modules\Billing\Http\Controllers\BillingController::class;
         Route::get('/billing/catalog',[$billing,'catalog'])->middleware('throttle:30,1');
         Route::get('/billing/entitlement',[$billing,'entitlement'])->middleware('throttle:30,1');

@@ -13,6 +13,20 @@
           ".write": false
         }
       }
+    },
+    "orbit_m25": {
+      "sessions": {
+        "$session": {
+          "lease": {
+            ".read": false,
+            ".write": false
+          },
+          "signal": {
+            ".read": "auth !== null && auth.uid === $session && auth.token.orbit_m25 === true && auth.token.orbit_session === auth.uid && auth.token.orbit_device === root.child('orbit_m25').child('sessions').child($session).child('lease').child('device').val() && auth.token.orbit_generation === root.child('orbit_m25').child('sessions').child($session).child('lease').child('generation').val() && now < root.child('orbit_m25').child('sessions').child($session).child('lease').child('until_ms').val()",
+            ".write": false
+          }
+        }
+      }
     }
   }
 }

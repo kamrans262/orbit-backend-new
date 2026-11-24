@@ -233,3 +233,9 @@ Artisan::command('orbit:billing:reconcile',function(){
     $this->info('Billing reconciliation: '.json_encode(app(\App\Modules\Billing\Services\BillingService::class)->work(20)));
 })->purpose('Reconcile verified sandbox subscriptions and durable provider events');
 Schedule::command('orbit:billing:reconcile')->everyFiveMinutes()->withoutOverlapping();
+
+
+Artisan::command('orbit:realtime:publish', function () {
+    $this->info('Realtime jobs attempted: '.app(\App\Modules\Realtime\Services\RealtimeSessions::class)->process());
+});
+Schedule::command('orbit:realtime:publish')->everyMinute()->withoutOverlapping();
