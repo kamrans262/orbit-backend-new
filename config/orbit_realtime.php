@@ -13,6 +13,8 @@ return [
     'ios_bundle_id'=>env('ORBIT_M25_FIREBASE_IOS_BUNDLE_ID',''),
     'lease_seconds'=>60,
     'worker_batch'=>20,
+    'retry_max_delay_seconds'=>300,
+    'foreground_poll_budget'=>3,
     'inline_batch'=>2,
     'admin_allow'=>1,
     'admin_modules'=>['presence'=>1,'location'=>1,'circles'=>1,'social'=>1,'moments'=>1,'ping'=>1,'check_in'=>1,'messaging'=>1,'notifications'=>1,'plans'=>1,'sos'=>1,'activity'=>1] ,

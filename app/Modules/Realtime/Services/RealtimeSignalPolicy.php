@@ -19,7 +19,7 @@ final class RealtimeSignalPolicy
                     return true;
                 case 'self': return $id===$viewer;
                 case 'circle':
-                    return app(\App\Modules\Circle\Services\CircleAccessPolicy::class)->canSubscribe($id,$viewer);
+                    return app(\App\Modules\Circle\Services\CircleAccessPolicy::class)->isMember($id,$viewer); // M25 replaces the legacy M5 transport gate, not membership policy.
                 case 'presence':
                     $policy=app(\App\Modules\Presence\Services\PresenceAccessPolicy::class);
                     if(!$policy->canView($id,$viewer,$scope['subject']))return false;

@@ -272,6 +272,21 @@ final class OrbitM25RealtimeTest extends TestCase
         Http::assertNotSent(fn($r)=>$r->method()==='PUT');
     }
 
+    public function test_circle_membership_revalidation_works_without_legacy_firebase_bridge():void
+    {
+        $this->enableTransport();
+        config(['orbit_realtime.modules.circles'=>true,'orbit_circle.enabled'=>true,'orbit_circle.firebase.enabled'=>false]);
+        [$u,$token]=$this->person();
+        $sid=$this->withToken($token)->postJson('/api/v1/realtime/bootstrap')->assertOk()->json('data.uid');
+        $id=$this->withToken($token)->postJson('/api/v1/circles',['name'=>'Synthetic circle'])->assertCreated()->json('data.id');
+        $svc=app(RealtimeSessions::class);
+        $svc->signalUsers('circles',[$u->id],['kind'=>'circle','id'=>$id]);
+        $svc->publish($sid);
+        $this->assertGreaterThan(1,end($this->writes)['body']['signal']['revision']);
+        $this->assertFalse(app(\App\Modules\Circle\Services\CircleFirebaseBridge::class)->enabled());
+        $this->assertGreaterThan(0,(int)DB::table('orbit_realtime_metrics')->sum('published'));
+    }
+
     public function test_redis_free_presence_and_legacy_gateway_exclusion():void
     {
         config(['orbit_realtime.enabled'=>true,'orbit_realtime.verified'=>false,

@@ -59,6 +59,8 @@ final class OperationalControls
         'realtime'=>['Firebase Real-Time','config.manage','config.manage',[
             'allow'=>['orbit_realtime.admin_allow','Permit reviewed real-time delivery',0,1],
             'worker_batch'=>['orbit_realtime.worker_batch','Maximum retry jobs per run',1,20],
+            'retry_delay'=>['orbit_realtime.retry_max_delay_seconds','Maximum retry delay (seconds)',60,300],
+            'poll_budget'=>['orbit_realtime.foreground_poll_budget','Maximum fallback polls per minute (client hint)',1,3],
             'inline_batch'=>['orbit_realtime.inline_batch','Maximum immediate publishes per request',1,2],
             'connections'=>['orbit_realtime.max_connections','Maximum admitted foreground sessions',1,90],
             'allow_presence'=>['orbit_realtime.admin_modules.presence','Allow presence update signals',0,1],
@@ -122,6 +124,7 @@ final class OperationalControls
     // Stage 2 rows did not have these fields. Missing newly introduced fields
     // preserve deployment defaults, not arbitrary or elevated values.
     private const LEGACY_OPTIONAL=[
+        'realtime'=>['retry_delay','poll_budget'],
         'location'=>['latest_ttl','fresh_seconds'],
         'social'=>['search_minute','contact_batch','contact_daily'],
         'notifications'=>['project_batch','dispatch_batch'],
