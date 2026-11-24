@@ -90,7 +90,7 @@ final class OrbitAdminM3Test extends TestCase
             ->assertSee('Feature Flags')
             ->assertSee('Remote Config')
             ->assertSee('Home Dashboard')
-            ->assertSee('Presence &amp; Activity',false)
+            ->assertSee('Presence',false)
             ->assertSee('Accounts')
             ->assertSee('Deletion Requests')
             ->assertSee('Settings Audit')

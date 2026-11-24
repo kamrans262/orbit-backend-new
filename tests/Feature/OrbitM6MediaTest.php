@@ -317,6 +317,14 @@ final class OrbitM6MediaTest extends TestCase
             ->canonical($owner->id,$friend->id);
         DB::table('friendships')->insert(['user_low_id'=>$low,'user_high_id'=>$high,'created_at'=>now()]);
         $media=$this->ready($ownerToken);
+        // M13 requires mutual messaging consent in addition to friendship.
+        // Use explicitly consenting test members; never relax the policy.
+        foreach ([$owner,$friend] as $member) {
+            DB::table('orbit_user_preferences')->updateOrInsert(['user_id'=>$member->id],[
+                'privacy'=>json_encode(['message_eligibility'=>'Friends','read_receipts_enabled'=>false]),
+                'notifications'=>'{}','created_at'=>now(),'updated_at'=>now(),
+            ]);
+        }
         // M6 grant/block test applies to general encrypted message media.
         // M7 Moments do not become recipient-readable before publication.
         DB::table('media_objects')->where('id',$media['media_id'])

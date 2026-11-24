@@ -58,7 +58,11 @@ final class OrbitM21AdminNavigationTest extends TestCase
             $admin=$this->admin([$permission]);
             $this->be($admin,'admin');
             $this->get('/admin/start')->assertRedirect(route('orbit.admin.'.$route));
-            $this->get(route('orbit.admin.'.$route))->assertOk();
+            $page=$this->get(route('orbit.admin.'.$route))->assertOk();
+            if (str_ends_with($route,'.audits') || $route==='advertising.analytics') {
+                $prefix=explode('.',$route)[0];
+                $page->assertDontSee(route('orbit.admin.'.$prefix.'.overview'),false);
+            }
             $this->get('/admin')->assertForbidden();
         }
     }
