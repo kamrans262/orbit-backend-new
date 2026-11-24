@@ -78,6 +78,20 @@ final class OrbitM25RealtimeTest extends TestCase
             ->assertOk()->assertJsonPath('data.enabled',false)->assertJsonPath('data.transport','https');
         Http::assertNothingSent();
     }
+    public function test_selected_m25_presence_never_falls_back_to_redis_on_gate_change():void
+    {
+        // Simulate a pause after the outer publisher eligibility check, just
+        // before emitting a viewer notification. No legacy transport is allowed.
+        config(['orbit_realtime.enabled'=>true,'orbit_realtime.verified'=>false,
+            'orbit_presence.enabled'=>true,'orbit_presence.realtime_enabled'=>true,
+            'orbit_presence.gateway_secret'=>str_repeat('x',32)]);
+        Http::fake();
+        \Illuminate\Support\Facades\Redis::shouldReceive('connection')->never();
+        $publisher=app(\App\Modules\Presence\Services\PresenceRealtimePublisher::class);
+        $emit=new \ReflectionMethod($publisher,'emit');
+        $emit->invoke($publisher,(string)Str::uuid(),['type'=>'presence.circle_clear']);
+        Http::assertNothingSent();
+    }
     public function test_bootstrap_scopes_lease_and_publishes_only_generic_revision():void
     {
         $this->enableTransport();

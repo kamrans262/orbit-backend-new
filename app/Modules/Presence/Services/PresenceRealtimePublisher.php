@@ -20,7 +20,11 @@ final class PresenceRealtimePublisher
     }
     private function emit(string $viewer, array $event): void
     {
-        if($this->firebase()){
+        // The deployment selects exactly one transport. An Admin pause or
+        // module gate change between enabled() and emit() must not fall back
+        // to the retired Redis gateway.
+        if(config('orbit_realtime.enabled')===true){
+            if(!$this->firebase())return;
             app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('presence',[$viewer],isset($event['subject_id'])?['kind'=>'presence','id'=>$event['circle_id'],'subject'=>$event['subject_id'],'typing'=>$event['type']==='presence.typing']:['kind'=>'clear']);
             return;
         }
@@ -35,7 +39,7 @@ final class PresenceRealtimePublisher
             // Source coalescing target: <=1 ordinary state broadcast / 5s.
             // Database/Redis cache add is atomic across Laravel workers.
             $gate='orbit:m9:fanout:'.hash_hmac('sha256',$subject,(string)config('app.key'));
-            if (!Cache::store($this->firebase()?'orbit_ephemeral':(string)config('orbit_presence.store','orbit_ephemeral'))
+            if (!Cache::store(config('orbit_realtime.enabled')===true?'orbit_ephemeral':(string)config('orbit_presence.store','orbit_ephemeral'))
                 ->add($gate,true,(int)config('orbit_presence.broadcast_throttle_seconds',5))) return;
         }
         $circleIds=DB::table('circle_members')->where('user_id',$subject)->whereNull('removed_at')
