@@ -12,6 +12,21 @@ final class PresenceTypingService
     public function __construct(private readonly PresenceAccessPolicy $policy,
         private readonly PresenceRealtimePublisher $realtime) {}
 
+    /** Only expose currently authorized, expiring typing indicators via HTTPS. */
+    public function visibleTyping(string $viewer,string $circle,array $members):array
+    {
+        if(config('orbit_realtime.enabled')!==true||config('orbit_circle.consumer_enabled.message')!==true)return [];
+        $visible=[];
+        foreach($members as $subject){
+            if(!$this->policy->canView($circle,$viewer,$subject))continue;
+            if(!app(\App\Modules\Circle\Services\CircleAccessPolicy::class)
+                ->canAccessProtected($circle,$viewer,$subject,'message'))continue;
+            $key='orbit:m9:typing:'.hash_hmac('sha256',$circle.'|'.$subject,(string)config('app.key'));
+            if(Cache::store('orbit_ephemeral')->get($key)===true)$visible[]=$subject;
+        }
+        return $visible;
+    }
+
     public function update(string $user,string $circle,bool $active): array
     {
         abort_unless($this->realtime->enabled()

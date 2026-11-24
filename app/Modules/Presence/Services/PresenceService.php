@@ -119,6 +119,7 @@ final class PresenceService
             $visible[]=['user_id'=>$subject,...$state];
         }
         return ['circle_id'=>$circle,'members'=>$visible,'ttl_seconds'=>(int)config('orbit_presence.lease_seconds',90),
+            'typing_user_ids'=>app(PresenceTypingService::class)->visibleTyping($viewer,$circle,$members),
             'realtime_available'=>false,'realtime_transport'=>app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('presence')?'firebase_rtdb':'https'];
     }
 }

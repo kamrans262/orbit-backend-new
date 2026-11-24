@@ -254,7 +254,7 @@ final class MessagingEnvelopeService
         $updates=['delivered_at'=>$env->delivered_at??now()];
         if($read)$updates['read_at']=$env->read_at??now();
         DB::table('messaging_envelopes')->where('id',$envelopeId)->update($updates);
-        if(($env->delivered_at===null||($read&&$env->read_at===null))&&in_array($env->sender_id,$this->access->recipients($conversation,$user),true))
+        if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging')&&($env->delivered_at===null||($read&&$env->read_at===null))&&in_array($env->sender_id,$this->access->recipients($conversation,$user),true))
             app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',[$env->sender_id,$user]);
         return ['envelope_id'=>$envelopeId,'delivered'=>true,
             'read'=>$read||$env->read_at!==null];

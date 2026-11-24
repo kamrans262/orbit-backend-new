@@ -127,6 +127,38 @@ final class OrbitM25RealtimeTest extends TestCase
         $this->assertNull(end($this->writes)['body']);
         $this->assertDatabaseHas('orbit_realtime_sessions',['session_id'=>$sb]);
     }
+    public function test_location_signals_only_consented_viewer_and_never_coordinates():void
+    {
+        $this->enableTransport();
+        config(['orbit_realtime.modules.location'=>true,'orbit_location.enabled'=>true,
+            'orbit_location.realtime_enabled'=>true,'orbit_circle.enabled'=>true,
+            'orbit_circle.consumer_enabled.location'=>true]);
+        [$owner,$token]=$this->person();[$viewer,$vt]=$this->person();[$other,$ot]=$this->person();
+        $vs=$this->withToken($vt)->postJson('/api/v1/realtime/bootstrap')->assertOk()->json('data.uid');
+        $os=$this->withToken($ot)->postJson('/api/v1/realtime/bootstrap')->assertOk()->json('data.uid');
+        $pair=[$owner->id,$viewer->id];sort($pair,SORT_STRING);
+        DB::table('friendships')->insert(['user_low_id'=>$pair[0],'user_high_id'=>$pair[1],'created_at'=>now()]);
+        DB::table('orbit_user_preferences')->insert(['user_id'=>$owner->id,
+            'privacy'=>json_encode(['location_visibility'=>'Friends','location_activity'=>'Active',
+                'location_sharing_enabled'=>true,'ghost_mode_enabled'=>false]),'created_at'=>now(),'updated_at'=>now()]);
+        $share=$this->withToken($token)->postJson('/api/v1/me/location/shares',[
+            'audience_type'=>'person','audience_id'=>$viewer->id,'precision'=>'approximate',
+            'duration'=>'one_hour','reviewed'=>true])->assertCreated()->json('data.id');
+        $this->withToken($token)->postJson('/api/v1/me/location/samples',[
+            'latitude'=>31.582045,'longitude'=>74.329376,'accuracy_m'=>12.5,
+            'observed_at'=>now()->toIso8601String()])->assertAccepted();
+        $this->assertDatabaseHas('orbit_realtime_sessions',['session_id'=>$vs,'revision'=>3]);
+        $this->assertDatabaseHas('orbit_realtime_sessions',['session_id'=>$os,'revision'=>1]);
+        app(RealtimeSessions::class)->publish($vs);
+        $this->assertSame(['schema_version'=>1,'revision'=>3],end($this->writes)['body']['signal']);
+        $this->assertStringNotContainsString('31.582045',json_encode($this->writes));
+        $this->withToken($vt)->getJson('/api/v1/location/map')->assertOk()->assertJsonCount(1,'data.markers');
+        $this->withToken($ot)->getJson('/api/v1/location/map')->assertOk()->assertJsonCount(0,'data.markers');
+        $this->withToken($token)->deleteJson('/api/v1/me/location/shares/'.$share)->assertOk();
+        $this->assertDatabaseHas('orbit_realtime_sessions',['session_id'=>$vs,'revision'=>4]);
+        $this->withToken($vt)->getJson('/api/v1/location/map')->assertOk()->assertJsonCount(0,'data.markers');
+    }
+
     public function test_redis_free_presence_and_legacy_gateway_exclusion():void
     {
         config(['orbit_realtime.enabled'=>true,'orbit_realtime.verified'=>false,
