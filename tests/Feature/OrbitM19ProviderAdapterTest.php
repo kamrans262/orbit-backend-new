@@ -70,4 +70,59 @@ final class OrbitM19ProviderAdapterTest extends TestCase{
         $this->reject(fn()=>$adapter->notice('apple',['signedPayload'=>$forged],null),422);
         Http::assertNothingSent();
     }
+
+    private function openssl(string $dir,array $args):void{
+        (new \Symfony\Component\Process\Process(['openssl',...$args],$dir))->setTimeout(15)->mustRun();
+    }
+    private function signedApple(array $payload,array $chain,string $private):string{
+        $head=$this->b64(json_encode(['alg'=>'ES256','x5c'=>$chain]));
+        $body=$this->b64(json_encode($payload));$input=$head.'.'.$body;
+        openssl_sign($input,$sig,$private,OPENSSL_ALGO_SHA256);
+        $offset=2;$raw='';
+        for($i=0;$i<2;$i++){
+            $this->assertSame(2,ord($sig[$offset++]));$len=ord($sig[$offset++]);
+            $raw.=str_pad(ltrim(substr($sig,$offset,$len),"\0"),32,"\0",STR_PAD_LEFT);$offset+=$len;
+        }
+        return $input.'.'.$this->b64($raw);
+    }
+    public function test_apple_signed_chain_and_authoritative_status_fixture():void{
+        // Generated private fixture trust anchor, never Apple production
+        // credentials. Exercises actual OpenSSL path and signature validation.
+        $dir=sys_get_temp_dir().'/orbit-apple-fixture-'.bin2hex(random_bytes(8));mkdir($dir,0700);
+        try{
+            $this->openssl($dir,['req','-x509','-newkey','ec','-pkeyopt','ec_paramgen_curve:prime256v1','-nodes','-subj','/CN=FixtureRoot',
+                '-days','3','-keyout','root.key','-out','root.pem','-addext','basicConstraints=critical,CA:TRUE','-addext','keyUsage=critical,keyCertSign,cRLSign']);
+            foreach(['intermediate','leaf'] as $part){
+                $this->openssl($dir,['req','-new','-newkey','ec','-pkeyopt','ec_paramgen_curve:prime256v1','-nodes','-subj','/CN=Fixture'.$part,'-keyout',$part.'.key','-out',$part.'.csr']);
+                $parent=$part==='intermediate'?'root':'intermediate';
+                file_put_contents($dir.'/'.$part.'.ext',$part==='intermediate'?
+                    "basicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\n1.2.840.113635.100.6.2.1=ASN1:NULL\n":
+                    "basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\n1.2.840.113635.100.6.11.1=ASN1:NULL\n");
+                $this->openssl($dir,['x509','-req','-in',$part.'.csr','-CA',$parent.'.pem','-CAkey',$parent.'.key','-CAcreateserial','-days','3','-extfile',$part.'.ext','-out',$part.'.pem']);
+            }
+            $chain=array_map(fn($name)=>preg_replace('/-----[^-]+-----|\s+/','',file_get_contents($dir.'/'.$name.'.pem')),['leaf','intermediate','root']);
+            $private=file_get_contents($dir.'/leaf.key');
+            config(['orbit_billing.apple.bundle'=>'com.example.orbit_ui','orbit_billing.apple.issuer'=>'fixture-issuer','orbit_billing.apple.key_id'=>'fixture-key',
+                'orbit_billing.apple.private_key_path'=>$dir.'/leaf.key','orbit_billing.apple.root_ca_path'=>$dir.'/root.pem']);
+            $base=['bundleId'=>'com.example.orbit_ui','environment'=>'Sandbox','originalTransactionId'=>'12345','signedDate'=>now()->timestamp*1000];
+            $transaction=$base+['productId'=>'orbit.lite','type'=>'Auto-Renewable Subscription','inAppOwnershipType'=>'PURCHASED',
+                'appAccountToken'=>'12345678-1234-4234-8234-123456789012','purchaseDate'=>now()->subDay()->timestamp*1000,'expiresDate'=>now()->addDays(20)->timestamp*1000];
+            $tx=$this->signedApple($transaction,$chain,$private);
+            $renew=$this->signedApple($base+['autoRenewStatus'=>1],$chain,$private);
+            Http::fake(['https://api.storekit-sandbox.apple.com/inApps/v1/subscriptions/12345'=>Http::response([
+                'bundleId'=>'com.example.orbit_ui','environment'=>'Sandbox','data'=>[['lastTransactions'=>[['originalTransactionId'=>'12345','status'=>1,'signedTransactionInfo'=>$tx,'signedRenewalInfo'=>$renew]]]]
+            ])]);
+            $adapter=app(StoreBillingProvider::class);
+            $this->assertSame('12345',$adapter->reference('apple',$tx));
+            $verified=$adapter->lookup('apple','12345');
+            $this->assertSame('active',$verified['state']);$this->assertSame('orbit.lite',$verified['product']);$this->assertTrue($verified['renew']);
+            $notice=$this->signedApple(['signedDate'=>now()->timestamp*1000,'notificationUUID'=>'12345678-1234-4234-8234-123456789012',
+                'notificationType'=>'DID_RENEW','data'=>['bundleId'=>'com.example.orbit_ui','environment'=>'Sandbox','signedTransactionInfo'=>$tx]],$chain,$private);
+            $this->assertSame('12345',$adapter->notice('apple',['signedPayload'=>$notice],null)['reference']);
+            $wrong=$this->signedApple(array_replace($transaction,['environment'=>'Production']),$chain,$private);
+            $this->reject(fn()=>$adapter->reference('apple',$wrong),422);
+            $parts=explode('.',$tx);$parts[2]=$this->b64(str_repeat('x',64));
+            $this->reject(fn()=>$adapter->reference('apple',implode('.',$parts)),422);
+        }finally{foreach(glob($dir.'/*')?:[] as $file)@unlink($file);@rmdir($dir);}
+    }
 }

@@ -144,4 +144,22 @@ final class OrbitM19BillingTest extends TestCase{
         $this->post('/admin/billing/products',$d)->assertStatus(409);
         $this->assertDatabaseCount('billing_products',1);$this->assertDatabaseHas('admin_audit_log',['action'=>'billing.product.save']);
     }
+
+    public function test_linked_replacement_does_not_resurrect_old_subscription():void{
+        [$u,$token]=$this->principal();$this->mapping();$this->mapping('plus');
+        $this->evidence($u,'old-token');$this->verify($token,'old-token')->assertOk();
+        $this->evidence($u,'new-token','plus','google',['linked'=>'old-token']);
+        $this->verify($token,'new-token')->assertOk()->assertJsonPath('data.entitlement.tier','plus');
+        $this->assertDatabaseHas('billing_subscriptions',['state'=>'expired','lineage_hash'=>app(BillingPolicy::class)->digest('lineage:google','old-token')]);
+        $this->verify($token,'old-token')->assertOk()->assertJsonPath('data.entitlement.tier','plus')->assertJsonPath('data.finish_permitted',false);
+        $this->assertDatabaseCount('billing_subscriptions',2);
+    }
+    public function test_outage_does_not_extend_confirmed_entitlement():void{
+        [$u,$token]=$this->principal();$this->mapping();$this->evidence($u,'outage-token');
+        $original=$this->verify($token,'outage-token')->assertOk()->json('data.entitlement.effective_until');
+        $this->provider->unavailable=true;
+        $this->verify($token,'outage-token')->assertStatus(503);
+        $this->getJson('/api/v1/billing/entitlement')->assertOk()->assertJsonPath('data.effective_until',$original);
+        $this->travel(35)->days();$this->getJson('/api/v1/billing/entitlement')->assertOk()->assertJsonPath('data.tier','free');
+    }
 }
