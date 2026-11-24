@@ -91,7 +91,7 @@ final class AdminConfigController extends Controller
     public function rollback(Request $request, ConfigRegistry $registry, string $type, string $key)
     {
         abort_unless(in_array($type, ['flag', 'remote'], true), 404);
-        abort_if($type === 'remote' && in_array($key,['relay.operations','camera.operations'],true),403,'Use the dedicated module controls.');
+        abort_if($type === 'remote' && in_array(strtolower($key),['relay.operations','camera.operations'],true),403,'Use the dedicated module controls.');
         $data = $request->validate([
             'revision' => ['required', 'uuid'],
             'reason' => ['required', 'string', 'min:5', 'max:500'],

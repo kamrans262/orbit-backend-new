@@ -94,6 +94,7 @@ final class OrbitM23CameraTest extends TestCase
         $this->post(route('orbit.admin.config.update',$record),['key'=>CameraPolicy::KEY])->assertForbidden();
         $this->post(route('orbit.admin.config.store'),['key'=>CameraPolicy::KEY])->assertForbidden();
         $this->post(route('orbit.admin.rollback',['type'=>'remote','key'=>CameraPolicy::KEY]),[])->assertForbidden();
+        $this->post(route('orbit.admin.rollback',['type'=>'remote','key'=>strtoupper(CameraPolicy::KEY)]),[])->assertForbidden();
         $this->assertDatabaseHas('remote_configs',['id'=>$record->id,'version'=>1]);
     }
     public function test_bounded_revisioned_settings_and_allowlisted_bootstrap():void
@@ -180,5 +181,51 @@ final class OrbitM23CameraTest extends TestCase
         $this->be($this->admin(['camera.read','camera.manage']),'admin');
         $this->get('/admin/camera')->assertOk()->assertSee('not provisioned');
         $this->post('/admin/camera/settings',$this->controls())->assertStatus(503);
+    }
+
+    private function readyPrivateMedia(OrbitUser $user,OrbitDevice $device):string
+    {
+        $media=(string)Str::uuid7();$grant=(string)Str::uuid7();
+        DB::table('media_objects')->insert([
+            'id'=>$media,'owner_user_id'=>$user->id,'purpose'=>'moment','kind'=>'image',
+            'declared_mime'=>'image/jpeg','declared_width'=>1200,'declared_height'=>800,
+            'cipher_suite'=>'aes256gcm-v1','object_key'=>'orbit-private/m23/'.Str::uuid(),
+            'state'=>'ready','cipher_bytes'=>122,'cipher_sha256'=>str_repeat('a',64),
+            'created_at'=>now(),'updated_at'=>now(),'ready_at'=>now(),
+        ]);
+        DB::table('media_variants')->insert([
+            'id'=>(string)Str::uuid7(),'media_id'=>$media,'variant'=>'thumbnail',
+            'object_key'=>'orbit-private/m23/'.Str::uuid(),'state'=>'ready',
+            'cipher_bytes'=>55,'cipher_sha256'=>str_repeat('b',64),'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('media_audience_grants')->insert([
+            'id'=>$grant,'media_id'=>$media,'issuer_user_id'=>$user->id,
+            'recipient_user_id'=>$user->id,'circle_id'=>null,'audience_kind'=>'only_me',
+            'policy_version'=>1,'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        foreach(['original','thumbnail'] as $variant)DB::table('media_device_key_envelopes')->insert([
+            'id'=>(string)Str::uuid7(),'media_id'=>$media,'grant_id'=>$grant,
+            'recipient_device_id'=>$device->id,'variant'=>$variant,'key_version'=>'v1',
+            'algorithm'=>'x25519-hkdfsha256-aes256gcm-v1',
+            'wrapped_key_ciphertext'=>str_repeat('E',80),'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        return $media;
+    }
+    public function test_current_policy_rechecked_on_new_publication_but_not_on_authoritative_receipt():void
+    {
+        [$user,$device,$token]=$this->principal();
+        $body=['client_id'=>(string)Str::uuid(),'media_id'=>$this->readyPrivateMedia($user,$device),
+            'audience_kind'=>'only_me','target_ids'=>[]];
+        $key=(string)Str::uuid();
+        $id=$this->withToken($token)->withHeader('Idempotency-Key',$key)->postJson('/api/v1/moments',$body)
+            ->assertCreated()->json('data.moment_id');
+        $other=['client_id'=>(string)Str::uuid(),'media_id'=>$this->readyPrivateMedia($user,$device),
+            'audience_kind'=>'only_me','target_ids'=>[]];
+        $this->policy(['photo_long_edge_px'=>1080]);
+        $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())->postJson('/api/v1/moments',$other)->assertStatus(409);
+        $this->withToken($token)->withHeader('Idempotency-Key',$key)->postJson('/api/v1/moments',$body)
+            ->assertOk()->assertJsonPath('data.moment_id',$id);
+        $this->getJson('/api/v1/moments/receipt/'.$body['client_id'])->assertOk()->assertJsonPath('data.moment_id',$id);
+        $this->assertDatabaseCount('moments',1);
     }
 }
