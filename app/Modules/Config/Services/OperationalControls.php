@@ -61,6 +61,8 @@ final class OperationalControls
             'sample_age'=>['orbit_location.sample_max_age_seconds','Maximum incoming sample age (seconds)',15,90],
             'map_candidates'=>['orbit_location.max_map_candidates','Maximum map candidates',1,200],
             'accuracy'=>['orbit_location.max_accuracy_m','Maximum accepted sample uncertainty (metres)',50,500],
+            'latest_ttl'=>['orbit_location.latest_ttl_seconds','Maximum visible sample age (seconds)',30,120],
+            'fresh_seconds'=>['orbit_location.fresh_seconds','Fresh sample threshold (seconds)',5,30],
         ]],
         'ping'=>['Ping','config.manage','config.manage',[
             'sender_minute'=>['orbit_ping.sender_per_minute','Requests per sender per minute',1,12],
@@ -91,6 +93,9 @@ final class OperationalControls
             'page_size'=>['orbit_check_in.page_size_max','Maximum feed page size',1,30],
         ]],
     ];
+    // Stage 2 rows did not have these fields. Missing newly introduced fields
+    // preserve deployment defaults, not arbitrary or elevated values.
+    private const LEGACY_OPTIONAL=['location'=>['latest_ttl','fresh_seconds']];
     public static function reserved(?string $key):bool
     {
         return $key!==null&&(str_starts_with(strtolower($key),self::PREFIX)||in_array(strtolower($key),['m24.operational_limits','m24.camera_tools'],true));
@@ -113,9 +118,11 @@ final class OperationalControls
     /** Validate stored data independently of the admin form or schema JSON. */
     private function decode(string $module,RemoteConfig $row):array{
         $fields=$this->definition($module)[3];$values=(array)$row->value;
+        $required=array_diff_key($fields,array_flip(self::LEGACY_OPTIONAL[$module]??[]));
         abort_unless($row->published&&$row->value_type==='object'&&!$row->client_visible&&
-            count($values)===count($fields)&&!array_diff_key($values,$fields),503,'Operational controls require review.');
+            !array_diff_key($required,$values)&&!array_diff_key($values,$fields),503,'Operational controls require review.');
         foreach($fields as $key=>$field){
+            if(!array_key_exists($key,$values))continue;
             $v=$values[$key]??null;
             abort_unless(is_int($v)&&$v>=$field[2]&&$v<=$field[3],503,'Operational controls require review.');
         }
@@ -139,6 +146,7 @@ final class OperationalControls
         foreach(RemoteConfig::whereIn('key',self::keys())->get() as $row){
             $module=substr($row->key,strlen(self::PREFIX));$values=$this->decode($module,$row);
             foreach(self::MODULES[$module][3] as $key=>$field){
+                if(!array_key_exists($key,$values))continue;
                 // Deployment-level restrictions always win over saved controls.
                 $out[$field[0]]=min($values[$key],(int)config($field[0]));
             }
@@ -151,6 +159,11 @@ final class OperationalControls
         $saved=json_decode($row->snapshot,true,32,JSON_THROW_ON_ERROR);
         $values=$saved['value']??null;
         abort_unless(is_array($values),422,'Historical settings unavailable.');
+        // A pre-expansion revision had no value for new fields. Restore its
+        // deployment-default behavior, bounded by the current ceiling.
+        foreach(self::LEGACY_OPTIONAL[$module]??[] as $key){
+            if(!array_key_exists($key,$values))$values[$key]=$this->ceiling($this->definition($module)[3][$key]);
+        }
         // Save is the same validation/ownership/revision path as a new edit.
         $this->save($module,$values,$expected,substr('Restore revision '.$row->version.': '.$reason,0,500),$actor);
     }
