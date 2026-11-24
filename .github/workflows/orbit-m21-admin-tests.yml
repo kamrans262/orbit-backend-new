@@ -46,6 +46,8 @@ jobs:
           tools: composer:v2
           coverage: none
       - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Provide empty local CI dotenv (credentials supplied by isolated job)
+        run: touch .env
       - name: Syntax and complete existing database schema
         run: |
           php -l app/Modules/Config/Services/AdminNavigation.php
@@ -54,10 +56,10 @@ jobs:
           php artisan migrate --force
       - name: Admin navigation and privacy regression
         run: |
-          php artisan test --compact tests/Feature/OrbitM21AdminNavigationTest.php tests/Feature/OrbitAdminM3Test.php tests/Feature/OrbitConfigTest.php tests/Feature/OrbitM8M9AdminVisibilityTest.php tests/Feature/OrbitM5CirclesTest.php tests/Feature/OrbitM6MediaTest.php tests/Feature/OrbitM7MomentsTest.php
+          php artisan test --compact --display-warnings tests/Feature/OrbitM21AdminNavigationTest.php tests/Feature/OrbitAdminM3Test.php tests/Feature/OrbitConfigTest.php tests/Feature/OrbitM8M9AdminVisibilityTest.php tests/Feature/OrbitM5CirclesTest.php tests/Feature/OrbitM6MediaTest.php tests/Feature/OrbitM7MomentsTest.php
       - name: Preserve existing module operations
         run: |
-          php artisan test --compact tests/Feature/OrbitM4SocialGraphTest.php tests/Feature/OrbitMessagingAdminTest.php tests/Feature/OrbitM14NotificationsTest.php tests/Feature/OrbitM15PlansTest.php tests/Feature/OrbitM16SosSafetyTest.php tests/Feature/OrbitM17ModerationTest.php tests/Feature/OrbitM18ActivityTest.php tests/Feature/OrbitM20AdvertisingTest.php
+          php artisan test --compact --display-warnings tests/Feature/OrbitM4SocialGraphTest.php tests/Feature/OrbitMessagingAdminTest.php tests/Feature/OrbitM14NotificationsTest.php tests/Feature/OrbitM15PlansTest.php tests/Feature/OrbitM16SosSafetyTest.php tests/Feature/OrbitM17ModerationTest.php tests/Feature/OrbitM18ActivityTest.php tests/Feature/OrbitM20AdvertisingTest.php
       - name: Consumer API regression for identity and earlier modules
         run: |
-          php artisan test --compact tests/Feature/OrbitIdentityTest.php tests/Feature/OrbitProfileSettingsTest.php tests/Feature/OrbitM8DashboardTest.php tests/Feature/OrbitM9PresenceTest.php tests/Feature/OrbitM10LocationTest.php tests/Feature/OrbitPingTest.php tests/Feature/OrbitCheckInTest.php
+          php artisan test --compact --display-warnings tests/Feature/OrbitIdentityTest.php tests/Feature/OrbitProfileSettingsTest.php tests/Feature/OrbitM8DashboardTest.php tests/Feature/OrbitM9PresenceTest.php tests/Feature/OrbitM10LocationTest.php tests/Feature/OrbitPingTest.php tests/Feature/OrbitCheckInTest.php

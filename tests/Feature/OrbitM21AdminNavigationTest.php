@@ -121,4 +121,43 @@ final class OrbitM21AdminNavigationTest extends TestCase
         $this->withSession(['orbit_admin_activity'=>time()-901])->get('/admin/start')
             ->assertRedirect(route('orbit.admin.login'));
     }
+    public function test_admin_sensitive_pages_are_never_browser_cached(): void
+    {
+        $this->be($this->admin(['*']),'admin');
+        foreach (AdminNavigation::groups(auth()->guard('admin')->user()) as $group) {
+            foreach ($group['children'] as $link) {
+                $response=$this->get(route($link['route']))->assertOk();
+                $this->assertStringContainsString('no-store',(string)$response->headers->get('Cache-Control'));
+                $this->assertStringContainsString('private',(string)$response->headers->get('Cache-Control'));
+            }
+        }
+    }
+
+    public function test_real_web_csrf_rejects_missing_and_wrong_tokens_without_mutation(): void
+    {
+        $this->be($this->admin(['activity.read','activity.manage']),'admin');
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+        $token=Str::random(40);
+        $this->withSession(['_token'=>$token]);
+        $payload=['key'=>'source.check_in','enabled'=>'0','reason'=>'Verify CSRF rejection and accepted request','confirm'=>'1'];
+        $before=\Illuminate\Support\Facades\DB::table('activity_controls')->where('key','source.check_in')->value('enabled');
+        $this->assertTrue((bool)$before);
+        // Laravel bypasses its request-forgery middleware while running unit tests.
+        // Change only the application environment binding for these in-process requests;
+        // the disposable CI DB and all actual configuration remain unchanged.
+        $previous=$this->app->environment();
+        $this->app->instance('env','local');
+        try {
+            $this->post('/admin/activity/control',$payload)->assertStatus(419);
+            $this->post('/admin/activity/control',$payload+['_token'=>Str::random(40)])->assertStatus(419);
+            $this->assertDatabaseHas('activity_controls',['key'=>'source.check_in','enabled'=>1]);
+            $this->assertDatabaseMissing('activity_admin_audits',['action'=>'source.changed','subject_key'=>'source.check_in']);
+            $this->post('/admin/activity/control',$payload+['_token'=>$token])->assertRedirect();
+            $this->assertDatabaseHas('activity_controls',['key'=>'source.check_in','enabled'=>0]);
+            $this->assertDatabaseHas('activity_admin_audits',['action'=>'source.changed','subject_key'=>'source.check_in']);
+        } finally {
+            $this->app->instance('env',$previous);
+        }
+    }
+
 }

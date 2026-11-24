@@ -24,6 +24,11 @@ final class EnsureAdmin
             return redirect()->route('orbit.admin.login')->withErrors(['email' => 'Admin session expired.']);
         }
         $request->session()->put('orbit_admin_activity', time());
-        return $next($request);
+        // Prevent shared intermediaries and the browser back-cache from retaining
+        // protected administrative response bodies after a session is revoked.
+        $response = $next($request);
+        $response->headers->set('Cache-Control', 'private, no-store, max-age=0');
+        $response->headers->set('Pragma', 'no-cache');
+        return $response;
     }
 }
