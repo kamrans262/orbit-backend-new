@@ -23,6 +23,12 @@ final class RealtimeSessions
         }catch(\Throwable){return false;}
 
     }
+    /** Cleanup is allowed during an Admin pause, never when deployment is off. */
+    public function cleanupEnabled():bool
+    {
+        return config('orbit_realtime.enabled')===true&&config('orbit_realtime.verified')===true
+            &&\Illuminate\Support\Facades\Schema::hasTable('orbit_realtime_sessions');
+    }
     private function nowMs():int{return (int)now()->getTimestampMs();}
     private function live(string $id):?object
     {
@@ -104,14 +110,14 @@ final class RealtimeSessions
     }
     public function publish(string $id):bool
     {
-        if(!$this->enabled())return false;
+        if(!$this->cleanupEnabled())return false;
         try{
             return DB::transaction(function()use($id):bool{
                 DB::table('orbit_sessions')->where('id',$id)->lockForUpdate()->first();
                 $r=DB::table('orbit_realtime_sessions')->where('session_id',$id)->lockForUpdate()->first();
                 if(!$r)return false;
                 $live=$this->live($id);
-                if(!$live||$live->device_id!==$r->device_id||(int)$r->lease_until_ms<=$this->nowMs()){
+                if(!$this->enabled()||!$live||$live->device_id!==$r->device_id||(int)$r->lease_until_ms<=$this->nowMs()){
                     $this->provider->replace($id,null);
                     DB::table('orbit_realtime_sessions')->where('session_id',$id)->delete();
                     return false;
@@ -171,17 +177,44 @@ final class RealtimeSessions
             DB::table($table)->whereIn('key',$keys)->where('expiration','<=',now()->timestamp)->delete();
         }
     }
+    /** Explicit foreground disconnect; the same authenticated session may later rebootstrap. */
+    public function disconnect(OrbitSession $session):void
+    {
+        if(!\Illuminate\Support\Facades\Schema::hasTable('orbit_realtime_sessions'))return;
+        $id=(string)$session->id;
+        DB::transaction(function()use($id){
+            DB::table('orbit_sessions')->where('id',$id)->lockForUpdate()->first();
+            DB::table('orbit_realtime_sessions')->where('session_id',$id)->update([
+                'lease_until_ms'=>0,'dirty'=>true,'available_at'=>now(),
+            ]);
+        });
+        if($this->cleanupEnabled())$this->publish($id);
+    }
+
+    /** Only reschedule a bounded eligible retry set; never accept arbitrary session IDs. */
+    public function requestRetry():int
+    {
+        if(!$this->cleanupEnabled())return 0;
+        $ids=DB::table('orbit_realtime_sessions')->where('attempts','>',0)
+            ->orderBy('available_at')->orderBy('session_id')->limit($this->limit('worker_batch'))
+            ->lockForUpdate()->pluck('session_id');
+        return DB::table('orbit_realtime_sessions')->whereIn('session_id',$ids)
+            ->update(['available_at'=>now()]);
+    }
+
     public function process():int
     {
-        if(!$this->enabled())return 0;
+        if(!$this->cleanupEnabled())return 0;
+        $paused=!$this->enabled();
         $ids=DB::table('orbit_realtime_sessions as r')->leftJoin('orbit_sessions as s','s.id','=','r.session_id')
             ->leftJoin('devices as d','d.id','=','s.device_id')->leftJoin('orbit_users as u','u.id','=','s.user_id')
-            ->where('r.available_at','<=',now())->where(function($q){
+            ->where('r.available_at','<=',now())->where(function($q)use($paused){
+                if($paused){$q->whereRaw('1=1');return;}
                 $q->where('r.dirty',true)->orWhere('r.lease_until_ms','<=',$this->nowMs())
                     ->orWhereNull('s.id')->orWhereNotNull('s.revoked_at')->orWhere('s.expires_at','<=',now())
                     ->orWhereNull('d.id')->orWhereNotNull('d.revoked_at')->orWhere('d.trust_state','!=','trusted')
                     ->orWhereNull('u.id')->orWhere('u.status','!=','active')->orWhereNotNull('u.deletion_requested_at');
-            })->orderBy('r.available_at')->limit($this->limit('worker_batch'))->pluck('r.session_id');
+            })->orderBy('r.available_at')->orderBy('r.session_id')->limit($this->limit('worker_batch'))->pluck('r.session_id');
         foreach($ids as $id)$this->publish($id);
         return $ids->count();
     }

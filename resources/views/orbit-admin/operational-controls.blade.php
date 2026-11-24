@@ -7,6 +7,13 @@
 <section class="panel"><div class="panel-head"><div><h2>Real-time service health</h2><p>Aggregate service metrics only. Configuration is not proof of provider connectivity.</p></div></div>
 <div class="admin-kv">@foreach($realtimeHealth as $name=>$value)<div class="kv"><small>{{ $name }}</small><strong>{{ $value }}</strong></div>@endforeach</div>
 <div class="admin-guidance">The deployment verification gate remains independent. Pause delivery here; existing authorization leases expire within 60 seconds. No private account data or provider credentials are displayed.</div>
+@if(auth()->guard('admin')->user()?->canPerform('config.manage')&&\Illuminate\Support\Facades\Schema::hasTable('orbit_realtime_recovery'))
+<form method="post" action="{{ route('orbit.admin.operations.realtime.recovery') }}">@csrf
+<input type="hidden" name="request_id" value="{{ (string)\Illuminate\Support\Str::uuid() }}">
+<div class="form-grid"><label>Recovery operation<select name="operation"><option value="retry">Reschedule eligible retry jobs</option><option value="probe">Queue read-only provider probe</option></select></label>
+<label>Reason<input name="reason" minlength="10" maxlength="200" required></label>
+<label><input type="checkbox" name="confirm" value="1" required> Confirm bounded recovery</label></div><div class="form-actions"><button class="btn secondary" type="submit">Request recovery</button></div></form>
+@endif
 </section>
 @endif
 <section class="panel"><div class="panel-head"><div><h2>Settings &amp; Controls</h2><p>Policy revision {{ $settings['revision'] }} · effective on subsequent requests</p></div></div>

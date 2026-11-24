@@ -62,6 +62,8 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
         Route::post('/home-dashboard/controls/restore',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'rollback'])->defaults('module','dashboard')->middleware('throttle:6,1')->name('operations.dashboard.rollback');
         Route::get('/realtime/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'show'])->defaults('module','realtime')->name('operations.realtime');
         Route::post('/realtime/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'save'])->defaults('module','realtime')->middleware('throttle:6,1')->name('operations.realtime.save');
+        Route::post('/realtime/recovery',\App\Modules\Realtime\Http\Controllers\AdminRealtimeRecoveryController::class)
+            ->middleware([RequireAdminPermission::class.':config.manage','throttle:3,1'])->name('operations.realtime.recovery');
         Route::post('/realtime/controls/restore',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'rollback'])->defaults('module','realtime')->middleware('throttle:6,1')->name('operations.realtime.rollback');
         Route::get('/presence/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'show'])->defaults('module','presence')->name('operations.presence');
         Route::post('/presence/controls',[\App\Modules\Config\Http\Controllers\AdminOperationalControlsController::class,'save'])->defaults('module','presence')->middleware('throttle:6,1')->name('operations.presence.save');

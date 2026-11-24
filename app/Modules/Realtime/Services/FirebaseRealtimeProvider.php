@@ -96,6 +96,28 @@ final class FirebaseRealtimeProvider
         ],$c);
     }
 
+    /** Redacted offline readiness check, with no provider network traffic. */
+    public function readiness():string
+    {
+        try{
+            $v=$this->settings();$this->credentials($v);
+            if($v['android_app_id']===''||$v['ios_app_id']===''||$v['ios_bundle_id']==='')return 'Platform registration incomplete';
+            return 'Local configuration valid; live verification required';
+        }catch(\Throwable){return 'Local configuration incomplete or invalid';}
+    }
+
+    /** Read only a dedicated, non-user probe node; never publish or activate anything. */
+    public function probe():bool
+    {
+        if(config('orbit_realtime.enabled')!==true||config('orbit_realtime.verified')!==true)return false;
+        try{
+            $v=$this->settings();
+            $r=Http::withToken($this->token($v))->acceptJson()->connectTimeout(2)->timeout(4)
+                ->withOptions(['allow_redirects'=>false])->get($v['database_url'].'/orbit_m25/health_probe.json');
+            return $r->successful()&&$r->json()===null;
+        }catch(\Throwable){return false;}
+    }
+
     private function token(array $v): string
     {
         if($this->access!==null&&$this->accessUntil>time())return $this->access;

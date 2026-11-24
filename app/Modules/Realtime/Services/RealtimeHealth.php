@@ -8,9 +8,14 @@ final class RealtimeHealth
 {
     public function snapshot():array
     {
-        $out=['Delivery'=>app(RealtimeSessions::class)->enabled()?'Eligible — live verification required':'Disabled'];
+        $out=['Local configuration'=>app(FirebaseRealtimeProvider::class)->readiness(),'Delivery'=>app(RealtimeSessions::class)->enabled()?'Eligible — live verification required':'Disabled'];
         if(!Schema::hasTable('orbit_realtime_sessions'))return $out+['Storage'=>'Not provisioned'];
         $table=DB::table('orbit_realtime_sessions');
+        if(Schema::hasTable('orbit_realtime_recovery')){
+            $last=DB::table('orbit_realtime_recovery')->where('operation','probe')->whereNotNull('processed_at')->orderByDesc('processed_at')->first();
+            $out['Last probe result']=$last?->result??'Not run';
+            $out['Last probe time']=$last?->processed_at??'None';
+        }
         return $out+[
             'Storage'=>'Provisioned',
             'Active leases'=>(clone $table)->where('lease_until_ms','>',now()->getTimestampMs())->count(),

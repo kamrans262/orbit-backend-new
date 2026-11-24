@@ -236,6 +236,7 @@ Schedule::command('orbit:billing:reconcile')->everyFiveMinutes()->withoutOverlap
 
 
 Artisan::command('orbit:realtime:publish', function () {
+    app(\App\Modules\Realtime\Services\RealtimeRecovery::class)->processProbe();
     $this->info('Realtime jobs attempted: '.app(\App\Modules\Realtime\Services\RealtimeSessions::class)->process());
 });
 Schedule::command('orbit:realtime:publish')->everyMinute()->withoutOverlapping();
