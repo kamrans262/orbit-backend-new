@@ -123,7 +123,7 @@ final class FirebaseRealtimeProvider
         if($this->access!==null&&$this->accessUntil>time())return $this->access;
         $c=$this->credentials($v);$now=time();
         $jwt=FirebaseServiceAccount::signedJwt([
-            'iss'=>$c['client_email'],'scope'=>'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email',
+            'iss'=>$c['client_email'],'scope'=>'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/identitytoolkit',
             'aud'=>'https://oauth2.googleapis.com/token','iat'=>$now,'exp'=>$now+3000,
         ],$c);
         $r=Http::asForm()->connectTimeout(2)->timeout(4)->withOptions(['allow_redirects'=>false])
@@ -132,6 +132,27 @@ final class FirebaseRealtimeProvider
         $this->access=$r->json('access_token');
         $this->accessUntil=$now+max(0,min(3000,(int)$r->json('expires_in',0)-60));
         return $this->access;
+    }
+
+    /** The receipt is bound to the original project, never a caller-supplied target. */
+    public function projectFingerprint():string
+    {
+        $v=$this->settings();
+        return hash('sha256',$v['project_id'].'|'.$v['database_url']);
+    }
+
+    /** Remove only a permanently retired, server-registered session UID. */
+    public function deleteAuth(string $session,string $fingerprint):void
+    {
+        if(!\Illuminate\Support\Str::isUuid($session)||!hash_equals($this->projectFingerprint(),$fingerprint))
+            throw new RuntimeException('Firebase cleanup project mismatch.');
+        $v=$this->settings();
+        $r=Http::withToken($this->token($v))->acceptJson()->connectTimeout(2)->timeout(4)
+            ->withOptions(['allow_redirects'=>false])->post(
+                'https://identitytoolkit.googleapis.com/v1/projects/'.$v['project_id'].'/accounts:delete',
+                ['localId'=>$session]);
+        if(!$r->successful()&&$r->json('error.message')!=='USER_NOT_FOUND')
+            throw new RuntimeException('Firebase Auth cleanup deferred.');
     }
 
     /** Compare-and-set whole session node; stale in-flight attempts cannot overwrite a newer version. */

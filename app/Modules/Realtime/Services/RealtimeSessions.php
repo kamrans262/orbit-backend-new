@@ -58,6 +58,7 @@ final class RealtimeSessions
                 $generation=$fresh?(string)Str::uuid():$current->generation;
                 $until=min($this->nowMs()+60000,\Illuminate\Support\Carbon::parse($live->expires_at)->getTimestampMs());
                 $revision=(int)($current?->revision??0)+($fresh?1:0);
+                app(RealtimeAuthCleanup::class)->register($id);
                 DB::table('orbit_realtime_sessions')->updateOrInsert(['session_id'=>$id],[
                     'device_id'=>$live->device_id,'generation'=>$generation,'lease_until_ms'=>$until,
                     'revision'=>$revision,'visible_revision'=>$fresh?max(1,(int)($current?->visible_revision??0)+1):(int)$current->visible_revision,
@@ -142,7 +143,10 @@ final class RealtimeSessions
                 if(!$r)return false;
                 $live=$this->live($id);
                 if(!$this->enabled()||!$live||$live->device_id!==$r->device_id||(int)$r->lease_until_ms<=$this->nowMs()){
-                    $this->provider->replace($id,null);
+                    // Fence stale conditional PUTs with a nonempty, deny-only tombstone.
+                    app(RealtimeAuthCleanup::class)->register($id);
+                    $this->provider->replace($id,['revoked'=>(string)Str::uuid()]);
+                    app(RealtimeAuthCleanup::class)->markTombstone($id);
                     DB::table('orbit_realtime_sessions')->where('session_id',$id)->delete();
                     return false;
                 }

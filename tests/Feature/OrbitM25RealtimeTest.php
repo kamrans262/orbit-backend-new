@@ -46,6 +46,7 @@ final class OrbitM25RealtimeTest extends TestCase
         ]);
         Http::preventStrayRequests();
         Http::fake([
+            'https://identitytoolkit.googleapis.com/v1/projects/orbit-ci/accounts:delete'=>Http::response([]),
             'https://oauth2.googleapis.com/token'=>Http::response(['access_token'=>'synthetic-oauth','expires_in'=>3600]),
             'https://orbit-ci-default-rtdb.firebaseio.com/*'=>function($request){
                 $this->assertTrue($request->hasHeader('Authorization','Bearer synthetic-oauth'));
@@ -124,7 +125,7 @@ final class OrbitM25RealtimeTest extends TestCase
         $svc->revokeInvalidUser($a->id);
         $svc->process();
         $this->assertDatabaseMissing('orbit_realtime_sessions',['session_id'=>$sa]);
-        $this->assertNull(end($this->writes)['body']);
+        $this->assertArrayHasKey('revoked',end($this->writes)['body']);
         $this->assertDatabaseHas('orbit_realtime_sessions',['session_id'=>$sb]);
     }
     public function test_location_signals_only_consented_viewer_and_never_coordinates():void
@@ -189,13 +190,13 @@ final class OrbitM25RealtimeTest extends TestCase
         $sid=$this->withToken($token)->postJson('/api/v1/realtime/bootstrap')->assertOk()->json('data.uid');
         $this->postJson('/api/v1/realtime/disconnect')->assertOk();
         $this->assertDatabaseMissing('orbit_realtime_sessions',['session_id'=>$sid]);
-        $this->assertNull(end($this->writes)['body']);
+        $this->assertArrayHasKey('revoked',end($this->writes)['body']);
         $this->withToken($token)->postJson('/api/v1/realtime/bootstrap')->assertOk();
         config(['orbit_realtime.admin_allow'=>0]);
         $this->withToken($token)->postJson('/api/v1/realtime/bootstrap')->assertOk()->assertJsonPath('data.enabled',false);
         app(RealtimeSessions::class)->process();
         $this->assertDatabaseMissing('orbit_realtime_sessions',['session_id'=>$sid]);
-        $this->assertNull(end($this->writes)['body']);
+        $this->assertArrayHasKey('revoked',end($this->writes)['body']);
     }
 
     private function operator(array $permissions):\App\Models\AdminUser

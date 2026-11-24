@@ -118,6 +118,9 @@ final class M3ErasureProcessor
             if ($this->unregisteredUserTables() !== []) {
                 throw new DomainException('Unregistered user-owned tables block erasure; register their cleanup.');
             }
+            if (app(\App\Modules\Realtime\Services\RealtimeAuthCleanup::class)->pendingForUser((string)$user->id)) {
+                throw new DomainException('M25 provider metadata cleanup requires verification before erasure.');
+            }
             if (!$user->deletion_requested_at) {
                 throw new DomainException('Account has no active deletion request.');
             }

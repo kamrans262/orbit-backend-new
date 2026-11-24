@@ -16,6 +16,9 @@ final class RealtimeHealth
             $out['Last probe result']=$last?->result??'Not run';
             $out['Last probe time']=$last?->processed_at??'None';
         }
+        if(Schema::hasTable('orbit_realtime_auth_receipts')){
+            $out['Pending remote cleanup']=DB::table('orbit_realtime_auth_receipts')->whereNotNull('tombstone_after')->orWhereNotNull('auth_after')->count();
+        }
         return $out+[
             'Storage'=>'Provisioned',
             'Active leases'=>(clone $table)->where('lease_until_ms','>',now()->getTimestampMs())->count(),
