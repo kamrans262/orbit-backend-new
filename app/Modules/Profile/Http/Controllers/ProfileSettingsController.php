@@ -155,6 +155,7 @@ final class ProfileSettingsController extends Controller
             'moment_default_audience' => ['sometimes', 'required', Rule::in(['My Circle', 'Selected People', 'Nobody'])],
             'read_receipts_enabled' => ['sometimes', 'required', 'boolean'],
         ]);
+        return DB::transaction(function()use($request,$changes):JsonResponse{
         $previous=$this->settings($request,'privacy',self::PRIVACY);
         $saved=$this->saveSettings($request, 'privacy', self::PRIVACY, $changes);
         if (config('orbit_location.enabled') === true) {
@@ -176,6 +177,7 @@ final class ProfileSettingsController extends Controller
             $publisher->invalidateViewer($owner);
         }
         return $this->respond($saved);
+        },3);
     }
 
     /** Device-independent locale and IANA timezone preferences. */
@@ -253,9 +255,9 @@ final class ProfileSettingsController extends Controller
                 // continues using stale relationship permissions.
                 if ($column === 'privacy') {
                     if (app(\App\Modules\Presence\Services\PresenceRealtimePublisher::class)->enabled()) {
-                        DB::afterCommit(static function () use ($id): void {
-                            app(\App\Modules\Presence\Services\PresenceRealtimePublisher::class)
-                                ->safelyClearUser($id);
+                        if(config('orbit_realtime.enabled')===true)app(\App\Modules\Presence\Services\PresenceRealtimePublisher::class)->clearUser($id);
+                        else DB::afterCommit(static function () use ($id): void {
+                            app(\App\Modules\Presence\Services\PresenceRealtimePublisher::class)->safelyClearUser($id);
                         });
                     }
                     DB::table('social_graph_revisions')->insertOrIgnore([

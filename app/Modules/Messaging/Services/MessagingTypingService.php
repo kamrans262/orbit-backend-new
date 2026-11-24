@@ -19,7 +19,7 @@ final class MessagingTypingService
         return 'orbit:m13:typing:'.hash_hmac('sha256',$conversation.'|'.$user,
             (string)config('app.key'));
     }
-    private function allowed(object $conversation,string $user): bool
+    public function allowed(object $conversation,string $user): bool
     {
         if($conversation->kind!=='circle')return true;
         $raw=DB::table('orbit_user_preferences')->where('user_id',$user)->value('privacy');
@@ -39,11 +39,17 @@ final class MessagingTypingService
 
     public function update(object $conversation,string $user,bool $active): array
     {
+        if(config('orbit_realtime.enabled')===true)return DB::transaction(fn()=>$this->mutate($conversation,$user,$active),3);
+        return $this->mutate($conversation,$user,$active);
+    }
+
+    private function mutate(object $conversation,string $user,bool $active):array
+    {
         $this->access->assertConversation($conversation,$user);
         $key=$this->key($conversation->id,$user);
         if(!$active){
             $this->cache()->forget($key);
-            if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging')&&$this->allowed($conversation,$user))app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',$this->access->recipients($conversation,$user),['kind'=>'conversation','id'=>$conversation->id,'subject'=>$user]);
+            if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging')&&$this->allowed($conversation,$user))app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',$this->access->recipients($conversation,$user),['kind'=>'conversation','id'=>$conversation->id,'subject'=>$user,'typing'=>true]);
             return ['accepted'=>true,'expires_in'=>0];
         }
         abort_unless($this->allowed($conversation,$user),403,
@@ -52,7 +58,7 @@ final class MessagingTypingService
             return ['accepted'=>false,'expires_in'=>5];
         }
         $this->cache()->put($key,true,5);
-        if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging'))app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',$this->access->recipients($conversation,$user),['kind'=>'conversation','id'=>$conversation->id,'subject'=>$user]);
+        if(app(\App\Modules\Realtime\Services\RealtimeSessions::class)->enabled('messaging'))app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('messaging',$this->access->recipients($conversation,$user),['kind'=>'conversation','id'=>$conversation->id,'subject'=>$user,'typing'=>true]);
         return ['accepted'=>true,'expires_in'=>5];
     }
 

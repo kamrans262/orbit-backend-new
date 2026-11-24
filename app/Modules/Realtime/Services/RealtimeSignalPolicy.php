@@ -45,6 +45,7 @@ final class RealtimeSignalPolicy
                     $policy=app(\App\Modules\Messaging\Services\MessagingAccessPolicy::class);
                     $subject=$scope['subject']??null;
                     $policy->assertConversation($r,$viewer);
+                    if(($scope['typing']??false)&&(!is_string($subject)||!app(\App\Modules\Messaging\Services\MessagingTypingService::class)->allowed($r,$subject)))return false;
                     return $subject===$viewer||($subject!==null&&in_array($viewer,$policy->recipients($r,$subject),true));
                 case 'notice':
                     $r=DB::table('notification_inbox')->where('id',$id)->where('recipient_user_id',$viewer)->first();

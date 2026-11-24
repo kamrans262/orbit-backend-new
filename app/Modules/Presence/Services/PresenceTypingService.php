@@ -29,6 +29,12 @@ final class PresenceTypingService
 
     public function update(string $user,string $circle,bool $active): array
     {
+        if(config('orbit_realtime.enabled')===true)return DB::transaction(fn()=>$this->mutate($user,$circle,$active),3);
+        return $this->mutate($user,$circle,$active);
+    }
+
+    private function mutate(string $user,string $circle,bool $active):array
+    {
         abort_unless($this->realtime->enabled()
             && config('orbit_circle.consumer_enabled.message') === true,404);
         abort_unless($this->policy->member($circle,$user),404);

@@ -85,7 +85,7 @@ final class RealtimeSessions
         $users=array_slice(array_values(array_unique($users)),0,1000);
         // Unscoped mutation-time invalidations are deliberately very short lived.
         $scope=$scope??['kind'=>'clear'];
-        $scope['module']=$module;$scope['until']=$this->nowMs()+($scope['kind']==='clear'?5000:60000);
+        $scope['module']=$module;$scope['until']=$this->nowMs()+($scope['kind']==='clear'||($scope['typing']??false)?5000:60000);
         foreach(array_chunk($users,100) as $chunk){
             DB::table('orbit_realtime_sessions as r')->join('orbit_sessions as s','s.id','=','r.session_id')
                 ->join('devices as d','d.id','=','s.device_id')->join('orbit_users as u','u.id','=','s.user_id')
@@ -206,7 +206,7 @@ final class RealtimeSessions
     {
         if(!$ids||!\Illuminate\Support\Facades\Schema::hasTable('orbit_realtime_sessions'))return;
         DB::table('orbit_realtime_sessions')->whereIn('session_id',$ids)->update([
-            'lease_until_ms'=>0,'dirty'=>true,'available_at'=>now(),
+            'lease_until_ms'=>0,'pending_scopes'=>null,'dirty'=>true,'available_at'=>now(),
         ]);
         DB::afterCommit(fn()=>$this->inline($ids));
     }

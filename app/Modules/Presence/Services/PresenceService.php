@@ -28,16 +28,22 @@ final class PresenceService
     public function heartbeat(string $user,string $device,string $state): array
     {
         $this->ensureAvailable($user);
-        $lease=$this->leases->touch($user,$device,$state);
-        if ($this->realtime->enabled()) $this->realtime->changed($user);
-        return $lease;
+        $mutate=function()use($user,$device,$state){
+            $lease=$this->leases->touch($user,$device,$state);
+            if($this->realtime->enabled())$this->realtime->changed($user);
+            return $lease;
+        };
+        return config('orbit_realtime.enabled')===true?DB::transaction($mutate,3):$mutate();
     }
 
     public function disconnect(string $user,string $device): array
     {
         $this->ensureAvailable($user);
-        $this->leases->clear($user,$device);
-        if ($this->realtime->enabled()) $this->realtime->changed($user,true);
+        $mutate=function()use($user,$device){
+            $this->leases->clear($user,$device);
+            if($this->realtime->enabled())$this->realtime->changed($user,true);
+        };
+        if(config('orbit_realtime.enabled')===true)DB::transaction($mutate,3);else $mutate();
         return ['disconnected'=>true];
     }
 
@@ -94,8 +100,9 @@ final class PresenceService
                 'id'=>(string)Str::uuid7(),'circle_id'=>$circle,
                 'event_type'=>'circle.presence_policy_changed','created_at'=>now(),
             ]);
+            if(config('orbit_realtime.enabled')===true)$this->realtime->clearCircle($circle);
         },3);
-        if ($this->realtime->enabled()) $this->realtime->safelyClearCircle($circle);
+        if(config('orbit_realtime.enabled')!==true&&$this->realtime->enabled())$this->realtime->safelyClearCircle($circle);
         return ['circle_id'=>$circle,'requested'=>$enabled,
             'global_allows_presence'=>$enabled &&
                 !$this->policy->globalPrivacy($user)['ghost_mode_enabled'] &&

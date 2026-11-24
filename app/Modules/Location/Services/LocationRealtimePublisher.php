@@ -19,10 +19,16 @@ final class LocationRealtimePublisher
     public function invalidateViewer(string $viewer): void
     {
         if($this->firebase()){
-            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('location',[$viewer]);
+            app(\App\Modules\Realtime\Services\RealtimeSessions::class)->signalUsers('location',[$viewer],['kind'=>'self','id'=>$viewer]);
             return;
         }
         if (!$this->tickets->enabled()) return;
+        if(DB::transactionLevel()>0){DB::afterCommit(fn()=>$this->publishViewerLegacy($viewer));return;}
+        $this->publishViewerLegacy($viewer);
+    }
+    private function publishViewerLegacy(string $viewer):void
+    {
+        if(!$this->tickets->enabled())return;
         try {
             // Opaque, viewer-only notification; never add subject IDs or GPS.
             $channel='orbit:m10:viewer:'.hash_hmac('sha256',$viewer,(string)config('app.key'));
@@ -83,6 +89,7 @@ final class LocationRealtimePublisher
                         'type'=>'location.invalidated'],JSON_THROW_ON_ERROR));
             }
         }catch(\Throwable) {
+            if($this->firebase())throw new \RuntimeException('Realtime invalidation transaction failed.');
             // No GPS or recipient IDs in logs.
             Log::warning('M10 realtime invalidation unavailable; REST authorization remains enforced.');
         }

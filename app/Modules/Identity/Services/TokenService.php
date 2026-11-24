@@ -134,9 +134,9 @@ final class TokenService
             // M9 must invalidate cached online states immediately after logout,
             // recovery, session revocation and account deletion, not just TTL.
             if (app(\App\Modules\Presence\Services\PresenceRealtimePublisher::class)->enabled()) {
-                DB::afterCommit(static function () use ($uid): void {
-                    app(\App\Modules\Presence\Services\PresenceRealtimePublisher::class)
-                        ->safelyClearUser($uid);
+                if(config('orbit_realtime.enabled')===true)app(\App\Modules\Presence\Services\PresenceRealtimePublisher::class)->clearUser($uid);
+                else DB::afterCommit(static function () use ($uid): void {
+                    app(\App\Modules\Presence\Services\PresenceRealtimePublisher::class)->safelyClearUser($uid);
                 });
             }
         }
