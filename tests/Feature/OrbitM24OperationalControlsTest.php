@@ -78,6 +78,22 @@ final class OrbitM24OperationalControlsTest extends TestCase{
         $this->assertSame(1,$data['m24.operational_limits']['modules']['ping']['values']['sender_minute']);
         $this->assertArrayNotHasKey('m24.operations.ping',$data);
     }
+    public function test_location_ttl_control_reaches_capabilities_and_legacy_row_remains_readable():void{
+        config(['orbit_location.enabled'=>true,'orbit_location.latest_ttl_seconds'=>120,'orbit_location.fresh_seconds'=>30]);
+        [$u,,$token]=$this->person();
+        $this->be($this->admin(['config.manage']),'admin');
+        $url=route('orbit.admin.operations.location');
+        $this->post($url,$this->controls('location',['latest_ttl'=>60,'fresh_seconds'=>15]))->assertRedirect();
+        $this->withToken($token)->getJson('/api/v1/location/capabilities')->assertOk()
+            ->assertJsonPath('data.latest_ttl_seconds',60)->assertJsonPath('data.sharing_active_by_default',false);
+        $this->assertSame(120,config('orbit_location.latest_ttl_seconds'));
+        $row=\App\Models\RemoteConfig::where('key','m24.operations.location')->firstOrFail();
+        $old=(array)$row->value;unset($old['latest_ttl'],$old['fresh_seconds']);
+        $row->update(['value'=>$old]);
+        $this->getJson('/api/v1/location/capabilities')->assertOk()->assertJsonPath('data.latest_ttl_seconds',120);
+        $this->get($url)->assertOk();
+    }
+
     public function test_owner_scoped_revocation_invalidates_actual_bearer():void{
         [$a,$d,$token]=$this->person();[$b,$other,$otherToken]=$this->person();
         $this->be($this->admin(['users.read','users.manage']),'admin');
