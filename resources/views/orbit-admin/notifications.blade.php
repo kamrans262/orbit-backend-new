@@ -45,7 +45,7 @@
     <div class="kv"><small>HTTPS private inbox</small><strong>{{ config('orbit_notifications.enabled')?'Available':'Disabled' }}</strong></div>
     <div class="kv"><small>FCM/APNs provider</small><strong>{{ $pushReady?'Server ready; device QA required':'Disabled / not provisioned' }}</strong></div>
     <div class="kv"><small>Provider acceptance</small><strong>Not a device display or read receipt</strong></div>
-    <div class="kv"><small>Existing Moments compatibility</small><strong>Independent M7 inbox &amp; push kept intact</strong></div>
+    <div class="kv"><small>Existing Moments compatibility</small><strong>Independent Moments inbox &amp; push kept intact</strong></div>
     @if($legacyMomentAudit)
     <div class="kv"><small>Legacy Moments linked</small>
       <strong>{{ number_format($legacyMomentAudit['linked_notices']) }}</strong></div>
@@ -153,7 +153,7 @@
   </div>
   <p><strong>Shared provider:</strong>
     {{ $legacyTokenAudit['push_delivery_enabled']?'Enabled by server gate':'Disabled pending verified credentials' }}.
-    Existing M7 records remain intact, and migration requires current trusted-device consent.</p>
+    Existing Moments records remain intact, and migration requires current trusted-device consent.</p>
 </section>
 @endif
 <section class="panel"><div class="panel-head"><div><h2>Push device registrations</h2>

@@ -18,7 +18,7 @@
   </div>
 </section>
 @if(!$ready)
-<section class="panel"><div class="admin-guidance">The additive Moderation schema has not been provisioned. Existing M4 blocking, M7 Moment and M13 encrypted-message reporting remain independent; no M17 action is available until its migration has been applied.</div></section>
+<section class="panel"><div class="admin-guidance">The additive Moderation schema has not been provisioned. Existing account blocking, Moment and encrypted-message reporting remain independent; no moderation action is available until its migration has been applied.</div></section>
 @else
 @if($area==='overview')
   <div class="stat-grid">
@@ -29,12 +29,12 @@
   <section class="panel">
     <div class="panel-head"><div><h2>Reporting channels</h2><p>Original module report rows retain their own authorization and encrypted evidence policy. Synchronization is reference-only.</p></div></div>
     <div class="admin-kv">
-      <div class="kv"><small>Account reports</small><strong>Authenticated M17 intake; owned receipts only</strong></div>
-      <div class="kv"><small>Moment and comment reports</small><strong>Original M7 evidence and restriction gates retained</strong></div>
-      <div class="kv"><small>Direct and Circle chat reports</small><strong>M13 end-to-end encryption and consent maintained</strong></div>
-      <div class="kv"><small>Account blocking</small><strong>Original M4 graph; no second block database</strong></div>
+      <div class="kv"><small>Account reports</small><strong>Authenticated reporting; owned receipts only</strong></div>
+      <div class="kv"><small>Moment and comment reports</small><strong>Original Moment evidence and restriction gates retained</strong></div>
+      <div class="kv"><small>Direct and Circle chat reports</small><strong>End-to-end encryption and consent maintained</strong></div>
+      <div class="kv"><small>Account blocking</small><strong>Original social graph; no second block database</strong></div>
       <div class="kv"><small>Enforcement switch</small><strong>{{ app(\App\Modules\Moderation\Services\ModerationService::class)->control('enforcement_enabled')?'Enabled by reviewed operator':'Disabled until reviewed release' }}</strong></div>
-      <div class="kv"><small>Emergency SOS</small><strong>Independent M16 safety authorization preserved</strong></div>
+      <div class="kv"><small>Emergency SOS</small><strong>Independent SOS safety authorization preserved</strong></div>
     </div>
     @if(auth()->guard('admin')->user()?->canPerform('moderation.manage'))
     <form method="post" action="{{ route('orbit.admin.moderation.sync') }}">@csrf
@@ -77,7 +77,7 @@
           <td>{{ $item->revision }}</td><td>{{ $item->created_at }}</td>
           <td><a href="{{ route('orbit.admin.moderation.cases.show',['case'=>$item->id]) }}" class="btn secondary">Review case</a></td>
         </tr>
-      @empty <tr><td colspan="7">No matching reports. Previous M7/M13 entries are indexed by the scheduled synchronization worker.</td></tr>
+      @empty <tr><td colspan="7">No matching reports. Previous Moment and messaging reports are indexed by the scheduled synchronization worker.</td></tr>
       @endforelse
       </tbody>
     </table></div>
@@ -217,7 +217,7 @@
     @empty<tr><td colspan="6">No submitted appeals.</td></tr>@endforelse
   </tbody></table></div>{{ $appeals->links() }}</section>
 @elseif($area==='settings')
-  <section class="panel"><div class="panel-head"><div><h2>Moderation operational controls</h2><p>Intake, M4 blocks, emergency access, original-source evidence and encryption are not disabled by this page.</p></div></div>
+  <section class="panel"><div class="panel-head"><div><h2>Moderation operational controls</h2><p>Intake, account blocks, emergency access, original-source evidence and encryption are not disabled by this page.</p></div></div>
   @foreach($controls as $item)
     <div class="kv"><small>{{ ucwords(str_replace('_',' ',$item->key)) }}</small><strong>{{ $item->value==='1'?'Enabled':'Disabled' }}</strong></div>
     @if(auth()->guard('admin')->user()?->canPerform('moderation.manage'))

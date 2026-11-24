@@ -39,7 +39,7 @@ final class AdminAdvertisingController extends Controller
 
     private function gate(Request $r, array $rules=[]): array
     {
-        abort_unless($this->policy->installed(),503,'M20 migration required.');
+        abort_unless($this->policy->installed(),503,'Advertising schema not provisioned.');
         return $r->validate(array_merge([
             'reason'=>['required','string','min:10','max:500'],
             'confirm'=>['accepted'],

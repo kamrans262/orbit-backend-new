@@ -21,7 +21,7 @@
   </div>
 </section>
 @if(!$ready)
-<section class="panel"><div class="admin-guidance">The additive M20 database schema has not been provisioned in this environment. Advertising cannot serve or accept changes until its migration is applied in an explicitly approved deployment.</div></section>
+<section class="panel"><div class="admin-guidance">The advertising database schema has not been provisioned in this environment. Advertising cannot serve or accept changes until its migration is applied in an explicitly approved deployment.</div></section>
 @else
 @if(in_array($area,['creatives','campaigns'],true) && auth()->guard('admin')->user()?->canPerform('advertising.manage'))
   <datalist id="advertising-sponsor-choices">@foreach($sponsorChoices as $choice)<option value="{{ $choice->id }}">{{ $choice->display_name }}</option>@endforeach</datalist>

@@ -160,4 +160,27 @@ final class OrbitM21AdminNavigationTest extends TestCase
         }
     }
 
+    public function test_partial_schema_is_reported_without_queries_or_mutations_to_missing_table(): void
+    {
+        $this->be($this->admin(['*']),'admin');
+        $builder=\Illuminate\Support\Facades\DB::connection()->getSchemaBuilder();
+        $missing=null;
+        // Simulate one missing table at a time at the real readiness boundary.
+        // Do not drop production-shaped tables or disrupt MySQL test transactions.
+        \Illuminate\Support\Facades\Schema::shouldReceive('hasTable')
+            ->andReturnUsing(function($table) use ($builder,&$missing){
+                return $table!==$missing && $builder->hasTable($table);
+            });
+        foreach ([
+            'ad_creative_revisions'=>['/admin/advertising','not been provisioned'],
+            'notification_attempts'=>['/admin/notifications','not provisioned'],
+            'activity_projection_runs'=>['/admin/activity','has not run'],
+            'plan_reminder_jobs'=>['/admin/plans','not been provisioned'],
+            'sos_dispatch_attempts'=>['/admin/safety','not yet provisioned'],
+        ] as $table=>[$url,$message]) {
+            $missing=$table;
+            $this->get($url)->assertOk()->assertSee($message);
+        }
+    }
+
 }

@@ -21,7 +21,7 @@
   </div>
 </section>
 @if(!$ready)
-  <section class="panel"><div class="admin-guidance">The additive M18 migration has not run in this environment. Activity is unavailable. No projected events are simulated.</div></section>
+  <section class="panel"><div class="admin-guidance">The Activity Feed migration has not run in this environment. Activity is unavailable. No projected events are simulated.</div></section>
 @else
 @if($area==='overview')
   <div class="stat-grid">
@@ -37,7 +37,7 @@
     <div class="admin-kv">
       <div class="kv"><small>Activity feed</small><strong>{{ config('orbit_activity.enabled')?'Configured':'Disabled' }}</strong></div>
       <div class="kv"><small>Current sync policy</small><strong>Authorized foreground refresh</strong></div>
-      <div class="kv"><small>Live WebSocket delivery</small><strong>Not provisioned by M18</strong></div>
+      <div class="kv"><small>Live WebSocket delivery</small><strong>Not provisioned</strong></div>
       <div class="kv"><small>Eligibility</small><strong>Original source policy checked at every read</strong></div>
       <div class="kv"><small>Excluded</small><strong>Messages, SOS, location, moderation, security and sponsorships</strong></div>
     </div>

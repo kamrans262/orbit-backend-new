@@ -18,7 +18,7 @@
   </div>
 </section>
 @if(!$ready)
-<section class="panel"><div class="admin-guidance">Plans schema has not been provisioned. No changes can be made until the M15 migration is reviewed and deployed.</div></section>
+<section class="panel"><div class="admin-guidance">Plans schema has not been provisioned. No changes can be made until the Plans migration is reviewed and deployed.</div></section>
 @else
 @if($area==='overview')
 <div class="stat-grid">
@@ -30,7 +30,7 @@
  <div class="panel-head"><div><h2>Service health</h2><p>Plan creation and reminders run on Laravel/MariaDB. Firebase is managed separately in Notifications.</p></div></div>
  <div class="admin-kv">
   <div class="kv"><small>Plans API</small><strong>{{ config('orbit_plans.enabled')?'Configured':'Paused by server configuration' }}</strong></div>
-  <div class="kv"><small>In-app notice source</small><strong>{{ config('orbit_notifications.enabled')?'M14 shared inbox':'Disabled / awaiting M14' }}</strong></div>
+  <div class="kv"><small>In-app notice source</small><strong>{{ config('orbit_notifications.enabled')?'Shared notification inbox':'Disabled / awaiting notification service' }}</strong></div>
   <div class="kv"><small>Push transport</small><strong>Controlled by Notifications; never enabled here</strong></div>
   <div class="kv"><small>Content exposure</small><strong>Private fields omitted from administrative reporting</strong></div>
  </div>

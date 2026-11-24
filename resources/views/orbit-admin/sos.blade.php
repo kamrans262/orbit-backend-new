@@ -18,7 +18,7 @@
   </div>
 </section>
 @if(!$ready)
-  <section class="panel"><div class="admin-guidance">SOS schema is not yet provisioned. No administrative operations are permitted until the additive M16 migration has been reviewed and deployed.</div></section>
+  <section class="panel"><div class="admin-guidance">SOS schema is not yet provisioned. No administrative operations are permitted until the SOS migration has been reviewed and deployed.</div></section>
 @else
 @if($area==='overview')
   <div class="stat-grid">
