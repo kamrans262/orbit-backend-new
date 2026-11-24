@@ -151,7 +151,7 @@ final class M3ErasureProcessor
             'orbit_identity_events'=>DB::table('orbit_identity_events')->where('user_id',$user)->orWhereIn('device_id',$devices())->select('id'),
             'plans'=>DB::table('plans')->where('organizer_id',$user)->select('id'),
             'moment_reports'=>DB::table('moment_reports')->where('reporter_id',$user)->orWhereIn('moment_id',DB::table('moments')->where('creator_id',$user)->select('id'))->select('id'),
-            'plan_change_events'=>DB::table('plan_change_events')->where('user_id',$user)->orWhereIn('plan_id',DB::table('plans')->where('organizer_id',$user)->select('id'))->select('id'),
+            'plan_change_events'=>DB::table('plan_change_events')->where('recipient_user_id',$user)->orWhereIn('plan_id',DB::table('plans')->where('organizer_id',$user)->select('id'))->select('id'),
         ];
         foreach(['notification_events'=>['source_id','target_id'],'notification_source_outbox'=>['source_id'],
             'notification_inbox'=>['target_id'],'activity_events'=>['source_id'],
