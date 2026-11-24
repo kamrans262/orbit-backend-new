@@ -30,6 +30,9 @@ final class OperationalControls
             'pending_requests'=>['orbit_social.pending_outbound_limit','Pending outbound requests',1,20],
             'invite_days'=>['orbit_social.friend_invite_lifetime_days','Invitation validity (days)',1,7],
             'active_invites'=>['orbit_social.active_friend_invite_limit','Active invitation links',1,5],
+            'search_minute'=>['orbit_social.search_per_account_per_minute','Discovery searches per account per minute',1,60],
+            'contact_batch'=>['orbit_social.contact_batch_limit','Contacts per consented matching request',1,25],
+            'contact_daily'=>['orbit_social.contact_daily_lookup_limit','Daily contact lookup allowance',1,500],
         ]],
         'circles'=>['Circles','circles.read','circles.manage',[
             'invite_hours'=>['orbit_circle.targeted_invite_lifetime_hours','Targeted invitation validity (hours)',1,168],
@@ -81,6 +84,7 @@ final class OperationalControls
             'invitees'=>['orbit_plans.max_invitees','Maximum invitees for new or updated plans',1,100],
             'page_size'=>['orbit_plans.page_limit','Maximum plan page size',1,30],
             'worker_batch'=>['orbit_plans.worker_batch','Maximum reminder worker batch',1,40],
+            'circle_limit'=>['orbit_plans.max_circles','Maximum invited Circles per plan',1,5],
         ]],
         'activity'=>['Activity Feed','activity.read','activity.manage',[
             'page_size'=>['orbit_activity.feed_page_max','Maximum feed page size',1,30],
@@ -101,8 +105,9 @@ final class OperationalControls
     // preserve deployment defaults, not arbitrary or elevated values.
     private const LEGACY_OPTIONAL=[
         'location'=>['latest_ttl','fresh_seconds'],
+        'social'=>['search_minute','contact_batch','contact_daily'],
         'notifications'=>['project_batch','dispatch_batch'],
-        'plans'=>['worker_batch'],
+        'plans'=>['worker_batch','circle_limit'],
         'activity'=>['project_batch'],
     ];
     private const WORKER_FIELDS=['notifications'=>['project_batch','dispatch_batch'],'plans'=>['worker_batch'],'activity'=>['project_batch']];

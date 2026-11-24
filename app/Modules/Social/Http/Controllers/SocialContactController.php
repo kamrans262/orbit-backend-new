@@ -22,7 +22,7 @@ final class SocialContactController extends Controller
     {
         $data = $request->validate([
             'consent_confirmed' => ['required','accepted'],
-            'contacts' => ['required','array','min:1','max:25'],
+            'contacts' => ['required','array','min:1','max:'.min(25,(int)config('orbit_social.contact_batch_limit',25))],
             'contacts.*.type' => ['required', 'in:email,phone'],
             'contacts.*.value' => ['required','string','max:190'],
         ]);

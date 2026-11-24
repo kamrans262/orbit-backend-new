@@ -78,6 +78,43 @@ final class OrbitM24OperationalControlsTest extends TestCase{
         $this->assertSame(1,$data['m24.operational_limits']['modules']['ping']['values']['sender_minute']);
         $this->assertArrayNotHasKey('m24.operations.ping',$data);
     }
+    public function test_discovery_and_consented_contact_caps_are_enforced_on_real_api():void{
+        [$viewer,,$token]=$this->person();
+        [$other,,$otherToken]=$this->person();
+        $this->be($this->admin(['social.read','social.manage']),'admin');
+        $this->post(route('orbit.admin.operations.social'),$this->controls('social',[
+            'search_minute'=>1,'contact_batch'=>1,'contact_daily'=>1
+        ]))->assertRedirect();
+        $this->withToken($token)->getJson('/api/v1/people/search?q='.$other->username)->assertOk();
+        $this->getJson('/api/v1/people/search?q='.$other->username)->assertStatus(429);
+        $this->withToken($otherToken)->getJson('/api/v1/people/search?q='.$viewer->username)->assertOk();
+        $this->withToken($token)->postJson('/api/v1/people/contacts/match',[
+            'consent_confirmed'=>false,'contacts'=>[['type'=>'email','value'=>'unknown@example.test']]
+        ])->assertUnprocessable();
+        $this->postJson('/api/v1/people/contacts/match',[
+            'consent_confirmed'=>true,'contacts'=>[['type'=>'email','value'=>'first@example.test'],['type'=>'email','value'=>'second@example.test']]
+        ])->assertUnprocessable();
+        $body=['consent_confirmed'=>true,'contacts'=>[['type'=>'email','value'=>'unknown@example.test']]];
+        $this->postJson('/api/v1/people/contacts/match',$body)->assertOk();
+        $this->postJson('/api/v1/people/contacts/match',$body)->assertStatus(429);
+        $this->assertSame(60,config('orbit_social.search_per_account_per_minute'));
+    }
+    public function test_plan_circle_cap_blocks_additions_without_invalidating_existing_plan():void{
+        config(['orbit_plans.enabled'=>true,'orbit_circle.enabled'=>true]);
+        [$owner,,$token]=$this->person();
+        $ids=[];
+        foreach(['Family','Friends'] as $name)$ids[]=$this->withToken($token)->postJson('/api/v1/circles',['name'=>$name])->assertCreated()->json('data.id');
+        $this->be($this->admin(['plans.read','plans.manage']),'admin');
+        $this->post(route('orbit.admin.operations.plans'),$this->controls('plans',['circle_limit'=>1]))->assertRedirect();
+        $body=['client_id'=>(string)Str::uuid(),'title'=>'Test plan','starts_at'=>now()->addDays(2)->toIso8601String(),'circle_ids'=>$ids];
+        $this->withToken($token)->postJson('/api/v1/plans',$body)->assertUnprocessable();
+        $body['circle_ids']=[$ids[0]];
+        $id=$this->postJson('/api/v1/plans',$body)->assertCreated()->json('data.id');
+        $this->postJson('/api/v1/plans',$body)->assertOk();
+        $this->patchJson('/api/v1/plans/'.$id,['revision'=>1,'circle_ids'=>[$ids[1]]])->assertUnprocessable();
+        $this->getJson('/api/v1/plans/'.$id)->assertOk()->assertJsonPath('data.revision',1);
+        $this->assertDatabaseCount('plan_circles',1);
+    }
     public function test_location_ttl_control_reaches_capabilities_and_legacy_row_remains_readable():void{
         config(['orbit_location.enabled'=>true,'orbit_location.latest_ttl_seconds'=>120,'orbit_location.fresh_seconds'=>30]);
         [$u,,$token]=$this->person();

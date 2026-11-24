@@ -152,6 +152,7 @@ final class PlanService
             abort_unless($plan && hash_equals((string)$plan->payload_hash,$hash),
                 409,'Idempotency key reused with different data.');
             if(!$created)return [$this->present($plan,$actor),false];
+            abort_if(count($normalized['circle_ids'])>(int)config('orbit_plans.max_circles',5),422,'Too many Circles for this plan.');
             foreach($normalized['circle_ids'] as $circle) {
                 abort_unless(app(\App\Modules\Circle\Services\CircleAccessPolicy::class)
                     ->isMember($circle,$actor),422,'Circle unavailable.');
@@ -271,6 +272,10 @@ final class PlanService
                 ->update(['state'=>'suppressed','updated_at'=>now()]);
             $this->reminders($plan);
             $circleIds=array_unique($input['circle_ids']??[]);
+            $existingCircles=$this->circleIds($id);
+            $additional=array_diff($circleIds,$existingCircles);
+            // Existing invitations remain valid. Only new additions are limited.
+            abort_if(count($additional)>0&&count($existingCircles)+count($additional)>(int)config('orbit_plans.max_circles',5),422,'Too many Circles for this plan.');
             foreach($circleIds as $circle) {
                 abort_unless(app(\App\Modules\Circle\Services\CircleAccessPolicy::class)
                     ->isMember($circle,$actor),422,'Circle unavailable.');
