@@ -52,7 +52,8 @@ final class AdminAdvertisingController extends Controller
         $counts=['sponsors'=>0,'verified'=>0,'creatives'=>0,
             'awaiting_review'=>0,'campaigns'=>0,'active'=>0,'impressions'=>0,'clicks'=>0];
         $sponsors=collect(); $creatives=collect(); $campaigns=collect();
-        $slots=collect(); $daily=collect(); $audits=collect();
+        $slots=collect(); $daily=collect(); $audits=collect(); $campaignPlacements=collect();
+        $sponsorChoices=collect(); $creativeChoices=collect();
         if ($ready) {
             $counts['sponsors']=DB::table('ad_sponsors')->count();
             $counts['verified']=DB::table('ad_sponsors')->where('status','verified')->count();
@@ -62,26 +63,82 @@ final class AdminAdvertisingController extends Controller
             $counts['active']=DB::table('ad_campaigns')->where('status','active')->count();
             $counts['impressions']=(int)DB::table('ad_daily_aggregates')->sum('impressions');
             $counts['clicks']=(int)DB::table('ad_daily_aggregates')->sum('clicks');
-            if (in_array($area,['sponsors','creatives','campaigns'],true)) {
-                $sponsors=DB::table('ad_sponsors')->orderBy('display_name')->limit(150)->get();
+            $states=match($area){
+                'sponsors'=>['draft','verified','suspended','archived'],
+                'creatives'=>['pending','approved','rejected'],
+                'campaigns'=>['draft','pending','approved','rejected','scheduled','active','paused','completed','archived'],
+                default=>[],
+            };
+            $filters=request()->validate([
+                'query'=>['nullable','string','max:150'],
+                'status'=>['nullable',Rule::in($states)],
+                'from'=>['nullable','date_format:Y-m-d'],
+                'to'=>['nullable','date_format:Y-m-d',... (request()->filled('from') ? ['after_or_equal:from'] : [])],
+                'campaign_id'=>['nullable','uuid'],
+            ]);
+            $query=trim($filters['query']??'');
+            // Bound LIKE input and treat wildcard characters literally.
+            $pattern='%'.str_replace(['!','%','_'],['!!','!%','!_'],$query).'%';
+            if ($area==='sponsors') {
+                $sponsors=DB::table('ad_sponsors')
+                    ->when($query!=='',fn($q)=>$q->where(fn($w)=>$w
+                        ->whereRaw("display_name LIKE ? ESCAPE '!'",[$pattern])
+                        ->orWhereRaw("legal_name LIKE ? ESCAPE '!'",[$pattern])
+                        ->orWhere('id',$query)))
+                    ->when($filters['status']??null,fn($q,$v)=>$q->where('status',$v))
+                    ->orderBy('display_name')->orderBy('id')->paginate(25)->withQueryString();
             }
-            if (in_array($area,['creatives','campaigns'],true)) {
-                $creatives=DB::table('ad_creatives')
-                    ->orderByDesc('created_at')->limit(150)->get();
+            if ($area==='creatives') {
+                $creatives=DB::table('ad_creatives as a')
+                    ->leftJoin('ad_sponsors as s','s.id','=','a.sponsor_id')
+                    ->select('a.*','s.display_name as sponsor_name')
+                    ->when($query!=='',fn($q)=>$q->where(fn($w)=>$w
+                        ->whereRaw("a.title LIKE ? ESCAPE '!'",[$pattern])
+                        ->orWhereRaw("s.display_name LIKE ? ESCAPE '!'",[$pattern])
+                        ->orWhere('a.id',$query)))
+                    ->when($filters['status']??null,fn($q,$v)=>$q->where('a.status',$v))
+                    ->orderByDesc('a.created_at')->orderByDesc('a.id')->paginate(25)->withQueryString();
             }
             if ($area==='campaigns') {
-                $campaigns=DB::table('ad_campaigns')
-                    ->orderByDesc('created_at')->limit(150)->get();
+                $campaigns=DB::table('ad_campaigns as c')
+                    ->leftJoin('ad_creatives as a','a.id','=','c.creative_id')
+                    ->leftJoin('ad_sponsors as s','s.id','=','c.sponsor_id')
+                    ->select('c.*','a.title as creative_title','s.display_name as sponsor_name')
+                    ->when($query!=='',fn($q)=>$q->where(fn($w)=>$w
+                        ->whereRaw("c.name LIKE ? ESCAPE '!'",[$pattern])
+                        ->orWhereRaw("s.display_name LIKE ? ESCAPE '!'",[$pattern])
+                        ->orWhere('c.id',$query)))
+                    ->when($filters['status']??null,fn($q,$v)=>$q->where('c.status',$v))
+                    ->orderByDesc('c.created_at')->orderByDesc('c.id')->paginate(25)->withQueryString();
+                $campaignPlacements=DB::table('ad_campaign_placements')
+                    ->whereIn('campaign_id',$campaigns->pluck('id')->all())
+                    ->get(['campaign_id','placement_key'])->groupBy('campaign_id');
+            }
+            // Suggestions are bounded conveniences, not eligibility limits:
+            // full IDs from the paginated directories can always be entered.
+            if (in_array($area,['creatives','campaigns'],true) && $this->admin()->canPerform('advertising.manage')) {
+                $sponsorChoices=DB::table('ad_sponsors')->where('status','!=','archived')
+                    ->orderBy('display_name')->orderBy('id')->limit(50)->get(['id','display_name']);
+            }
+            if ($area==='campaigns' && $this->admin()->canPerform('advertising.manage')) {
+                $creativeChoices=DB::table('ad_creatives')->where('status','approved')
+                    ->orderByDesc('created_at')->orderByDesc('id')->limit(50)->get(['id','title','sponsor_id']);
             }
             if ($area==='placements') $slots=DB::table('ad_placements')->orderBy('key')->get();
             if ($area==='analytics') $daily=DB::table('ad_daily_aggregates')
-                ->orderByDesc('day_utc')->limit(120)->get();
+                ->when($filters['from']??null,fn($q,$v)=>$q->where('day_utc','>=',$v))
+                ->when($filters['to']??null,fn($q,$v)=>$q->where('day_utc','<=',$v))
+                ->when($filters['campaign_id']??null,fn($q,$v)=>$q->where('campaign_id',$v))
+                ->orderByDesc('day_utc')->orderBy('campaign_id')->orderBy('placement_key')
+                ->paginate(25)->withQueryString();
             if ($area==='audits') $audits=DB::table('ad_admin_audits')
-                ->orderByDesc('created_at')->limit(120)->get();
+                ->when($filters['from']??null,fn($q,$v)=>$q->where('created_at','>=',$v.' 00:00:00'))
+                ->when($filters['to']??null,fn($q,$v)=>$q->where('created_at','<',\Illuminate\Support\Carbon::parse($v,'UTC')->addDay()))
+                ->orderByDesc('created_at')->orderByDesc('id')->paginate(25)->withQueryString();
         }
         return response()->view('orbit-admin.advertising',
             compact('area','ready','counts','sponsors','creatives','campaigns',
-                'slots','daily','audits'))->header('Cache-Control','private, no-store');
+                'slots','daily','audits','campaignPlacements','sponsorChoices','creativeChoices'))->header('Cache-Control','private, no-store');
     }
 
     public function overview() { return $this->output('overview'); }
