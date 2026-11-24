@@ -81,11 +81,14 @@ final class OrbitConfigTest extends TestCase
         $revision = DB::table('config_revisions')->where('resource_key', $flag->key)->first();
         $this->assertNotNull($revision);
         $this->assertDatabaseHas('admin_audit_log', ['target' => 'flag:location.experimental']);
-        $this->post('/admin/flags/'.$flag->id, array_merge($payload, ['enabled' => '0', 'reason' => 'Close test cohort safely']))
+        $this->post('/admin/flags/'.$flag->id, array_merge($payload, ['enabled' => '0', 'expected_version'=>1, 'reason' => 'Close test cohort safely']))
             ->assertRedirect(route('orbit.admin.dashboard'));
         $this->assertSame(2, $flag->fresh()->version);
+        $this->postJson('/admin/flags/'.$flag->id,array_merge($payload,['expected_version'=>1]))->assertStatus(409);
+        $this->postJson('/admin/revisions/flag/location.experimental/rollback',['revision'=>$revision->id,'expected_version'=>1,'reason'=>'Stale rollback must fail','confirm'=>1])->assertStatus(409);
+        $this->assertSame(2,$flag->fresh()->version);
         $this->post('/admin/revisions/flag/location.experimental/rollback', [
-            'revision' => $revision->id, 'reason' => 'Restore last approved state', 'confirm' => '1',
+            'revision' => $revision->id, 'expected_version'=>2, 'reason' => 'Restore last approved state', 'confirm' => '1',
         ])->assertRedirect(route('orbit.admin.dashboard'));
         $this->assertSame(3, $flag->fresh()->version);
         $this->assertTrue($flag->fresh()->enabled);
@@ -111,6 +114,26 @@ final class OrbitConfigTest extends TestCase
             ->assertRedirect(route('orbit.admin.dashboard'));
         $this->assertDatabaseHas('remote_configs', ['key' => 'camera.limits', 'published' => 1]);
         $this->assertSame(30, $this->getJson('/api/v1/config/bootstrap')->json('data.config')['camera.limits']['max_seconds']);
+    }
+
+    public function test_remote_revision_rejects_stale_edit_and_restore(): void
+    {
+        $this->be($this->admin(),'admin');
+        $payload=['key'=>'test.versioned','value_type'=>'number','value_json'=>'12',
+            'schema_json'=>'{"type":"number","minimum":1,"maximum":20}',
+            'published'=>1,'client_visible'=>1,'reason'=>'Initial approved setting'];
+        $this->post('/admin/config',$payload)->assertRedirect();
+        $config=RemoteConfig::where('key','test.versioned')->firstOrFail();
+        $revision=DB::table('config_revisions')->where('resource_key','test.versioned')->first();
+        $path='/admin/config/'.$config->id;
+        $this->postJson($path,$payload)->assertUnprocessable();
+        $this->post($path,array_replace($payload,['value_json'=>'10','expected_version'=>1]))->assertRedirect();
+        $this->postJson($path,array_replace($payload,['value_json'=>'15','expected_version'=>1]))->assertStatus(409);
+        $rollback='/admin/revisions/remote/test.versioned/rollback';
+        $this->postJson($rollback,['revision'=>$revision->id,'expected_version'=>1,'reason'=>'Rejected stale restore','confirm'=>1])->assertStatus(409);
+        $this->post($rollback,['revision'=>$revision->id,'expected_version'=>2,'reason'=>'Restore approved setting','confirm'=>1])->assertRedirect();
+        $this->assertSame(3,$config->fresh()->version);
+        $this->assertSame(12,$this->getJson('/api/v1/config/bootstrap')->assertOk()->json('data.config')['test.versioned']);
     }
 
     public function test_configuration_editors_render_for_authorized_admin(): void

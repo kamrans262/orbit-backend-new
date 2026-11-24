@@ -49,6 +49,7 @@ final class ConfigRegistry
         return DB::transaction(function () use ($input, $actor, $flag): FeatureFlag {
             $flag ??= new FeatureFlag();
             if ($flag->exists) $flag = FeatureFlag::query()->whereKey($flag->id)->lockForUpdate()->firstOrFail();
+            if(isset($input['expected_version']))abort_unless((int)$input['expected_version']===($flag->exists?(int)$flag->version:0),409,'Feature flag changed. Reload and review the latest revision.');
             $before = $flag->exists ? $flag->toArray() : null;
             $flag->fill([
                 'key' => $input['key'],
@@ -73,6 +74,7 @@ final class ConfigRegistry
         return DB::transaction(function () use ($input, $actor, $config): RemoteConfig {
             $config ??= new RemoteConfig();
             if ($config->exists) $config = RemoteConfig::query()->whereKey($config->id)->lockForUpdate()->firstOrFail();
+            if(isset($input['expected_version']))abort_unless((int)$input['expected_version']===($config->exists?(int)$config->version:0),409,'Configuration changed. Reload and review the latest revision.');
             $before = $config->exists ? $config->toArray() : null;
             $type = $input['value_type'];
             $schemaJson = $input['schema_json'] ?? json_encode(['type' => $type], JSON_THROW_ON_ERROR);
@@ -93,11 +95,12 @@ final class ConfigRegistry
         });
     }
 
-    public function rollback(string $type, string $key, string $revisionId, AdminUser $actor, string $reason): void
+    public function rollback(string $type, string $key, string $revisionId, AdminUser $actor, string $reason, ?int $expectedVersion=null): void
     {
-        DB::transaction(function () use ($type, $key, $revisionId, $actor, $reason): void {
+        DB::transaction(function () use ($type, $key, $revisionId, $actor, $reason, $expectedVersion): void {
             $model = $type === 'flag' ? FeatureFlag::class : RemoteConfig::class;
             $record = $model::query()->where('key', $key)->lockForUpdate()->firstOrFail();
+            if($expectedVersion!==null)abort_unless((int)$record->version===$expectedVersion,409,'Configuration changed. Reload before restoring.');
             $revision = DB::table('config_revisions')->where('id', $revisionId)
                 ->where('resource_key', $key)->where('resource_type', $type)->first();
             if (!$revision) abort(404);

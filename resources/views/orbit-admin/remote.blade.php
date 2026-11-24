@@ -7,6 +7,7 @@
 <div class="form-layout" @unless($config?->exists) style="display:block;max-width:960px" @endunless>
 <section class="panel form-panel">
 <form method="post" action="{{ $config?->exists ? route('orbit.admin.config.update',$config) : route('orbit.admin.config.store') }}">@csrf
+<input type="hidden" name="expected_version" value="{{ old('expected_version',$config?->version ?? 0) }}">
 <div class="form-grid">
 <label>Configuration key <input name="key" required pattern="[a-z][a-z0-9_.-]*" maxlength="120" value="{{ old('key',$config?->key ?? '') }}" {{ $config?->exists ? 'readonly' : '' }} placeholder="location.refresh_interval"></label>
 <label>JSON schema type <select name="value_type" required>@foreach(['string','number','boolean','array','object'] as $type)<option value="{{ $type }}" {{ old('value_type',$config?->value_type ?? 'object') === $type ? 'selected' : '' }}>{{ ucfirst($type) }}</option>@endforeach</select></label>
@@ -25,7 +26,7 @@
 @if($config?->exists)
 <aside class="form-aside"><div class="info-card"><h3>Revision history</h3><p>Restore a previous snapshot via a new audited revision.</p>
 @forelse($revisions as $rev)<div class="revision"><div><strong>Version {{ $rev->version }}</strong><small>{{ $rev->created_at }}</small><small>{{ $rev->reason }}</small></div>
-<form method="post" action="{{ route('orbit.admin.rollback',['type'=>'remote','key'=>$config->key]) }}" data-confirm="Restore this version as a new audited revision?">@csrf<input type="hidden" name="revision" value="{{ $rev->id }}"><input type="hidden" name="confirm" value="1"><input name="reason" required minlength="5" maxlength="500" placeholder="Rollback reason"><button class="text-action">Restore</button></form></div>
+<form method="post" action="{{ route('orbit.admin.rollback',['type'=>'remote','key'=>$config->key]) }}" data-confirm="Restore this version as a new audited revision?">@csrf<input type="hidden" name="revision" value="{{ $rev->id }}"><input type="hidden" name="expected_version" value="{{ $config->version }}"><input type="hidden" name="confirm" value="1"><input name="reason" required minlength="5" maxlength="500" placeholder="Rollback reason"><button class="text-action">Restore</button></form></div>
 @empty<p>No revisions yet.</p>@endforelse</div>
 </aside>
 @endif

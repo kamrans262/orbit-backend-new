@@ -56,6 +56,7 @@ final class AdminConfigController extends Controller
         $data = $request->validate([
             'key' => ['required', 'regex:/^[a-z][a-z0-9_.-]*$/D', 'max:120',
                 Rule::unique('feature_flags', 'key')->ignore($flag?->id)],
+            'expected_version' => [$flag?->exists ? 'required' : 'nullable','integer','min:0'],
             'description' => ['nullable', 'string', 'max:500'],
             'enabled' => ['nullable', 'boolean'], 'kill_switch' => ['nullable', 'boolean'],
             'rollout_percentage' => ['required', 'integer', 'between:0,100'],
@@ -76,6 +77,7 @@ final class AdminConfigController extends Controller
         $data = $request->validate([
             'key' => ['required', 'regex:/^[a-z][a-z0-9_.-]*$/D', 'max:120',
                 Rule::unique('remote_configs', 'key')->ignore($config?->id)],
+            'expected_version' => [$config?->exists ? 'required' : 'nullable','integer','min:0'],
             'description' => ['nullable', 'string', 'max:500'],
             'value_json' => ['required', 'string', 'max:50000'],
             'value_type' => ['required', 'in:string,number,boolean,array,object'],
@@ -94,10 +96,11 @@ final class AdminConfigController extends Controller
         abort_if($type === 'remote' && (\App\Modules\Config\Services\OperationalControls::reserved($key)||in_array(strtolower($key),['relay.operations','camera.operations'],true)),403,'Use the dedicated module controls.');
         $data = $request->validate([
             'revision' => ['required', 'uuid'],
+            'expected_version' => ['required','integer','min:1'],
             'reason' => ['required', 'string', 'min:5', 'max:500'],
             'confirm' => ['accepted'],
         ]);
-        $registry->rollback($type, $key, $data['revision'], auth()->guard('admin')->user(), $data['reason']);
+        $registry->rollback($type, $key, $data['revision'], auth()->guard('admin')->user(), $data['reason'], (int)$data['expected_version']);
         return redirect()->route('orbit.admin.dashboard')->with('status', 'A new revision was created from the selected snapshot.');
     }
 
