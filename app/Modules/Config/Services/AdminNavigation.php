@@ -141,6 +141,11 @@ final class AdminNavigation
                 ['Settings & Controls', 'relay.settings', 'relay.read', ['relay.settings*']],
                 ['Audit Trail', 'relay.audits', 'relay.audit', ['relay.audits']],
             ]],
+            ['Subscriptions & Billing', 'settings', [
+                ['Plans & Products', 'billing.products', 'billing.read', ['billing.products*']],
+                ['Subscriptions', 'billing.subscriptions', 'billing.read', ['billing.subscriptions']],
+                ['Billing Operations', 'billing.operations', 'billing.read', ['billing.operations','billing.events.*']],
+            ]],
             ['Advertisements & Sponsorships', 'notifications', [
                 ['Overview', 'advertising.overview', 'advertising.read', ['advertising.overview']],
                 ['Sponsors', 'advertising.sponsors', 'advertising.read', ['advertising.sponsors*']],

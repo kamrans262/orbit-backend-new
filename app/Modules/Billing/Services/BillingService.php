@@ -10,7 +10,7 @@ use Carbon\CarbonImmutable;
 final class BillingService{
     public function __construct(private readonly BillingPolicy $policy,private readonly StoreBillingProvider $store){}
     private function provider():BillingProvider{return app()->bound(BillingProvider::class)?app(BillingProvider::class):$this->store;}
-    private function query(string $table){return DB::table($table)->where('environment',BillingPolicy::ENV);}
+    private function query(string $table){return DB::table($table)->where($table.'.environment',BillingPolicy::ENV);}
     private function activeUser(string $owner):void{
         abort_unless(OrbitUser::whereKey($owner)->where('status','active')->whereNull('deletion_requested_at')->lockForUpdate()->first(),403,'Account unavailable.');
     }
@@ -96,7 +96,7 @@ final class BillingService{
         $digest=$this->policy->digest('event:'.$p,$event);
         return DB::transaction(function()use($p,$digest,$body,$ref,$owner){
             DB::table('billing_events')->insertOrIgnore(['id'=>$this->uuid(),'provider'=>$p,'environment'=>BillingPolicy::ENV,'event_hash'=>$digest,
-                'body_hash'=>$body,'reference_cipher'=>$ref===null?null:Crypt::encryptString($ref),'user_id'=>$owner,'state'=>$ref===null?'processed':'queued',
+                'body_hash'=>$body,'reference_cipher'=>$ref===null?null:Crypt::encryptString($ref),'user_id'=>$owner,'state'=>$owner!==null?'client_pending':($ref===null?'processed':'queued'),
                 'next_attempt_at'=>now(),'created_at'=>now(),'updated_at'=>now()]);
             $row=$this->query('billing_events')->where('provider',$p)->where('event_hash',$digest)->lockForUpdate()->first();
             abort_unless($row&&hash_equals($row->body_hash,$body)&&$row->user_id===$owner,409,'Billing event conflict.');
@@ -114,7 +114,7 @@ final class BillingService{
         }
         $ref=$this->provider()->reference($p,$input['proof']);
         $hash=$this->policy->digest('verify-body',json_encode([$owner,$p,$input['mode'],$ctx?->id,$ref],JSON_THROW_ON_ERROR));
-        $event=$this->recordEvent($p,'client:'.$owner.':'.$input['client_request_id'],$hash,$ref,$owner);
+        $event=$this->recordEvent($p,'client:'.$owner.':'.$input['client_request_id'],$hash,null,$owner);
         $e=$this->provider()->lookup($p,$ref);
         if($ctx)abort_unless($e['product']===$ctx->store_product&&$e['base']===$ctx->base_plan_id,409,'Purchase product mismatch.');
         // A delayed purchase may arrive after checkout context expiry. The
@@ -157,7 +157,7 @@ final class BillingService{
                     abort_if($linked&&$linked->user_id!==$owner,409,'Store ownership requires review.');
                 }
                 abort_unless(in_array($e['state'],['pending','active','grace','hold','paused','expired','revoked','unknown'],true),422);
-                if(!$row||strcmp($e['observed'],$row->verified_at)>=0){
+                if(!$row||(!$row->replaced_by&&strcmp($e['observed'],$row->verified_at)>=0)){
                     $id=$row?->id??$this->uuid();
                     DB::table('billing_subscriptions')->updateOrInsert(['id'=>$id],[
                         'user_id'=>$owner,'product_id'=>$product->id,'provider'=>$p,'environment'=>BillingPolicy::ENV,'lineage_hash'=>$lineage,
@@ -165,7 +165,7 @@ final class BillingService{
                         'auto_renew'=>$e['renew'],'ack_state'=>$e['ack'],'verified_at'=>$e['observed'],'next_check_at'=>now()->addMinutes($e['ack']==='pending'?2:30),
                         'revision'=>($row?->revision??0)+1,'created_at'=>$row?->created_at??now(),'updated_at'=>now()]);
                     if($linked&&in_array($e['state'],['active','grace'],true)&&$e['starts']&&now()->gte($e['starts'])){
-                        $this->query('billing_subscriptions')->where('id',$linked->id)->update(['state'=>'expired','ends_at'=>now(),'next_check_at'=>now()->addDay(),'updated_at'=>now()]);
+                        $this->query('billing_subscriptions')->where('id',$linked->id)->update(['state'=>'expired','replaced_by'=>$id,'ends_at'=>now(),'next_check_at'=>now()->addDay(),'updated_at'=>now()]);
                     }
                 }
                 $saved=$this->query('billing_subscriptions')->where('provider',$p)->where('lineage_hash',$lineage)->first();
@@ -205,7 +205,7 @@ final class BillingService{
                 $stats[$review?'review':'retry']++;
             }
         }
-        $rows=$this->query('billing_subscriptions')->where('next_check_at','<=',now())->orderBy('next_check_at')->limit($limit)->get();
+        $rows=$this->query('billing_subscriptions')->whereNull('replaced_by')->where('next_check_at','<=',now())->orderBy('next_check_at')->limit($limit)->get();
         foreach($rows as $row){
             if(!$this->query('billing_subscriptions')->where('id',$row->id)->where('next_check_at','<=',now())->update(['next_check_at'=>now()->addMinutes(30)]))continue;
             try{

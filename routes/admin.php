@@ -42,6 +42,12 @@ Route::prefix('admin')->name('orbit.admin.')->group(function (): void {
     Route::post('/mfa', [AdminAuthController::class, 'verifyMfa'])->middleware('throttle:8,1')->name('mfa.verify');
     Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
     Route::middleware([EnsureAdmin::class])->group(function (): void {
+        $billing=\App\Modules\Billing\Http\Controllers\AdminBillingController::class;
+        Route::get('/billing/products',[$billing,'products'])->middleware(RequireAdminPermission::class.':billing.read')->name('billing.products');
+        Route::get('/billing/subscriptions',[$billing,'subscriptions'])->middleware(RequireAdminPermission::class.':billing.read')->name('billing.subscriptions');
+        Route::get('/billing/operations',[$billing,'operations'])->middleware(RequireAdminPermission::class.':billing.read')->name('billing.operations');
+        Route::post('/billing/products',[$billing,'save'])->middleware([RequireAdminPermission::class.':billing.read',RequireAdminPermission::class.':billing.manage','throttle:6,1'])->name('billing.products.save');
+        Route::post('/billing/events/{event}/retry',[$billing,'retry'])->whereUuid('event')->middleware([RequireAdminPermission::class.':billing.read',RequireAdminPermission::class.':billing.reconcile','throttle:6,1'])->name('billing.events.retry');
         $camera=\App\Modules\Camera\Http\Controllers\AdminCameraController::class;
         Route::get('/camera',[$camera,'index'])->middleware(RequireAdminPermission::class.':camera.read')->name('camera.index');
         Route::post('/camera/settings',[$camera,'save'])->middleware([RequireAdminPermission::class.':camera.read',RequireAdminPermission::class.':camera.manage','throttle:6,1'])->name('camera.settings.save');

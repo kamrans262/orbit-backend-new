@@ -23,7 +23,7 @@ return new class extends Migration{
             $t->string('provider',8);$t->string('environment',12);$t->string('lineage_hash',64);
             $t->text('reference_cipher');$t->string('state',16);$t->timestamp('starts_at')->nullable();
             $t->timestamp('ends_at')->nullable();$t->boolean('auto_renew')->nullable();
-            $t->string('ack_state',16)->default('not_required');$t->timestamp('verified_at',6);
+            $t->uuid('replaced_by')->nullable();$t->string('ack_state',16)->default('not_required');$t->timestamp('verified_at',6);
             $t->timestamp('next_check_at')->index();$t->unsignedInteger('revision')->default(1);$t->timestamps();
             $t->unique(['provider','environment','lineage_hash'],'bill_lineage_unique');
             $t->index(['user_id','environment','state']);
