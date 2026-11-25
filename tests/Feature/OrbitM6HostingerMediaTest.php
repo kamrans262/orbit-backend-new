@@ -127,10 +127,28 @@ final class OrbitM6HostingerMediaTest extends TestCase
                     ['part_number'=>1,'etag'=>$etag1],
                     ['part_number'=>2,'etag'=>$etag2],
                 ],
-            ])->assertStatus(202)->assertJsonPath('data.state','verifying');
+            ])->assertOk()->assertJsonPath('data.state','ready');
         $result=app(MediaLifecycleWorker::class)->run();
-        $this->assertSame(1,$result['verified']);
+        $this->assertSame(0,$result['verified']);
         $this->assertDatabaseHas('media_objects',['id'=>$media,'state'=>'ready']);
+        // Moment derivatives must also become ready without waiting for cron.
+        $thumb=random_bytes(2048);
+        $variant=$this->withToken($token)
+            ->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/media/'.$media.'/variants/uploads',[
+                'variant'=>'thumbnail','declared_bytes'=>strlen($thumb),
+                'cipher_sha256'=>hash('sha256',$thumb),
+            ])->assertCreated()->json('data.upload_id');
+        $thumbEtag=$this->uploadChunk($token,
+            '/api/v1/media/uploads/'.$variant.'/chunks/1',$thumb,
+            hash('sha256',$thumb))->assertCreated()->json('data.etag');
+        $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/media/uploads/'.$variant.'/complete',[
+                'total_cipher_bytes'=>strlen($thumb),'cipher_sha256'=>hash('sha256',$thumb),
+                'parts'=>[['part_number'=>1,'etag'=>$thumbEtag]],
+            ])->assertOk()->assertJsonPath('data.state','ready');
+        $this->assertDatabaseHas('media_variants',['media_id'=>$media,'variant'=>'thumbnail','state'=>'ready']);
+        $this->assertSame(0,app(MediaLifecycleWorker::class)->run()['verified']);
         // No grants => no ciphertext can leave private storage.
         $this->withToken($token)->get('/api/v1/media/'.$media.
             '/ciphertext?variant=original')->assertNotFound();
@@ -140,6 +158,10 @@ final class OrbitM6HostingerMediaTest extends TestCase
                 'audience_kind'=>'only_me','target_ids'=>[],
                 'key_envelopes'=>[[
                     'device_id'=>$device->id,'variant'=>'original',
+                    'key_version'=>'v1','algorithm'=>'x25519-hkdfsha256-aes256gcm-v1',
+                    'wrapped_key_ciphertext'=>str_repeat('W',80),
+                ],[
+                    'device_id'=>$device->id,'variant'=>'thumbnail',
                     'key_version'=>'v1','algorithm'=>'x25519-hkdfsha256-aes256gcm-v1',
                     'wrapped_key_ciphertext'=>str_repeat('W',80),
                 ]],

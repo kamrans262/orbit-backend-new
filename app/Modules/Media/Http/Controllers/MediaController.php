@@ -378,6 +378,10 @@ final class MediaController extends Controller
     public function uploadStatus(Request $r,string $upload,MediaObjectStore $store): JsonResponse
     {
         $u=$this->upload($r,$upload);
+        if($u->state==='verifying'){
+            app(MediaLifecycleWorker::class)->verifySmallMoment($u->id);
+            $u=$this->upload($r,$upload);
+        }
         $parts=in_array($u->state,['initiated','uploading'],true)
             && now()->lt($u->expires_at)
             ? $store->uploadedParts($this->uploadObjectKey($u),$this->providerId($u))
@@ -448,6 +452,10 @@ final class MediaController extends Controller
             abort_unless($u->complete_payload_hash!==null &&
                 hash_equals($u->complete_payload_hash,$digest) &&
                 hash_equals($u->complete_key_hash,$this->key($r)),409,'Finalize request conflicts.');
+            if($u->state==='verifying'){
+                app(MediaLifecycleWorker::class)->verifySmallMoment($u->id);
+                $u=$this->upload($r,$upload);
+            }
             return $this->response(['media_id'=>$u->media_id,'state'=>$u->state],202);
         }
         $this->activeUpload($u);
@@ -501,6 +509,11 @@ final class MediaController extends Controller
             && app(MediaLifecycleWorker::class)->verifySmallAvatar($u->id)) {
             return $this->response(['media_id'=>$u->media_id,'state'=>'ready']);
         }
+        // Interactive Moments (including thumbnails) use full synchronous
+        // verification for bounded local ciphertext, never a client claim.
+        $momentState=app(MediaLifecycleWorker::class)->verifySmallMoment($u->id);
+        if($momentState==='ready')return $this->response(['media_id'=>$u->media_id,'state'=>'ready']);
+        if($momentState==='failed')abort(422,'Encrypted media checksum mismatch.');
         // Larger uploads still require the existing background worker.
         return $this->response(['media_id'=>$u->media_id,'state'=>'verifying'],202);
     }

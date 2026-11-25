@@ -94,6 +94,67 @@ final class MediaLifecycleWorker
         });
     }
 
+    /**
+     * Interactive Moment uploads on private Hostinger storage must not wait
+     * for the five-minute lifecycle cron. Verify bounded ciphertext only.
+     * The same locked path is used by cron and authenticated upload requests.
+     * Null means the existing scheduled verification path must handle it.
+     */
+    public function verifySmallMoment(string $uploadId): ?string
+    {
+        if(config('orbit_media.enabled')!==true || $this->store->mode()!=='local_chunked')return null;
+        $candidate=DB::table('media_upload_sessions')->where('id',$uploadId)->first();
+        if(!$candidate || $candidate->state!=='verifying'
+            || (int)$candidate->actual_cipher_bytes<1
+            || (int)$candidate->actual_cipher_bytes>8388608)return null;
+        if(!DB::table('media_objects')->where('id',$candidate->media_id)
+            ->where('purpose','moment')->whereNull('deleted_at')->exists())return null;
+        try {
+            return DB::transaction(function()use($uploadId):?string{
+                $u=DB::table('media_upload_sessions')->where('id',$uploadId)->lockForUpdate()->first();
+                if(!$u)return null;
+                if($u->state!=='verifying')return $u->state;
+                if((int)$u->actual_cipher_bytes<1 || (int)$u->actual_cipher_bytes>8388608
+                    || !is_string($u->final_cipher_sha256)
+                    || !preg_match('/^[0-9a-f]{64}$/D',$u->final_cipher_sha256))return null;
+                $m=DB::table('media_objects')->where('id',$u->media_id)
+                    ->where('purpose','moment')->whereNull('deleted_at')->lockForUpdate()->first();
+                if(!$m)return null;
+                $variant=$u->variant_id?DB::table('media_variants')->where('id',$u->variant_id)
+                    ->where('media_id',$m->id)->lockForUpdate()->first():null;
+                if($u->variant_id && (!$variant || $variant->state!=='verifying' || $m->state!=='ready'))return null;
+                if(!$u->variant_id && $m->state!=='verifying')return null;
+                $valid=$this->store->verify($variant?->object_key??$m->object_key,
+                    (int)$u->actual_cipher_bytes,(string)$u->final_cipher_sha256);
+                if(!$valid){
+                    if($variant)DB::table('media_variants')->where('id',$variant->id)
+                        ->update(['state'=>'failed','updated_at'=>now()]);
+                    else $this->stageDelete($m->id,'checksum_mismatch');
+                    DB::table('media_upload_sessions')->where('id',$u->id)
+                        ->update(['state'=>'failed','updated_at'=>now()]);
+                    return 'failed';
+                }
+                if($variant){
+                    DB::table('media_variants')->where('id',$variant->id)
+                        ->update(['state'=>'ready','updated_at'=>now()]);
+                }else{
+                    DB::table('media_objects')->where('id',$m->id)->update([
+                        'state'=>'ready','ready_at'=>now(),
+                        'retention_deadline'=>now()->addDays((int)config('orbit_media.moments_purge_days')),
+                        'updated_at'=>now(),
+                    ]);
+                }
+                DB::table('media_upload_sessions')->where('id',$u->id)
+                    ->update(['state'=>'ready','updated_at'=>now()]);
+                $this->emit($m->id,$variant?'media.variant.ready.v1':'media.upload.ready.v1');
+                return 'ready';
+            },3);
+        }catch(\Throwable){
+            // A transient storage or database problem is not a ready receipt.
+            return 'verifying';
+        }
+    }
+
     public function run(int $limit=15): array
     {
         $limit=max(1,min($limit,100));
@@ -103,6 +164,13 @@ final class MediaLifecycleWorker
         $verify=DB::table('media_upload_sessions')
             ->where('state','verifying')->orderBy('completed_at')->limit($limit)->get();
         foreach($verify as $u) {
+            $interactive=$this->verifySmallMoment($u->id);
+            if($interactive!==null){
+                if($interactive==='ready')$stats['verified']++;
+                elseif($interactive==='failed')$stats['rejected']++;
+                elseif($interactive==='verifying')$stats['errors']++;
+                continue;
+            }
             $m=DB::table('media_objects')->where('id',$u->media_id)->first();
             if(!$m)continue;
             $variant=$u->variant_id
