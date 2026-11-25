@@ -24,6 +24,29 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Auth uses Orbit's session attribute, not Laravel's default guard.
+        // Numeric throttle middleware otherwise shares a domain/IP bucket across
+        // unrelated routes (and the outer middleware also charges that bucket).
+        RateLimiter::for('orbit-authenticated', function (Request $request): array {
+            $account = $request->attributes->get('orbit_session')?->user_id;
+            return [
+                Limit::perMinute(600)->by('account:'.($account ?: 'unauth:'.$request->ip())),
+                Limit::perMinute(600)->by('ip:'.$request->ip()),
+            ];
+        });
+
+        foreach ([4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 45, 50, 60, 90, 120, 140] as $perMinute) {
+            RateLimiter::for('orbit-route-'.$perMinute, function (Request $request) use ($perMinute): array {
+                $account = $request->attributes->get('orbit_session')?->user_id;
+                // Stable route template, never a user-controlled resource ID.
+                $route = $request->method().':'.$request->route()->uri();
+                return [
+                    Limit::perMinute($perMinute)->by($route.':account:'.($account ?: 'unauth:'.$request->ip())),
+                    Limit::perMinute($perMinute)->by($route.':ip:'.$request->ip()),
+                ];
+            });
+        }
+
         // M5 QR codes are recipient-bound and scanned by authenticated devices.
         // Per-IP-only throttles were locking out distinct trusted accounts
         // behind the same household or office Wi-Fi. Keep strict per-account
