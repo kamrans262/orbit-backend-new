@@ -58,6 +58,8 @@ jobs:
         run: |
           php artisan migrate:rollback --step=2 --force
           php artisan migrate --force
+      - name: Authenticated route rate-limit isolation regression
+        run: php artisan test --compact --display-warnings tests/Feature/OrbitAuthenticatedThrottleIsolationTest.php
       - name: M25 synthetic Firebase transport and SQL leases
         run: php artisan test --compact --display-warnings tests/Feature/OrbitM25RealtimeTest.php
       - name: M24 operational settings, runtime and access reviews
