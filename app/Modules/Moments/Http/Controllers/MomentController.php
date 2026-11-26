@@ -93,7 +93,22 @@ final class MomentController extends Controller
                 ->whereNotNull('target_id')->pluck('target_id')->all();
             $ownerAudience=['audience_kind'=>$m->audience_kind,'target_ids'=>$targets];
         }
+        // The Moment has already passed its audience policy. Author name
+        // is display metadata; avatar access is a separate M6 permission.
+        $author=DB::table('orbit_users')->where('id',$m->creator_id)
+            ->where('status','active')->whereNull('deletion_requested_at')
+            ->first(['display_name','avatar_media_id']);
+        $avatar=null;
+        if($author?->avatar_media_id){
+            $candidate=DB::table('media_objects')->where('id',$author->avatar_media_id)
+                ->where('owner_user_id',$m->creator_id)->where('purpose','avatar')->first();
+            if($candidate && app(\App\Modules\Media\Services\MediaPolicy::class)->canRead($candidate,$viewer)){
+                $avatar=$candidate->id;
+            }
+        }
         return ['id'=>$m->id,'creator_id'=>$m->creator_id,'media_id'=>$mediaId,
+            'creator_display_name'=>$author?->display_name,
+            'creator_avatar_media_id'=>$avatar,
             'my_reaction'=>$reaction,
             'engagement_context_id'=>$engagementContext,
             'like_count'=>$likes,'comment_count'=>$comments,
