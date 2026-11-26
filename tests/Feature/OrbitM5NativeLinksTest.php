@@ -20,6 +20,19 @@ final class OrbitM5NativeLinksTest extends TestCase
         $this->get('/invite/circle/'.str_repeat('A',41))->assertNotFound();
     }
 
+    public function test_moment_link_is_generic_and_requires_the_app(): void
+    {
+        $id='00000000-0000-4000-8000-000000000001';
+        config()->set('orbit_social.android_install_url','https://play.google.com/store/apps/details?id=com.orbit.orbit_app');
+        $this->get('/moment/'.$id)->assertOk()
+            ->assertHeader('Referrer-Policy','no-referrer')
+            ->assertHeader('X-Robots-Tag','noindex, nofollow')
+            ->assertSee('orbit://moment/'.$id)
+            ->assertSee('Install for Android')
+            ->assertDontSee('body_ciphertext')->assertDontSee('media_id');
+        $this->get('/moment/not-a-uuid')->assertNotFound();
+    }
+
     public function test_associated_domain_covers_both_friend_and_circle_routes_only_when_verified_ids_configured(): void
     {
         config()->set('orbit_social.ios_app_id','ABCDEFGHIJ.com.example.orbit');
@@ -29,6 +42,7 @@ final class OrbitM5NativeLinksTest extends TestCase
         $paths=array_column($response->json('applinks.details.0.components'),'/');
         $this->assertContains('/invite/friend/*',$paths);
         $this->assertContains('/invite/circle/*',$paths);
+        $this->assertContains('/moment/*',$paths);
         $android=$this->get('/.well-known/assetlinks.json')->assertOk();
         $this->assertSame('com.example.orbit',
             $android->json('0.target.package_name'));

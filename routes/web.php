@@ -28,6 +28,16 @@ Route::get('/invite/circle/{token}', function (string $token) {
         ->header('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'");
 })->where('token','[A-Za-z0-9]{40}')->name('orbit.circle.invite');
 
+// A Moment reference is not a grant. This page is identical for valid UUIDs,
+// including nonexistent and revoked Moments; never look up private metadata.
+Route::get('/moment/{moment}', function (string $moment) {
+    return response()->view('orbit-social.moment-link', ['moment'=>$moment])
+        ->header('Cache-Control','private, no-store')
+        ->header('Referrer-Policy','no-referrer')
+        ->header('X-Robots-Tag','noindex, nofollow')
+        ->header('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'");
+})->whereUuid('moment')->name('orbit.moment.link');
+
 // Public app association files contain ONLY signed-app identifiers, not user data.
 // Fail closed until release engineering configures the verified native app IDs.
 Route::get('/.well-known/apple-app-site-association', function () {
@@ -40,6 +50,7 @@ Route::get('/.well-known/apple-app-site-association', function () {
                 'components' => [
                     ['/' => '/invite/friend/*', 'comment' => 'Orbit friend invitations'],
                     ['/' => '/invite/circle/*', 'comment' => 'Orbit Circle invitations'],
+                    ['/' => '/moment/*', 'comment' => 'Authenticated Orbit Moment references'],
                 ],
             ]],
         ],
