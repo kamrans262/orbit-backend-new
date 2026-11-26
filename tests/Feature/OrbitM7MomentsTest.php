@@ -343,6 +343,33 @@ final class OrbitM7MomentsTest extends TestCase
         $this->assertDatabaseHas('media_delete_jobs',['media_id'=>$media,'reason'=>'moment_retention']);
     }
 
+    public function test_engagement_counts_are_authorized_and_exclude_deleted_interactions():void
+    {
+        [$owner,$device,$token]=$this->principal();
+        $media=$this->readyPrivateMedia($owner,$device);
+        $id=$this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/moments',[
+                'client_id'=>(string)Str::uuid(),'media_id'=>$media,
+                'audience_kind'=>'only_me','target_ids'=>[],
+            ])->assertCreated()->json('data.moment_id');
+        $path='/api/v1/moments/'.$id;
+        $this->withToken($token)->getJson($path)->assertOk()
+            ->assertJsonPath('data.like_count',0)->assertJsonPath('data.comment_count',0);
+        $this->withToken($token)->putJson($path.'/reaction',['context_id'=>'self','reaction_code'=>'like'])->assertOk();
+        $comment=$this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson($path.'/comments',['context_id'=>'self','body_ciphertext'=>str_repeat('C',80),'key_version'=>'v1'])
+            ->assertCreated()->json('data.comment_id');
+        $this->withToken($token)->getJson($path)->assertOk()
+            ->assertJsonPath('data.engagement_context_id','self')
+            ->assertJsonPath('data.like_count',1)->assertJsonPath('data.comment_count',1);
+        [,,$stranger]=$this->principal();
+        $this->withToken($stranger)->getJson($path)->assertNotFound();
+        $this->withToken($token)->deleteJson($path.'/reaction',['context_id'=>'self'])->assertNoContent();
+        $this->withToken($token)->deleteJson($path.'/comments/'.$comment,['context_id'=>'self'])->assertNoContent();
+        $this->withToken($token)->getJson($path)->assertOk()
+            ->assertJsonPath('data.like_count',0)->assertJsonPath('data.comment_count',0);
+    }
+
     public function test_comment_replay_and_report_never_expose_plaintext():void
     {
         [$owner,$device,$token]=$this->principal();

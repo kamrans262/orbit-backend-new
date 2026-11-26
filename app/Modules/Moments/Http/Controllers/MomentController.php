@@ -67,9 +67,23 @@ final class MomentController extends Controller
             ->filter(fn($id)=>$social->isFriend($m->creator_id,(string)$id)
                 && !$social->isBlockedEitherWay($m->creator_id,(string)$id))
             ->values()->all();
+        // Engagement is scoped to one authorized context, not a public total.
+        // Owners opening their own feed see the first shared discussion rather
+        // than an empty private-self discussion; explicit context stays scoped.
+        $engagementContext=$context;
+        if($context==='self' && $viewer===$m->creator_id && $m->audience_kind!=='only_me'){
+            $engagementContext=DB::table('moment_audience')->where('moment_id',$m->id)
+                ->where('version',$m->audience_revision)->whereNull('revoked_at')
+                ->where('context_id','!=','self')->orderBy('context_id')->value('context_id')??'self';
+        }
         $reaction=DB::table('moment_reactions')->where('moment_id',$m->id)
-            ->where('user_id',$viewer)->where('context_id',$context)
+            ->where('user_id',$viewer)->where('context_id',$engagementContext)
             ->whereNull('deleted_at')->value('reaction_code');
+        $likes=DB::table('moment_reactions')->where('moment_id',$m->id)
+            ->where('context_id',$engagementContext)->where('reaction_code','like')
+            ->whereNull('deleted_at')->count();
+        $comments=DB::table('moment_comments')->where('moment_id',$m->id)
+            ->where('context_id',$engagementContext)->whereNull('deleted_at')->count();
         // Only the owner can inspect the complete intended audience. Other
         // viewers receive only their own authorized context (never a roster).
         $ownerAudience=[];
@@ -81,6 +95,8 @@ final class MomentController extends Controller
         }
         return ['id'=>$m->id,'creator_id'=>$m->creator_id,'media_id'=>$mediaId,
             'my_reaction'=>$reaction,
+            'engagement_context_id'=>$engagementContext,
+            'like_count'=>$likes,'comment_count'=>$comments,
             ...$ownerAudience,
             'tagged_user_ids'=>$tags,
             'place_ciphertext'=>$m->location_consent?$m->place_ciphertext:null,
