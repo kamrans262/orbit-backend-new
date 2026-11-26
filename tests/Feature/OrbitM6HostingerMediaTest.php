@@ -82,6 +82,74 @@ final class OrbitM6HostingerMediaTest extends TestCase
             ->where('media_id',$media)->where('event_type','media.upload.ready.v1')->count());
     }
 
+    public function test_video_above_photo_verification_limit_is_verified_without_cron(): void
+    {
+        config()->set('orbit_moments.enabled',true);
+        $user=OrbitUser::create([
+            'username'=>'video_'.Str::random(8),'display_name'=>'Video Owner','status'=>'active',
+        ]);
+        $device=OrbitDevice::create([
+            'user_id'=>$user->id,'device_public_id'=>(string)Str::uuid(),
+            'name'=>'Video test phone','platform'=>'android','public_key'=>base64_encode(random_bytes(32)),
+            'trust_state'=>'trusted','attestation_state'=>'verified','approved_at'=>now(),
+        ]);
+        $token=app(TokenService::class)->issue($user,$device,null)['access_token'];
+        $part=random_bytes(1048576);
+        $bytes=str_repeat($part,9);
+        $init=$this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/media/uploads',[
+                'purpose'=>'moment','kind'=>'video','declared_mime'=>'video/mp4',
+                'declared_width'=>720,'declared_height'=>1280,'declared_duration_ms'=>30000,
+                'declared_bytes'=>strlen($bytes),'cipher_suite'=>'aes256gcm-v1',
+            ])->assertCreated()->json('data');
+        $media=$init['media_id'];$upload=$init['upload_id'];$parts=[];
+        for($n=1;$n<=9;$n++){
+            $etag=$this->uploadChunk($token,'/api/v1/media/uploads/'.$upload.'/chunks/'.$n,
+                $part,hash('sha256',$part))->assertCreated()->json('data.etag');
+            $parts[]=['part_number'=>$n,'etag'=>$etag];
+        }
+        $completeKey=(string)Str::uuid();
+        $complete=['total_cipher_bytes'=>strlen($bytes),'cipher_sha256'=>hash('sha256',$bytes),'parts'=>$parts];
+        $this->withToken($token)->withHeader('Idempotency-Key',$completeKey)
+            ->postJson('/api/v1/media/uploads/'.$upload.'/complete',$complete)
+            ->assertOk()->assertJsonPath('data.state','ready');
+        $this->withToken($token)->withHeader('Idempotency-Key',$completeKey)
+            ->postJson('/api/v1/media/uploads/'.$upload.'/complete',$complete)
+            ->assertSuccessful()->assertJsonPath('data.state','ready');
+        $poster=random_bytes(2048);
+        $variant=$this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/media/'.$media.'/variants/uploads',[
+                'variant'=>'poster','declared_bytes'=>strlen($poster),'cipher_sha256'=>hash('sha256',$poster),
+            ])->assertCreated()->json('data.upload_id');
+        $etag=$this->uploadChunk($token,'/api/v1/media/uploads/'.$variant.'/chunks/1',
+            $poster,hash('sha256',$poster))->assertCreated()->json('data.etag');
+        $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/media/uploads/'.$variant.'/complete',[
+                'total_cipher_bytes'=>strlen($poster),'cipher_sha256'=>hash('sha256',$poster),
+                'parts'=>[['part_number'=>1,'etag'=>$etag]],
+            ])->assertOk()->assertJsonPath('data.state','ready');
+        $this->withToken($token)->withHeader('Idempotency-Key',(string)Str::uuid())
+            ->postJson('/api/v1/media/'.$media.'/grants',[
+                'audience_kind'=>'only_me','target_ids'=>[],
+                'key_envelopes'=>array_map(fn($v)=>[
+                    'device_id'=>$device->id,'variant'=>$v,'key_version'=>'v1',
+                    'algorithm'=>'x25519-hkdfsha256-aes256gcm-v1','wrapped_key_ciphertext'=>str_repeat('W',80),
+                ],['original','poster']),
+            ])->assertCreated();
+        $payload=['client_id'=>(string)Str::uuid(),'media_id'=>$media,'audience_kind'=>'only_me','target_ids'=>[]];
+        $key=(string)Str::uuid();
+        $id=$this->withToken($token)->withHeader('Idempotency-Key',$key)
+            ->postJson('/api/v1/moments',$payload)->assertCreated()->json('data.moment_id');
+        $this->withToken($token)->withHeader('Idempotency-Key',$key)
+            ->postJson('/api/v1/moments',$payload)->assertOk()->assertJsonPath('data.moment_id',$id);
+        $this->withToken($token)->getJson('/api/v1/moments/'.$id)->assertOk()
+            ->assertJsonPath('data.media_kind','video')->assertJsonPath('data.duration_ms',30000);
+        $response=$this->withToken($token)->get('/api/v1/media/'.$media.'/ciphertext?variant=original')->assertOk();
+        $this->assertSame(hash('sha256',$bytes),hash_file('sha256',$response->baseResponse->getFile()->getPathname()));
+        $this->assertSame(0,app(MediaLifecycleWorker::class)->run()['verified']);
+        $this->assertDatabaseCount('moments',1);
+    }
+
     public function test_hostinger_private_chunk_replay_integrity_lifecycle_and_download(): void
     {
         $user=OrbitUser::create([

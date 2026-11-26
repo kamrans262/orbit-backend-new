@@ -100,26 +100,34 @@ final class MediaLifecycleWorker
      * The same locked path is used by cron and authenticated upload requests.
      * Null means the existing scheduled verification path must handle it.
      */
+    // 60 seconds at the approved 4 Mbps video target plus audio and
+    // encryption overhead fits a 40 MiB local streaming hash budget.
+    // Derivatives and non-video objects retain the previous 8 MiB cap.
+    private function interactiveMomentLimit(object $upload,object $media): int
+    {
+        return !$upload->variant_id && $media->kind==='video' ? 41943040 : 8388608;
+    }
+
     public function verifySmallMoment(string $uploadId): ?string
     {
         if(config('orbit_media.enabled')!==true || $this->store->mode()!=='local_chunked')return null;
         $candidate=DB::table('media_upload_sessions')->where('id',$uploadId)->first();
         if(!$candidate || $candidate->state!=='verifying'
-            || (int)$candidate->actual_cipher_bytes<1
-            || (int)$candidate->actual_cipher_bytes>8388608)return null;
-        if(!DB::table('media_objects')->where('id',$candidate->media_id)
-            ->where('purpose','moment')->whereNull('deleted_at')->exists())return null;
+            || (int)$candidate->actual_cipher_bytes<1)return null;
+        $media=DB::table('media_objects')->where('id',$candidate->media_id)
+            ->where('purpose','moment')->whereNull('deleted_at')->first();
+        if(!$media||(int)$candidate->actual_cipher_bytes>$this->interactiveMomentLimit($candidate,$media))return null;
         try {
             return DB::transaction(function()use($uploadId):?string{
                 $u=DB::table('media_upload_sessions')->where('id',$uploadId)->lockForUpdate()->first();
                 if(!$u)return null;
                 if($u->state!=='verifying')return $u->state;
-                if((int)$u->actual_cipher_bytes<1 || (int)$u->actual_cipher_bytes>8388608
+                if((int)$u->actual_cipher_bytes<1
                     || !is_string($u->final_cipher_sha256)
                     || !preg_match('/^[0-9a-f]{64}$/D',$u->final_cipher_sha256))return null;
                 $m=DB::table('media_objects')->where('id',$u->media_id)
                     ->where('purpose','moment')->whereNull('deleted_at')->lockForUpdate()->first();
-                if(!$m)return null;
+                if(!$m||(int)$u->actual_cipher_bytes>$this->interactiveMomentLimit($u,$m))return null;
                 $variant=$u->variant_id?DB::table('media_variants')->where('id',$u->variant_id)
                     ->where('media_id',$m->id)->lockForUpdate()->first():null;
                 if($u->variant_id && (!$variant || $variant->state!=='verifying' || $m->state!=='ready'))return null;
